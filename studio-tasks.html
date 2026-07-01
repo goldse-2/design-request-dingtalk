@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的任务 - 作图中心</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="has-sidebar">
+
+<aside class="sidebar">
+    <div class="sidebar-top">
+        <a href="index.html" class="sidebar-logo" title="作图中心">
+            <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg"><path d="M512 0c281.6 0 512 230.4 512 512s-230.4 512-512 512S0 793.6 0 512 230.4 0 512 0z" fill="#2C425B"/><path d="M512 1024c-79.36 0-153.6-17.92-220.16-51.2-5.12-23.04-7.68-48.64-10.24-76.8-2.56-76.8 66.56-153.6 76.8-230.4 15.36-122.88-25.6-230.4-25.6-230.4l460.8-128c10.24 81.92 17.92 207.36 25.6 332.8 5.12 92.16 61.44 140.8 97.28 184.32C824.32 944.64 678.4 1024 512 1024z" fill="#AD503C"/><path d="M512 1024c-117.76 0-227.84-40.96-314.88-107.52 66.56-33.28 148.48-58.88 238.08-66.56V793.6h153.6v56.32c89.6 7.68 171.52 33.28 238.08 66.56C739.84 983.04 629.76 1024 512 1024z" fill="#EF8049"/><path d="M435.2 537.6h153.6v281.6h-153.6V537.6z" fill="#FFDEC9"/><path d="M665.6 578.56C627.2 640 570.88 691.2 486.4 691.2c-222.72 0-204.8-332.8-204.8-332.8 0-115.2 115.2-204.8 230.4-204.8s230.4 94.72 230.4 209.92c0 0-2.56 20.48-10.24 53.76-10.24 66.56-66.56 161.28-66.56 161.28z" fill="#FFDEC9"/><path d="M537.6 307.2c-25.6 30.72-94.72 76.8-128 76.8v-76.8s-56.32 48.64-102.4 76.8c-2.56 87.04 0 153.6 0 153.6s-74.24-115.2-51.2-230.4c23.04-115.2 117.76-235.52 230.4-204.8 112.64 30.72 230.4-53.76 281.6 153.6 17.92 135.68-64 217.6-102.4 248.32 0 0 2.56-168.96-128-197.12z" fill="#AD503C"/><path d="M819.2 281.6c-66.56 130.56-58.88-46.08-186.88-104.96C512 125.44 460.8 153.6 460.8 153.6s-56.32-25.6 0-76.8c25.6-23.04 120.32-10.24 204.8 25.6 0-12.8 10.24-25.6 25.6-25.6s25.6 10.24 25.6 25.6c0 7.68-2.56 15.36-10.24 17.92 81.92 43.52 143.36 102.4 112.64 161.28z" fill="#EF8049"/></svg>
+        </a>
+        <nav class="sidebar-nav">
+            <a href="index.html" class="sidebar-link" title="提交需求">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+            </a>
+            <a href="studio.html" class="sidebar-link active" title="图片制作">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            </a>
+            <a href="library.html" class="sidebar-link" title="资料库">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+            </a>
+            <a href="admin.html" class="sidebar-link" title="管理台">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            </a>
+        </nav>
+    </div>
+    <div class="sidebar-bottom">
+        <button id="userBtn" class="sidebar-user-btn" title="点击登录" onclick="handleUserBtnClick()">
+            <img id="userAvatar" class="sidebar-avatar" src="" alt="" style="display:none">
+            <svg id="loginIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </button>
+    </div>
+</aside>
+
+<div id="loginModal" class="modal" hidden>
+    <div class="modal-content">
+        <h3>登录后使用</h3>
+        <p style="color:#6b7280;font-size:0.9rem;margin-bottom:20px;text-align:center">请先登录钉钉账号</p>
+        <a href="/api/dingtalk-auth" class="btn-dingtalk-qr">
+            <svg width="22" height="22" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="64" height="64" rx="14" fill="white"/><path d="M32 8C18.745 8 8 18.745 8 32C8 45.255 18.745 56 32 56C45.255 56 56 45.255 56 32C56 18.745 45.255 8 32 8ZM42.5 36.5C41.2 38.8 38.5 40 35.5 40H28.5C25.5 40 22.8 38.8 21.5 36.5C20.5 34.8 20.5 32.5 21.5 30.8L27.5 20.5C28.2 19.2 29.6 18.5 31 18.5C32.4 18.5 33.8 19.2 34.5 20.5L38 26.5H35.5L32 20.5L26 30.5H38C38.8 30.5 39.5 31.2 39.5 32C39.5 32.8 38.8 33.5 38 33.5H24.5L23.5 35.5C24.5 36.8 26.3 37.5 28.2 37.5H35.5C37.5 37.5 39.3 36.8 40.2 35.5L42.5 36.5Z" fill="#0089FF"/></svg>
+            使用钉钉登录
+        </a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="container">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+            <a href="studio.html" style="display:inline-flex;align-items:center;gap:6px;background:none;border:1.5px solid #e5e7eb;border-radius:8px;padding:6px 12px;font-size:0.85rem;color:#374151;text-decoration:none">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                返回制作
+            </a>
+            <h2 style="font-size:1.4rem;font-weight:700;color:#111827">我的图片任务</h2>
+        </div>
+        
+        <!-- 实时队列状态 -->
+        <div id="queueStatus" style="display:none;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);border-radius:12px;padding:20px 24px;margin-bottom:20px;color:#fff;box-shadow:0 4px 12px rgba(102,126,234,0.25)">
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px">
+                <div style="display:flex;align-items:center;gap:16px">
+                    <div style="width:48px;height:48px;background:rgba(255,255,255,0.2);border-radius:10px;display:flex;align-items:center;justify-content:center">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    </div>
+                    <div>
+                        <div style="font-size:0.8rem;opacity:0.9;margin-bottom:4px">当前队列状态</div>
+                        <div style="font-size:1.3rem;font-weight:700" id="queueText">正在加载...</div>
+                    </div>
+                </div>
+                <div style="display:flex;gap:20px">
+                    <div style="text-align:center">
+                        <div style="font-size:1.6rem;font-weight:700" id="queuePending">0</div>
+                        <div style="font-size:0.75rem;opacity:0.9">排队中</div>
+                    </div>
+                    <div style="text-align:center">
+                        <div style="font-size:1.6rem;font-weight:700" id="queueProcessing">0</div>
+                        <div style="font-size:0.75rem;opacity:0.9">处理中</div>
+                    </div>
+                    <div style="text-align:center">
+                        <div style="font-size:1.6rem;font-weight:700;color:#dcfce7" id="estimateTime">-</div>
+                        <div style="font-size:0.75rem;opacity:0.9">预计等待</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="taskLoading" style="color:#9ca3af;padding:40px 0;text-align:center">加载中...</div>
+        <div id="taskList" style="display:flex;flex-direction:column;gap:14px"></div>
+        <div id="taskEmpty" class="lib-empty" hidden>还没有提交过任务</div>
+        <div id="taskNeedLogin" class="lib-empty" hidden>请先登录钉钉账号查看任务</div>
+    </div>
+</div>
+
+<script src="studio-tasks.js"></script>
+</body>
+</html>

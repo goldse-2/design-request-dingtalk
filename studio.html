@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>图片制作 - 作图中心</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="has-sidebar auth-pending">
+
+<aside class="sidebar">
+    <div class="sidebar-top">
+        <a href="index.html" class="sidebar-logo" title="作图中心">
+            <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg"><path d="M512 0c281.6 0 512 230.4 512 512s-230.4 512-512 512S0 793.6 0 512 230.4 0 512 0z" fill="#2C425B"/><path d="M512 1024c-79.36 0-153.6-17.92-220.16-51.2-5.12-23.04-7.68-48.64-10.24-76.8-2.56-76.8 66.56-153.6 76.8-230.4 15.36-122.88-25.6-230.4-25.6-230.4l460.8-128c10.24 81.92 17.92 207.36 25.6 332.8 5.12 92.16 61.44 140.8 97.28 184.32C824.32 944.64 678.4 1024 512 1024z" fill="#AD503C"/><path d="M512 1024c-117.76 0-227.84-40.96-314.88-107.52 66.56-33.28 148.48-58.88 238.08-66.56V793.6h153.6v56.32c89.6 7.68 171.52 33.28 238.08 66.56C739.84 983.04 629.76 1024 512 1024z" fill="#EF8049"/><path d="M435.2 537.6h153.6v281.6h-153.6V537.6z" fill="#FFDEC9"/><path d="M665.6 578.56C627.2 640 570.88 691.2 486.4 691.2c-222.72 0-204.8-332.8-204.8-332.8 0-115.2 115.2-204.8 230.4-204.8s230.4 94.72 230.4 209.92c0 0-2.56 20.48-10.24 53.76-10.24 66.56-66.56 161.28-66.56 161.28z" fill="#FFDEC9"/><path d="M537.6 307.2c-25.6 30.72-94.72 76.8-128 76.8v-76.8s-56.32 48.64-102.4 76.8c-2.56 87.04 0 153.6 0 153.6s-74.24-115.2-51.2-230.4c23.04-115.2 117.76-235.52 230.4-204.8 112.64 30.72 230.4-53.76 281.6 153.6 17.92 135.68-64 217.6-102.4 248.32 0 0 2.56-168.96-128-197.12z" fill="#AD503C"/><path d="M819.2 281.6c-66.56 130.56-58.88-46.08-186.88-104.96C512 125.44 460.8 153.6 460.8 153.6s-56.32-25.6 0-76.8c25.6-23.04 120.32-10.24 204.8 25.6 0-12.8 10.24-25.6 25.6-25.6s25.6 10.24 25.6 25.6c0 7.68-2.56 15.36-10.24 17.92 81.92 43.52 143.36 102.4 112.64 161.28z" fill="#EF8049"/></svg>
+        </a>
+        <nav class="sidebar-nav">
+            <a href="index.html" class="sidebar-link" title="提交需求" id="submitReqLink">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+            </a>
+            <a href="studio.html" class="sidebar-link active" title="图片制作">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            </a>
+            <a href="library.html" class="sidebar-link" title="资料库">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+            </a>
+            <a href="admin.html" class="sidebar-link" title="管理台">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            </a>
+        </nav>
+    </div>
+    <div class="sidebar-bottom">
+        <button id="userBtn" class="sidebar-user-btn" title="点击登录" onclick="handleUserBtnClick()">
+            <img id="userAvatar" class="sidebar-avatar" src="" alt="" style="display:none">
+            <svg id="loginIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </button>
+    </div>
+</aside>
+
+<div class="page-content">
+    <div class="container">
+        <div class="studio-type-hero">
+            <span id="studioTypewriter"></span><span class="studio-type-cursor">_</span>
+        </div>
+
+        <div style="margin-bottom:20px">
+            <h2 style="font-size:1.4rem;font-weight:700;color:#111827">图片制作</h2>
+            <p style="color:#6b7280;font-size:0.9rem;margin-top:4px">提交素材和需求，完成后可在「我的任务」查看下载</p>
+        </div>
+
+        <div class="studio-tabs">
+            <button class="studio-tab active" data-mode="free">自由模式</button>
+            <button class="studio-tab" data-mode="program">图生图模式</button>
+            <a href="studio-tasks.html" class="studio-tab-link">我的任务 →</a>
+        </div>
+
+        <!-- placeholder for forms -->
+        <div id="studioFormArea"></div>
+    </div>
+</div>
+
+<div id="submitTip" class="submit-tip">
+    <button class="submit-tip-close" onclick="closeSubmitTip()">×</button>
+    <div class="submit-tip-title">亚马逊任务表格上传入口</div>
+    <div class="submit-tip-text">表格提交已经搬到这里啦，有需要可以点「提交需求」上传。</div>
+    <div class="submit-tip-arrow"></div>
+</div>
+
+<div id="guideModal" class="guide-modal">
+    <div class="guide-box">
+        <button class="guide-close" onclick="closeGuide()">×</button>
+        <div class="guide-header">
+            <h2>欢迎使用图生图模式</h2>
+            <p>3个简单步骤，快速生成亚马逊风格产品图</p>
+        </div>
+        <div id="guidePage1">
+            <div class="guide-steps" style="display:flex;flex-direction:column;gap:24px;max-width:800px;margin:0 auto">
+                <div class="guide-step" style="display:flex;align-items:center;gap:20px;background:#f8fafc;border-radius:12px;padding:20px">
+                    <div class="guide-num" style="flex-shrink:0">1</div>
+                    <div style="flex:1">
+                        <h4>上传要模仿的竞品图</h4>
+                        <p style="margin:8px 0 0;color:#6b7280">上传1张你想模仿的亚马逊产品图，AI会分析其风格、构图、光影</p>
+                    </div>
+                    <img src="/参考图.png" style="width:120px;height:120px;object-fit:cover;border-radius:8px;border:2px solid #e5e7eb;flex-shrink:0">
+                </div>
+                <div class="guide-arrow" style="text-align:center;font-size:1.5rem;color:#d1d5db">↓</div>
+                <div class="guide-step" style="display:flex;align-items:center;gap:20px;background:#f8fafc;border-radius:12px;padding:20px">
+                    <div class="guide-num" style="flex-shrink:0">2</div>
+                    <div style="flex:1">
+                        <h4>上传你的白底产品图</h4>
+                        <p style="margin:8px 0 0;color:#6b7280">上传2张白底产品图，AI会将你的产品按竞品图的风格重新生成</p>
+                    </div>
+                    <img src="/白底图.jpg" style="width:120px;height:120px;object-fit:cover;border-radius:8px;border:2px solid #e5e7eb;flex-shrink:0">
+                </div>
+                <div class="guide-arrow" style="text-align:center;font-size:1.5rem;color:#d1d5db">↓</div>
+                <div class="guide-step" style="display:flex;align-items:center;gap:20px;background:#f8fafc;border-radius:12px;padding:20px">
+                    <div class="guide-num" style="flex-shrink:0">3</div>
+                    <div style="flex:1">
+                        <h4>等待AI生成成品图</h4>
+                        <p style="margin:8px 0 0;color:#6b7280">提交后约4-8分钟完成，生成的图片会保留竞品风格，替换成你的产品</p>
+                    </div>
+                    <img src="/生成图.png" style="width:120px;height:120px;object-fit:cover;border-radius:8px;border:2px solid #e5e7eb;flex-shrink:0">
+                </div>
+            </div>
+            <button class="guide-cta" onclick="guideNext()">下一步</button>
+        </div>
+
+        <div id="guidePage2" hidden>
+            <div class="guide-privacy">
+                <h3>使用须知与隐私政策</h3>
+                <ul>
+                    <li>本网站仅供<strong>深圳市亿立科技开发有限公司</strong>内部使用。</li>
+                    <li>所上传的图片及资料都会<strong>经过公司审核</strong>，必要时会保留记录。</li>
+                    <li>生图时间一般为 <strong>4-8 分钟</strong>，视当前排队情况而定。</li>
+                </ul>
+                <label class="guide-agree">
+                    <input type="checkbox" id="guideAgree" onchange="onAgreeChange(this.checked)">
+                    <span>我已阅读并同意<a href="privacy.html" target="_blank" class="guide-link">《使用须知与隐私政策》</a></span>
+                </label>
+            </div>
+            <div class="guide-page2-actions">
+                <button class="guide-back" onclick="guideBack()">上一步</button>
+                <button class="guide-cta" id="guideStart" onclick="finishGuide()" disabled>同意并登录</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="loginModal" class="login-page" hidden>
+    <div class="login-visual"></div>
+    <div class="login-panel">
+        <div class="login-inner">
+            <div class="login-step login-step--active" id="loginStepStart">
+                <div class="login-logo">
+                    <svg viewBox="0 0 24 24" width="44" height="44" fill="currentColor"><path d="M22.28 9.82a5.98 5.98 0 0 0-.52-4.91 6.05 6.05 0 0 0-6.51-2.9A6 6 0 0 0 4.98 4.18a5.98 5.98 0 0 0-3.99 2.9 6.05 6.05 0 0 0 .74 7.1 5.98 5.98 0 0 0 .51 4.91 6.05 6.05 0 0 0 6.52 2.9A5.98 5.98 0 0 0 13.26 24a6.05 6.05 0 0 0 5.77-4.19 5.98 5.98 0 0 0 3.99-2.9 6.05 6.05 0 0 0-.74-7.09zM13.26 22.43a4.48 4.48 0 0 1-2.88-1.04l.14-.08 4.78-2.76a.78.78 0 0 0 .39-.68v-6.74l2.02 1.17a.07.07 0 0 1 .04.06v5.58a4.5 4.5 0 0 1-4.49 4.49zM3.61 18.3a4.47 4.47 0 0 1-.54-3.02l.14.09 4.78 2.76a.78.78 0 0 0 .78 0l5.84-3.37v2.33a.08.08 0 0 1-.03.07L9.74 22a4.5 4.5 0 0 1-6.13-1.64zM2.34 7.9a4.48 4.48 0 0 1 2.34-1.97V11.6a.78.78 0 0 0 .39.68l5.81 3.36-2.02 1.16a.08.08 0 0 1-.07 0l-4.83-2.79A4.5 4.5 0 0 1 2.34 7.9zm16.6 3.86l-5.84-3.4L15.12 7.2a.07.07 0 0 1 .07 0l4.83 2.79a4.49 4.49 0 0 1-.68 8.1v-5.67a.78.78 0 0 0-.4-.66zm2.01-3.03l-.14-.09-4.77-2.78a.78.78 0 0 0-.79 0L9.42 9.23V6.9a.07.07 0 0 1 .03-.07l4.83-2.79a4.49 4.49 0 0 1 6.67 4.65zM8.32 12.86L6.3 11.7a.08.08 0 0 1-.04-.06V6.07a4.49 4.49 0 0 1 7.37-3.45l-.14.08-4.78 2.76a.78.78 0 0 0-.39.68zl.01 6.71zm1.1-2.36L12 9.01l2.6 1.5v3l-2.6 1.5-2.6-1.5z"/></svg>
+                </div>
+                <h1 class="login-title">欢迎来到 GPT-Image-2</h1>
+                <p class="login-sub">深圳市亿立科技开发有限公司 · 内部作图中心</p>
+                <button class="login-dingtalk" onclick="startLoginFlow()">登录</button>
+                <p class="login-terms">登录前需阅读并同意<a href="privacy.html" target="_blank">《使用须知与隐私政策》</a></p>
+            </div>
+
+            <div class="login-step" id="loginStepGuide">
+                <h2 class="login-guide-title">欢迎使用 GPT-Image-2</h2>
+                <p class="login-guide-sub">四个简单步骤，快速产出可用的电商素材。</p>
+                <div class="login-guide-list">
+                    <div><span>1</span><strong>选择创作模式</strong><small>自由创作或基于产品图改图</small></div>
+                    <div><span>2</span><strong>填写需求与参考图</strong><small>描述风格、构图并上传素材</small></div>
+                    <div><span>3</span><strong>选择尺寸规格</strong><small>按用途选择输出尺寸</small></div>
+                    <div><span>4</span><strong>提交并等待出图</strong><small>完成后在我的任务查看</small></div>
+                </div>
+                <button class="login-dingtalk" onclick="loginFlowNext()">下一步</button>
+            </div>
+
+            <div class="login-step" id="loginStepAgree">
+                <h2 class="login-guide-title">使用须知与隐私政策</h2>
+                <div class="login-policy-list">
+                    <p>本网站仅供深圳市亿立科技开发有限公司内部使用。</p>
+                    <p>上传的图片资料会经过公司审核，必要时保留记录。</p>
+                    <p>生图时间一般为 4-8 分钟，视当前排队情况而定。</p>
+                </div>
+                <label class="login-agree">
+                    <input type="checkbox" id="loginAgree" onchange="document.getElementById('loginFinalBtn').disabled=!this.checked">
+                    <span>我已阅读并同意<a href="privacy.html" target="_blank">《使用须知与隐私政策》</a></span>
+                </label>
+                <button class="login-dingtalk" id="loginFinalBtn" onclick="confirmAgreeAndLogin()" disabled>同意并登录</button>
+                <button class="login-back" onclick="loginFlowBack()">上一步</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<button id="helpBtn" class="help-btn" onclick="openGuide()" title="帮助中心">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    帮助中心
+</button>
+
+<script src="studio.js?v=20260624-2"></script>
+</body>
+</html>

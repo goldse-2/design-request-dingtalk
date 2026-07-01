@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理台 - 作图中心</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="has-sidebar">
+
+<aside class="sidebar">
+    <div class="sidebar-top">
+        <a href="index.html" class="sidebar-logo" title="作图中心">
+            <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg"><path d="M512 0c281.6 0 512 230.4 512 512s-230.4 512-512 512S0 793.6 0 512 230.4 0 512 0z" fill="#2C425B"/><path d="M512 1024c-79.36 0-153.6-17.92-220.16-51.2-5.12-23.04-7.68-48.64-10.24-76.8-2.56-76.8 66.56-153.6 76.8-230.4 15.36-122.88-25.6-230.4-25.6-230.4l460.8-128c10.24 81.92 17.92 207.36 25.6 332.8 5.12 92.16 61.44 140.8 97.28 184.32C824.32 944.64 678.4 1024 512 1024z" fill="#AD503C"/><path d="M512 1024c-117.76 0-227.84-40.96-314.88-107.52 66.56-33.28 148.48-58.88 238.08-66.56V793.6h153.6v56.32c89.6 7.68 171.52 33.28 238.08 66.56C739.84 983.04 629.76 1024 512 1024z" fill="#EF8049"/><path d="M435.2 537.6h153.6v281.6h-153.6V537.6z" fill="#FFDEC9"/><path d="M665.6 578.56C627.2 640 570.88 691.2 486.4 691.2c-222.72 0-204.8-332.8-204.8-332.8 0-115.2 115.2-204.8 230.4-204.8s230.4 94.72 230.4 209.92c0 0-2.56 20.48-10.24 53.76-10.24 66.56-66.56 161.28-66.56 161.28z" fill="#FFDEC9"/><path d="M537.6 307.2c-25.6 30.72-94.72 76.8-128 76.8v-76.8s-56.32 48.64-102.4 76.8c-2.56 87.04 0 153.6 0 153.6s-74.24-115.2-51.2-230.4c23.04-115.2 117.76-235.52 230.4-204.8 112.64 30.72 230.4-53.76 281.6 153.6 17.92 135.68-64 217.6-102.4 248.32 0 0 2.56-168.96-128-197.12z" fill="#AD503C"/><path d="M819.2 281.6c-66.56 130.56-58.88-46.08-186.88-104.96C512 125.44 460.8 153.6 460.8 153.6s-56.32-25.6 0-76.8c25.6-23.04 120.32-10.24 204.8 25.6 0-12.8 10.24-25.6 25.6-25.6s25.6 10.24 25.6 25.6c0 7.68-2.56 15.36-10.24 17.92 81.92 43.52 143.36 102.4 112.64 161.28z" fill="#EF8049"/></svg>
+        </a>
+        <nav class="sidebar-nav">
+            <a href="index.html" class="sidebar-link" title="提交需求">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+            </a>
+            <a href="studio.html" class="sidebar-link" title="图片制作">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            </a>
+            <a href="library.html" class="sidebar-link" title="资料库">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+            </a>
+            <a href="admin.html" class="sidebar-link active" title="管理台">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            </a>
+        </nav>
+    </div>
+    <div class="sidebar-bottom"></div>
+</aside>
+
+<div class="page-content">
+
+<!-- AI自动化审核 -->
+<div id="studioSection" class="container" hidden style="margin-top:0;padding-top:0">
+    <div style="margin:32px 0 16px">
+        <h2 style="font-size:1.2rem;font-weight:700;color:#111827">AI自动化审核</h2>
+        <p style="color:#6b7280;font-size:0.85rem;margin-top:2px">待处理的图片制作需求</p>
+    </div>
+    <div id="studioAdminContent"></div>
+    <div style="margin-top:28px;border-top:1px solid #e5e7eb;padding-top:18px">
+        <button type="button" id="studioHistoryToggle" onclick="toggleStudioHistory()" style="display:flex;align-items:center;gap:8px;background:none;border:none;cursor:pointer;font-size:1rem;font-weight:700;color:#111827;padding:0">
+            <span id="studioHistoryArrow" style="display:inline-block;transition:transform 0.2s">▶</span>
+            历史记录
+            <span style="font-size:0.8rem;font-weight:400;color:#9ca3af">（已完成并通知）</span>
+        </button>
+        <div id="studioHistoryContent" hidden style="margin-top:16px"></div>
+    </div>
+</div>
+
+<!-- 密码保护层 -->
+<div id="authWall" class="auth-wall">
+    <div class="auth-box">
+        <h2>管理台登录</h2>
+        <p>请输入管理密码</p>
+        <input type="password" id="authInput" class="auth-input" placeholder="输入密码" autocomplete="current-password">
+        <div id="authError" class="auth-error" hidden>密码错误，请重试</div>
+        <button id="authBtn" class="auth-btn">进入管理台</button>
+    </div>
+</div>
+
+<!-- 管理台主体 -->
+<div id="adminMain" class="container" hidden>
+    <header class="admin-header">
+        <div>
+            <h1>作图需求管理台</h1>
+            <p>查看、完成或驳回提交的需求</p>
+        </div>
+    </header>
+
+    <div class="stats-row" id="stats"></div>
+
+    <div class="filter-bar">
+        <select id="filterSelect" class="filter-select">
+            <option value="all" selected>全部需求</option>
+            <option value="图片">图片</option>
+            <option value="视频">视频</option>
+            <option value="设计">设计</option>
+        </select>
+    </div>
+
+    <div id="loadingState" class="admin-loading">加载中...</div>
+    <div id="emptyState" class="empty-state" hidden>
+        <div style="font-size:2.5rem">📭</div>
+        <p>暂无提交记录</p>
+    </div>
+
+    <div id="submissionsList" class="submissions-list"></div>
+
+    <div style="margin-top:28px;border-top:1px solid #e5e7eb;padding-top:18px">
+        <button type="button" id="historyToggle" onclick="toggleHistory()" style="display:flex;align-items:center;gap:8px;background:none;border:none;cursor:pointer;font-size:1rem;font-weight:700;color:#111827;padding:0">
+            <span id="historyArrow" style="display:inline-block;transition:transform 0.2s">▶</span>
+            历史提交记录
+            <span style="font-size:0.8rem;font-weight:400;color:#9ca3af">（已完成 / 已驳回，保留 45 天）</span>
+        </button>
+        <div id="historyContent" hidden style="margin-top:16px"></div>
+    </div>
+</div>
+
+<!-- 资料库管理 -->
+<div id="librarySection" class="container" hidden style="margin-top:0;padding-top:0">
+    <div style="margin:32px 0 16px;display:flex;align-items:center;justify-content:space-between">
+        <div>
+            <h2 style="font-size:1.2rem;font-weight:700;color:#111827">资料库管理</h2>
+            <p style="color:#6b7280;font-size:0.85rem;margin-top:2px">上传和管理产品图、素材文件，按分类和文件夹分组</p>
+        </div>
+        <a href="library.html" target="_blank" style="font-size:0.8rem;color:#6366f1;text-decoration:none">查看资料库 →</a>
+    </div>
+
+    <div style="background:#fff;border-radius:12px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,0.07);margin-bottom:16px">
+        <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px">
+            <div style="min-width:140px">
+                <label style="font-size:0.8rem;color:#374151;display:block;margin-bottom:4px">分类</label>
+                <select id="libCategory" style="width:100%;padding:8px 12px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:0.875rem;outline:none;background:#fff"></select>
+            </div>
+            <div style="flex:1;min-width:140px">
+                <label style="font-size:0.8rem;color:#374151;display:block;margin-bottom:4px">产品名称（选文件夹时自动填入）</label>
+                <input id="libProduct" type="text" placeholder="如：S10充电款" style="width:100%;padding:8px 12px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:0.875rem;outline:none">
+            </div>
+            <button id="libUploadBtn" type="button" style="padding:8px 18px;background:#6366f1;color:#fff;border:none;border-radius:8px;font-size:0.875rem;font-weight:600;cursor:pointer;white-space:nowrap">选择文件</button>
+            <button id="libFolderBtn" type="button" style="padding:8px 18px;background:#fff;color:#6366f1;border:1.5px solid #6366f1;border-radius:8px;font-size:0.875rem;font-weight:600;cursor:pointer;white-space:nowrap">📁 选择文件夹</button>
+            <input type="file" id="libFileInput" accept="image/*,.pdf,.zip,.ai,.psd" multiple style="display:none">
+            <input type="file" id="libFolderInput" accept="image/*,.pdf,.zip,.ai,.psd" multiple webkitdirectory style="display:none">
+        </div>
+        <div id="libUploadPreview" class="lib-upload-grid" style="display:none"></div>
+        <button id="libConfirmBtn" hidden style="margin-top:12px;padding:9px 24px;background:#16a34a;color:#fff;border:none;border-radius:8px;font-size:0.875rem;font-weight:600;cursor:pointer">✓ 确认上传</button>
+        <div id="libUploadStatus" style="font-size:0.85rem;color:#6b7280;margin-top:8px"></div>
+    </div>
+
+    <div id="libAdminContent"></div>
+</div>
+
+<!-- 案例管理 -->
+<div id="examplesAdminSection" class="container" hidden style="margin-top:0;padding-top:0">
+    <button id="examplesToggleBtn" type="button" style="width:100%;margin:32px 0 12px;background:#fff;border:none;border-radius:12px;padding:16px 20px;box-shadow:0 1px 4px rgba(0,0,0,0.07);display:flex;align-items:center;justify-content:space-between;cursor:pointer;text-align:left">
+        <div>
+            <h2 style="font-size:1.2rem;font-weight:700;color:#111827">案例管理</h2>
+            <p style="color:#6b7280;font-size:0.85rem;margin-top:2px">管理图片制作右侧示例画廊中用户上传的案例</p>
+        </div>
+        <span style="display:flex;align-items:center;gap:14px">
+            <a href="studio.html" target="_blank" onclick="event.stopPropagation()" style="font-size:0.8rem;color:#6366f1;text-decoration:none">查看图片制作 →</a>
+            <span id="examplesToggleArrow" style="font-size:1.1rem;color:#9ca3af;transition:transform .18s">▶</span>
+        </span>
+    </button>
+    <div id="examplesAdminContent" hidden style="background:#fff;border-radius:12px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,0.07)"></div>
+</div>
+
+<footer class="site-footer">
+    <p>© 2025 作图中心 &nbsp;·&nbsp; <a href="index.html">提交需求</a> &nbsp;·&nbsp; <a href="library.html">资料库</a></p>
+</footer>
+<div id="etaModal" class="modal" hidden>
+    <div class="modal-content">
+        <button class="modal-close" id="etaModalClose">×</button>
+        <h3>设置预计完成时间</h3>
+        <p style="color:#6b7280;font-size:0.9rem;margin-bottom:12px">选择预计完成时间，会通过钉钉通知提交人（不会从列表移除）</p>
+        <select id="etaInput" class="filter-select" style="width:100%;margin-bottom:12px">
+            <option value="">请选择预计完成时间</option>
+            <option value="即刻">即刻</option>
+            <option value="3-5天">3-5天</option>
+            <option value="8-15天">8-15天</option>
+        </select>
+        <textarea id="etaNote" class="textarea" placeholder="补充说明（可选）" style="min-height:60px"></textarea>
+        <div style="display:flex;gap:8px;margin-top:16px">
+            <button id="etaCancelBtn" class="btn-secondary" style="flex:1">取消</button>
+            <button id="etaConfirmBtn" class="btn-complete" style="flex:1">发送通知</button>
+        </div>
+    </div>
+</div>
+
+<!-- 排序弹窗 -->
+<div id="sortModal" class="modal" hidden>
+    <div class="modal-content" style="max-width:500px">
+        <button class="modal-close" id="sortModalClose">×</button>
+        <h3>任务排序</h3>
+        <p style="color:#6b7280;font-size:0.9rem;margin-bottom:16px">使用 ↑ ↓ 调整任务顺序，排在前面的优先处理</p>
+        <div id="sortList" style="max-height:400px;overflow-y:auto"></div>
+        <div style="display:flex;gap:8px;margin-top:16px">
+            <button id="sortCloseBtn" class="btn-secondary" style="flex:1">取消</button>
+            <button id="sortSaveBtn" class="btn-primary" style="flex:1">保存</button>
+        </div>
+    </div>
+</div>
+
+<!-- 驳回原因弹窗 -->
+<div id="rejectModal" class="modal" hidden>
+    <div class="modal-content">
+        <button class="modal-close" id="rejectModalClose">×</button>
+        <h3>驳回需求</h3>
+        <p style="color:#6b7280;font-size:0.9rem;margin-bottom:12px">请输入驳回原因（可选，会通过钉钉通知提交人）</p>
+        <textarea id="rejectReason" class="textarea" placeholder="驳回原因..." style="min-height:80px"></textarea>
+        <div style="margin-top:12px">
+            <label style="font-size:0.85rem;color:#374151;display:block;margin-bottom:6px">附图（可选，支持多张）</label>
+            <div id="rejectPasteZone" tabindex="0" style="border:1.5px dashed #d1d5db;border-radius:8px;padding:12px 16px;text-align:center;font-size:0.85rem;color:#9ca3af;cursor:pointer;outline:none;transition:border-color 0.15s">
+                点击选择 或 Ctrl+V 粘贴图片（可多张）
+                <input type="file" id="rejectImageInput" accept="image/*" multiple style="display:none">
+            </div>
+            <div id="rejectImagePreview" style="margin-top:8px;display:flex;flex-wrap:wrap;gap:8px"></div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:16px">
+            <button id="rejectCancelBtn" class="btn-secondary" style="flex:1">取消</button>
+            <button id="rejectConfirmBtn" class="btn-danger" style="flex:1">确认驳回</button>
+        </div>
+    </div>
+</div>
+
+<script src="admin.js?v=20260627-feedback-modal"></script>
+</div>
+</body>
+</html>

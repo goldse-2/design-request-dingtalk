@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>作图需求提交</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="has-sidebar">
+
+<aside class="sidebar">
+    <div class="sidebar-top">
+        <a href="index.html" class="sidebar-logo" title="作图中心">
+            <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg"><path d="M512 0c281.6 0 512 230.4 512 512s-230.4 512-512 512S0 793.6 0 512 230.4 0 512 0z" fill="#2C425B"/><path d="M512 1024c-79.36 0-153.6-17.92-220.16-51.2-5.12-23.04-7.68-48.64-10.24-76.8-2.56-76.8 66.56-153.6 76.8-230.4 15.36-122.88-25.6-230.4-25.6-230.4l460.8-128c10.24 81.92 17.92 207.36 25.6 332.8 5.12 92.16 61.44 140.8 97.28 184.32C824.32 944.64 678.4 1024 512 1024z" fill="#AD503C"/><path d="M512 1024c-117.76 0-227.84-40.96-314.88-107.52 66.56-33.28 148.48-58.88 238.08-66.56V793.6h153.6v56.32c89.6 7.68 171.52 33.28 238.08 66.56C739.84 983.04 629.76 1024 512 1024z" fill="#EF8049"/><path d="M435.2 537.6h153.6v281.6h-153.6V537.6z" fill="#FFDEC9"/><path d="M588.8 680.96c-30.72 38.4-81.92 64-128 61.44-10.24 0-17.92 0-25.6-2.56V512c51.2 5.12 117.76 20.48 153.6 51.2v117.76z" fill="#EDB795"/><path d="M665.6 578.56C627.2 640 570.88 691.2 486.4 691.2c-222.72 0-204.8-332.8-204.8-332.8 0-115.2 115.2-204.8 230.4-204.8s230.4 94.72 230.4 209.92c0 0-2.56 20.48-10.24 53.76-10.24 66.56-66.56 161.28-66.56 161.28z" fill="#FFDEC9"/><path d="M675.84 537.6c0 46.08-38.4 81.92-84.48 81.92h-23.04c-2.56-5.12-10.24-10.24-15.36-10.24h-12.8c-10.24 0-20.48 7.68-20.48 20.48 0 10.24 7.68 20.48 20.48 20.48h12.8c5.12 0 12.8-2.56 15.36-7.68h23.04c56.32 0 104.96-46.08 104.96-102.4h-20.48z" fill="#2C425B"/><path d="M668.16 560.64c-17.92-7.68 15.36-156.16 23.04-163.84 0 0 40.96-51.2 46.08 28.16 7.68 76.8-51.2 143.36-69.12 135.68z" fill="#FFDEC9"/><path d="M537.6 307.2c-25.6 30.72-94.72 76.8-128 76.8v-76.8s-56.32 48.64-102.4 76.8c-2.56 87.04 0 153.6 0 153.6s-74.24-115.2-51.2-230.4c23.04-115.2 117.76-235.52 230.4-204.8 112.64 30.72 230.4-53.76 281.6 153.6 17.92 135.68-64 217.6-102.4 248.32 0 0 2.56-168.96-128-197.12z" fill="#AD503C"/><path d="M819.2 281.6c-66.56 130.56-58.88-46.08-186.88-104.96C512 125.44 460.8 153.6 460.8 153.6s-56.32-25.6 0-76.8c25.6-23.04 120.32-10.24 204.8 25.6 0-12.8 10.24-25.6 25.6-25.6s25.6 10.24 25.6 25.6c0 7.68-2.56 15.36-10.24 17.92 81.92 43.52 143.36 102.4 112.64 161.28z" fill="#EF8049"/></svg>
+        </a>
+        <nav class="sidebar-nav">
+            <a href="index.html" class="sidebar-link active" title="提交需求">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+            </a>
+            <a href="studio.html" class="sidebar-link" title="图片制作">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            </a>
+            <a href="library.html" class="sidebar-link" title="资料库">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+            </a>
+            <a href="admin.html" class="sidebar-link" title="管理台">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2z"/><path d="M12 8v4l3 3"/></svg>
+            </a>
+        </nav>
+    </div>
+    <div class="sidebar-bottom">
+        <button id="userBtn" class="sidebar-user-btn" title="点击登录" onclick="handleUserBtnClick()">
+            <img id="userAvatar" class="sidebar-avatar" src="" alt="" style="display:none">
+            <span id="userName" style="display:none"></span>
+            <svg id="loginIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </button>
+    </div>
+</aside>
+
+<div class="page-content">
+    <div class="topbar">
+        <div class="topbar-right">
+            <a href="#" id="guideBtn" class="topbar-guide-btn" onclick="document.getElementById('guideModal').removeAttribute('hidden');document.getElementById('guideModal').classList.add('modal--visible');return false;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                使用指南
+            </a>
+            <div id="topbarUser" class="topbar-user" hidden>
+                <img id="topbarAvatar" class="topbar-avatar" src="" alt="">
+            </div>
+        </div>
+    </div>
+    <div class="container">
+        <main class="main">
+            <div class="form-section">
+                <div class="field">
+                    <label class="label">任务类型</label>
+                    <div id="taskGuide" class="task-guide">
+                        <div class="task-step">
+                            <div class="task-step-label">第一步：选择大类</div>
+                            <div class="task-options" id="taskCat">
+                                <button type="button" class="task-opt" data-cat="图片">🖼️ 图片</button>
+                                <button type="button" class="task-opt" data-cat="视频">🎬 视频</button>
+                                <button type="button" class="task-opt" data-cat="设计">🎨 设计</button>
+                            </div>
+                        </div>
+                        <div class="task-step" id="taskSubStep" hidden>
+                            <div class="task-step-label">第二步：选择具体类型</div>
+                            <div class="task-options" id="taskSub"></div>
+                        </div>
+                    </div>
+                    <input type="hidden" id="taskType" value="">
+                    <div id="taskSelected" class="task-selected" hidden></div>
+                </div>
+
+                <div class="field" id="excelField">
+                    <label class="label">需求表格</label>
+                    <div class="upload" id="uploadZone">
+                        <input type="file" id="fileInput" accept=".xlsx,.xls" hidden>
+                        <div id="uploadEmpty" class="upload-empty">
+                            <svg width="48" height="48" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-bottom:12px;opacity:0.6">
+                                <circle cx="32" cy="32" r="32" fill="#94a3b8"/>
+                                <path d="M32 20v16M32 36v-16M24 28l8-8 8 8" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M20 42h24" stroke="white" stroke-width="3" stroke-linecap="round"/>
+                            </svg>
+                            <div class="upload-text">拖拽文件到此处或点击上传</div>
+                            <div class="upload-hint">.xlsx · .xls</div>
+                        </div>
+                        <div id="uploadFilled" class="upload-filled" hidden>
+                            <span id="fileName" class="upload-name"></span>
+                            <button id="clearFile" class="upload-clear" type="button">×</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="field" id="imageField" hidden>
+                    <label class="label">提交图片 <span class="optional">（最多 3 张，单张 ≤ 5MB）</span></label>
+                    <div class="upload" id="directDrop">
+                        <input type="file" id="directInput" accept="image/*" multiple hidden>
+                        <div class="upload-empty">
+                            <div class="upload-text">点击或拖拽上传图片</div>
+                            <div class="upload-hint">最多 3 张 · 单张 ≤ 5MB</div>
+                        </div>
+                    </div>
+                    <textarea id="directDesc" class="textarea" placeholder="图片需求描述（可选）" style="margin-top:10px"></textarea>
+                    <div id="directThumbs" class="sf-preview-list" style="margin-top:10px"></div>
+                </div>
+
+                <div class="field" id="designField" hidden>
+                    <label class="label">设计说明书信息</label>
+                    <input type="text" id="designProduct" class="textarea" placeholder="产品型号（产品代码）" style="margin-bottom:10px;padding:12px;font-size:0.9rem">
+                    <input type="text" id="designBrand" class="textarea" placeholder="品牌" style="margin-bottom:10px;padding:12px;font-size:0.9rem">
+                    <input type="email" id="designEmail" class="textarea" placeholder="售后邮箱（可选）" style="margin-bottom:10px;padding:12px;font-size:0.9rem">
+                    <input type="text" id="designAmazonName" class="textarea" placeholder="亚马逊名称" style="margin-bottom:10px;padding:12px;font-size:0.9rem">
+                    
+                    <label class="label" style="margin-top:10px;margin-bottom:6px;font-size:0.85rem">产品图片 <span class="optional">（最多 3 张）</span></label>
+                    <div class="upload" id="designImageDrop" style="margin-bottom:10px">
+                        <input type="file" id="designImageInput" accept="image/*" multiple hidden>
+                        <div class="upload-empty">
+                            <div class="upload-text" style="font-size:0.85rem">点击或拖拽上传产品图片</div>
+                            <div class="upload-hint">最多 3 张</div>
+                        </div>
+                    </div>
+                    <div id="designImageThumbs" class="sf-preview-list"></div>
+                    
+                    <label class="label" style="margin-top:10px;margin-bottom:8px;font-size:0.85rem">需求时间（工作日）</label>
+                    <div class="custom-date-picker" id="designDatePicker">
+                        <input type="text" id="designTime" class="textarea date-display" placeholder="选择日期" readonly style="padding:12px;font-size:0.9rem;cursor:pointer">
+                        <div class="date-calendar" id="designCalendar" hidden>
+                            <div class="calendar-header">
+                                <button type="button" class="calendar-nav" data-action="prev">‹</button>
+                                <div class="calendar-title"></div>
+                                <button type="button" class="calendar-nav" data-action="next">›</button>
+                            </div>
+                            <div class="calendar-weekdays">
+                                <div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div>
+                            </div>
+                            <div class="calendar-days"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="field" id="packagingField" hidden>
+                    <label class="label">设计包装信息</label>
+                    <input type="text" id="packagingProduct" class="textarea" placeholder="产品型号（产品代码）" style="margin-bottom:10px;padding:12px;font-size:0.9rem">
+                    <input type="text" id="packagingBrand" class="textarea" placeholder="品牌" style="margin-bottom:10px;padding:12px;font-size:0.9rem">
+                    <input type="email" id="packagingEmail" class="textarea" placeholder="售后邮箱（可选）" style="margin-bottom:10px;padding:12px;font-size:0.9rem">
+                    <input type="text" id="packagingAmazonName" class="textarea" placeholder="亚马逊名称" style="margin-bottom:10px;padding:12px;font-size:0.9rem">
+                    <input type="text" id="packagingSize" class="textarea" placeholder="包装尺寸：比如100MMx100MMx30mm" style="margin-bottom:10px;padding:12px;font-size:0.9rem">
+                    
+                    <label class="label" style="margin-top:10px;margin-bottom:6px;font-size:0.85rem">产品图片 <span class="optional">（最多 3 张）</span></label>
+                    <div class="upload" id="packagingImageDrop" style="margin-bottom:10px">
+                        <input type="file" id="packagingImageInput" accept="image/*" multiple hidden>
+                        <div class="upload-empty">
+                            <div class="upload-text" style="font-size:0.85rem">点击或拖拽上传产品图片</div>
+                            <div class="upload-hint">最多 3 张</div>
+                        </div>
+                    </div>
+                    <div id="packagingImageThumbs" class="sf-preview-list"></div>
+                    
+                    <label class="label" style="margin-top:10px;margin-bottom:8px;font-size:0.85rem">需求时间（工作日）</label>
+                    <div class="custom-date-picker" id="packagingDatePicker">
+                        <input type="text" id="packagingTime" class="textarea date-display" placeholder="选择日期" readonly style="padding:12px;font-size:0.9rem;cursor:pointer">
+                        <div class="date-calendar" id="packagingCalendar" hidden>
+                            <div class="calendar-header">
+                                <button type="button" class="calendar-nav" data-action="prev">‹</button>
+                                <div class="calendar-title"></div>
+                                <button type="button" class="calendar-nav" data-action="next">›</button>
+                            </div>
+                            <div class="calendar-weekdays">
+                                <div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div>
+                            </div>
+                            <div class="calendar-days"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label class="label">备注 <span class="optional">（可选）</span></label>
+                    <textarea id="remarks" class="textarea" placeholder="补充说明"></textarea>
+                </div>
+
+                <button id="submitBtn" class="btn-submit" disabled>提交</button>
+                <div id="status" class="status"></div>
+            </div>
+
+            <div class="preview-section">
+                <div class="preview-header" style="border-bottom:1px solid #e5e7eb;padding-bottom:12px;margin-bottom:16px">
+                    <span class="preview-title">当前处理任务</span>
+                </div>
+                
+                <div id="processingTask" class="processing-task" hidden>
+                    <div class="processing-task-name"></div>
+                    <div class="processing-task-meta">
+                        <div class="processing-time">
+                            <span style="color:#6b7280;font-size:0.85rem">已处理：</span>
+                            <span id="processingDuration" style="font-weight:600;color:#2563eb">0小时</span>
+                        </div>
+                        <div class="processing-eta">
+                            <span style="color:#6b7280;font-size:0.85rem">预计完成：</span>
+                            <span id="processingEta" style="font-weight:600;color:#059669">-</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="processingEmpty" class="preview-empty" hidden></div>
+                
+                <div style="margin:14px 0 18px;padding:12px 16px;background:#fef9e7;border:1px solid #fde68a;border-radius:10px;font-size:0.85rem;color:#92400e;line-height:1.6">
+                    💡 提交任务后需要排队等待处理，请耐心等候。<br>
+                    急用可以联系我，或使用 <a href="/studio" style="color:#6366f1;font-weight:600;text-decoration:underline">自助处理台</a> 自行处理。
+                </div>
+                
+                <div style="margin-top:24px">
+                    <div class="preview-header" style="border-bottom:1px solid #e5e7eb;padding-bottom:12px;margin-bottom:16px">
+                        <span class="preview-title">待处理队列</span>
+                        <span id="queueCount" class="preview-badge">0</span>
+                        <button id="queueRefreshBtn" type="button" title="刷新" style="margin-left:auto;background:#fff;border:1px solid #d1d5db;color:#374151;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:0.8rem;display:inline-flex;align-items:center;gap:4px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>刷新</button>
+                    </div>
+                    <div id="queueList" class="queue-list" hidden></div>
+                    <div id="queueEmpty" class="preview-empty" hidden></div>
+                </div>
+            </div>
+                </div>
+            </div>
+        </main>
+    </div>
+</div>
+
+<div id="guideModal" class="modal" hidden>
+    <div class="modal-content" style="max-width:520px">
+        <button class="modal-close" onclick="this.closest('.modal').hidden=true;this.closest('.modal').classList.remove('modal--visible')">×</button>
+        <h3>使用指南</h3>
+        <div style="font-size:0.9rem;color:#374151;line-height:1.8;text-align:left">
+            <p style="font-weight:600;margin-bottom:6px">📋 提交作图需求步骤</p>
+            <ol style="padding-left:18px;margin-bottom:16px">
+                <li>选择任务类型（图片 / 视频 / 设计）</li>
+                <li>上传对应的 Excel 需求表格（.xlsx 或 .xls）</li>
+                <li>右侧预览解析结果，确认无误</li>
+                <li>填写备注（可选），点击提交</li>
+            </ol>
+            <p style="font-weight:600;margin-bottom:6px">📌 注意事项</p>
+            <ul style="padding-left:18px;margin-bottom:16px">
+                <li>需要先登录钉钉账号才能提交</li>
+                <li>表格格式请使用标准模板，否则可能解析失败</li>
+                <li>提交后可在钉钉收到状态通知</li>
+            </ul>
+            <p style="font-weight:600;margin-bottom:6px">📦 资料库</p>
+            <p>点击左侧「资料库」图标，可下载产品白底图等素材文件。</p>
+        </div>
+    </div>
+</div>
+
+<div id="loginModal" class="modal" hidden>
+    <div class="modal-content">
+        <h3>登录后使用</h3>
+        <p style="color:#6b7280;font-size:0.9rem;margin-bottom:20px;text-align:center">请先登录钉钉账号</p>
+        <a href="/api/dingtalk-auth" class="btn-dingtalk-qr">
+            <svg width="22" height="22" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="64" height="64" rx="14" fill="white"/><path d="M32 8C18.745 8 8 18.745 8 32C8 45.255 18.745 56 32 56C45.255 56 56 45.255 56 32C56 18.745 45.255 8 32 8ZM42.5 36.5C41.2 38.8 38.5 40 35.5 40H28.5C25.5 40 22.8 38.8 21.5 36.5C20.5 34.8 20.5 32.5 21.5 30.8L27.5 20.5C28.2 19.2 29.6 18.5 31 18.5C32.4 18.5 33.8 19.2 34.5 20.5L38 26.5H35.5L32 20.5L26 30.5H38C38.8 30.5 39.5 31.2 39.5 32C39.5 32.8 38.8 33.5 38 33.5H24.5L23.5 35.5C24.5 36.8 26.3 37.5 28.2 37.5H35.5C37.5 37.5 39.3 36.8 40.2 35.5L42.5 36.5Z" fill="#0089FF"/></svg>
+            使用钉钉登录
+        </a>
+    </div>
+</div>
+
+<div id="successModal" class="modal" hidden>
+    <div class="modal-content success-modal-content">
+        <div class="success-icon">✅</div>
+        <h3 style="margin:0 0 8px;font-size:1.2rem">提交成功</h3>
+        <p id="successQueue" style="color:#6b7280;font-size:0.95rem;margin:0"></p>
+    </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

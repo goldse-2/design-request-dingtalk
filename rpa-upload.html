@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>成品图上传</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="rpa-upload-page">
+    <main class="rpa-upload-shell">
+        <section class="rpa-upload-card">
+            <div class="rpa-upload-logo">GPT-Image-2</div>
+            <h1>成品图上传</h1>
+            <p class="rpa-upload-sub">上传后会自动标记任务完成，并通知用户到「我的任务」下载。</p>
+
+            <label class="rpa-field">
+                <span>上传密码</span>
+                <input id="uploadPassword" type="password" placeholder="请输入密码" autocomplete="current-password">
+            </label>
+
+            <label class="rpa-field">
+                <span>任务 ID</span>
+                <input id="taskId" type="text" placeholder="例如 studio-xxxxxxxx" autocomplete="off">
+            </label>
+
+            <div id="resultDrop" class="rpa-drop" tabindex="0">
+                <input id="resultFiles" type="file" accept="image/*" multiple hidden>
+                <div class="rpa-drop-icon">＋</div>
+                <strong>拖拽成品图到这里</strong>
+                <small>或点击选择图片，支持 png / jpg / webp / gif，多张可一起上传</small>
+            </div>
+
+            <div id="previewList" class="rpa-preview-list" hidden></div>
+            <button id="uploadBtn" class="rpa-upload-btn">上传并通知用户</button>
+            <div id="uploadStatus" class="rpa-upload-status"></div>
+        </section>
+    </main>
+    <script src="rpa-upload.js"></script>
+</body>
+</html>

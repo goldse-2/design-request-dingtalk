@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>资料库 - 作图中心</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="has-sidebar">
+
+<aside class="sidebar">
+    <div class="sidebar-top">
+        <a href="index.html" class="sidebar-logo" title="作图中心">
+            <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg"><path d="M512 0c281.6 0 512 230.4 512 512s-230.4 512-512 512S0 793.6 0 512 230.4 0 512 0z" fill="#2C425B"/><path d="M512 1024c-79.36 0-153.6-17.92-220.16-51.2-5.12-23.04-7.68-48.64-10.24-76.8-2.56-76.8 66.56-153.6 76.8-230.4 15.36-122.88-25.6-230.4-25.6-230.4l460.8-128c10.24 81.92 17.92 207.36 25.6 332.8 5.12 92.16 61.44 140.8 97.28 184.32C824.32 944.64 678.4 1024 512 1024z" fill="#AD503C"/><path d="M512 1024c-117.76 0-227.84-40.96-314.88-107.52 66.56-33.28 148.48-58.88 238.08-66.56V793.6h153.6v56.32c89.6 7.68 171.52 33.28 238.08 66.56C739.84 983.04 629.76 1024 512 1024z" fill="#EF8049"/><path d="M435.2 537.6h153.6v281.6h-153.6V537.6z" fill="#FFDEC9"/><path d="M665.6 578.56C627.2 640 570.88 691.2 486.4 691.2c-222.72 0-204.8-332.8-204.8-332.8 0-115.2 115.2-204.8 230.4-204.8s230.4 94.72 230.4 209.92c0 0-2.56 20.48-10.24 53.76-10.24 66.56-66.56 161.28-66.56 161.28z" fill="#FFDEC9"/><path d="M537.6 307.2c-25.6 30.72-94.72 76.8-128 76.8v-76.8s-56.32 48.64-102.4 76.8c-2.56 87.04 0 153.6 0 153.6s-74.24-115.2-51.2-230.4c23.04-115.2 117.76-235.52 230.4-204.8 112.64 30.72 230.4-53.76 281.6 153.6 17.92 135.68-64 217.6-102.4 248.32 0 0 2.56-168.96-128-197.12z" fill="#AD503C"/><path d="M819.2 281.6c-66.56 130.56-58.88-46.08-186.88-104.96C512 125.44 460.8 153.6 460.8 153.6s-56.32-25.6 0-76.8c25.6-23.04 120.32-10.24 204.8 25.6 0-12.8 10.24-25.6 25.6-25.6s25.6 10.24 25.6 25.6c0 7.68-2.56 15.36-10.24 17.92 81.92 43.52 143.36 102.4 112.64 161.28z" fill="#EF8049"/></svg>
+        </a>
+        <nav class="sidebar-nav">
+            <a href="index.html" class="sidebar-link" title="提交需求">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+            </a>
+            <a href="library.html" class="sidebar-link active" title="资料库">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+            </a>
+            <a href="admin.html" class="sidebar-link" title="管理台">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            </a>
+        </nav>
+    </div>
+    <div class="sidebar-bottom"></div>
+</aside>
+
+<div class="page-content">
+    <div class="container">
+        <!-- Category view -->
+        <div id="libCatView">
+            <div style="margin-bottom:20px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+                <div>
+                    <h2 style="font-size:1.4rem;font-weight:700;color:#111827">资料库</h2>
+                    <p style="color:#6b7280;font-size:0.9rem;margin-top:4px">选择分类查看产品、素材和文件</p>
+                </div>
+
+            </div>
+            <div id="libLoading" style="color:#9ca3af;padding:40px 0;text-align:center">加载中...</div>
+            <div id="libCatGrid" style="display:flex;flex-direction:column;gap:32px"></div>
+            <div id="libEmpty" class="lib-empty" hidden>暂无资料，请联系管理员上传</div>
+            <div class="shoot-request-bottom-wrap">
+                <button type="button" class="shoot-request-btn" onclick="openShootModal()">+ 提交拍摄 / 素材需求</button>
+            </div>
+        </div>
+
+        <!-- Product view (drill-in) -->
+        <div id="libProdView" hidden>
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+                <button onclick="showCatView()" style="display:inline-flex;align-items:center;gap:6px;background:none;border:1.5px solid #e5e7eb;border-radius:8px;padding:6px 12px;font-size:0.85rem;color:#374151;cursor:pointer">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                    返回
+                </button>
+                <span id="libProdBreadcrumb" style="font-size:0.85rem;color:#9ca3af"></span>
+                <h2 id="libProdTitle" style="font-size:1.2rem;font-weight:700;color:#111827"></h2>
+            </div>
+            <div id="libProdGrid" class="library-grid"></div>
+        </div>
+    </div>
+</div>
+
+<div id="shootModal" class="modal" hidden>
+    <div class="modal-content" style="max-width:480px">
+        <button class="modal-close" type="button" onclick="closeShootModal()">×</button>
+        <h3 style="margin-bottom:14px">提交拍摄 / 素材需求</h3>
+        <label style="font-size:0.85rem;color:#374151;display:block;margin-bottom:6px">产品名称 / 型号</label>
+        <input id="shootProduct" type="text" placeholder="如：S10充电款" style="width:100%;padding:9px 12px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:0.875rem;outline:none;margin-bottom:14px">
+        <label style="font-size:0.85rem;color:#374151;display:block;margin-bottom:6px">需求描述</label>
+        <textarea id="shootDesc" placeholder="说明拍摄角度、数量、用途等" style="width:100%;min-height:80px;padding:9px 12px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:0.875rem;outline:none;resize:vertical;margin-bottom:14px"></textarea>
+        <label style="font-size:0.85rem;color:#374151;display:block;margin-bottom:6px">参考图片 <span style="color:#9ca3af">（最多 3 张，单张 ≤ 5MB）</span></label>
+        <div id="shootDrop" tabindex="0" style="border:1.5px dashed #d1d5db;border-radius:8px;padding:16px;text-align:center;font-size:0.85rem;color:#9ca3af;cursor:pointer;outline:none">
+            点击选择图片
+            <input type="file" id="shootInput" accept="image/*" multiple style="display:none">
+        </div>
+        <div id="shootThumbs" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px"></div>
+        <div id="shootStatus" style="font-size:0.85rem;color:#6b7280;margin-top:10px"></div>
+        <div style="display:flex;gap:8px;margin-top:16px">
+            <button type="button" onclick="closeShootModal()" style="flex:1;padding:9px;border:1.5px solid #e5e7eb;background:#fff;color:#374151;border-radius:8px;cursor:pointer;font-size:0.875rem">取消</button>
+            <button type="button" id="shootSubmit" onclick="submitShoot()" style="flex:1;padding:9px;border:none;background:#111827;color:#fff;border-radius:8px;cursor:pointer;font-size:0.875rem;font-weight:600">提交需求</button>
+        </div>
+    </div>
+</div>
+
+<div id="shootLoginModal" class="modal" hidden>
+    <div class="modal-content">
+        <h3>登录后使用</h3>
+        <p style="color:#6b7280;font-size:0.9rem;margin-bottom:20px;text-align:center">请先登录钉钉账号</p>
+        <a href="/api/dingtalk-auth" class="btn-dingtalk-qr">使用钉钉登录</a>
+    </div>
+</div>
+
+<script>
+let allCategories = {};
+
+async function loadLibrary() {
+    try {
+        const res = await fetch('/api/library');
+        const json = await res.json();
+        document.getElementById('libLoading').hidden = true;
+
+        const visibleCategories = Object.fromEntries(
+            Object.entries(json.categories || {})
+                .filter(([, products]) => Object.keys(products || {}).length)
+                .sort(([a], [b]) => a.localeCompare(b, 'zh-CN'))
+        );
+        if (!json.ok || Object.keys(visibleCategories).length === 0) {
+            document.getElementById('libEmpty').hidden = false;
+            return;
+        }
+
+        allCategories = visibleCategories;
+        const grid = document.getElementById('libCatGrid');
+        grid.innerHTML = '';
+
+        for (const [cat, products] of Object.entries(allCategories)) {
+            const section = document.createElement('div');
+
+            const titleRow = document.createElement('div');
+            titleRow.className = 'library-section-title';
+            titleRow.textContent = cat;
+            section.appendChild(titleRow);
+
+            const prodGrid = document.createElement('div');
+            prodGrid.className = 'library-grid';
+
+            const productEntries = Object.entries(products)
+                .filter(([, files]) => Array.isArray(files) && files.length)
+                .sort(([a], [b]) => a.localeCompare(b, 'zh-CN'));
+            if (!productEntries.length) continue;
+
+            for (const [product, files] of productEntries) {
+                const cover = files.find(f => /\.(png|jpg|jpeg|webp|gif)$/i.test(f.name)) || files[0];
+                const isImg = /\.(png|jpg|jpeg|webp|gif)$/i.test(cover.name);
+                const card = document.createElement('div');
+                card.className = 'lib-card';
+                card.style.cursor = 'pointer';
+                card.innerHTML = `
+                    <div class="lib-card-img-wrap" style="position:relative">
+                        ${isImg ? `<img src="/api/library-file/${encodeURIComponent(cover.key)}" alt="${esc(product)}" loading="lazy">` : `<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" stroke-width="1.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`}
+                        <span style="position:absolute;bottom:6px;right:8px;background:rgba(0,0,0,0.5);color:#fff;font-size:0.7rem;padding:2px 7px;border-radius:10px">${files.length} 个文件</span>
+                    </div>
+                    <div class="lib-card-body">
+                        <div class="lib-card-name">${esc(product)}</div>
+                        <div class="lib-card-meta" style="color:#6366f1">点击查看 →</div>
+                    </div>`;
+                card.addEventListener('click', () => openProduct(cat, product, files));
+                prodGrid.appendChild(card);
+            }
+            section.appendChild(prodGrid);
+            grid.appendChild(section);
+        }
+    } catch (e) {
+        document.getElementById('libLoading').textContent = '加载失败：' + e.message;
+    }
+}
+
+function openProduct(cat, product, files) {
+    document.getElementById('libCatView').hidden = true;
+    document.getElementById('libProdView').hidden = false;
+    document.getElementById('libProdBreadcrumb').textContent = cat + ' /';
+    document.getElementById('libProdTitle').textContent = product;
+
+    const grid = document.getElementById('libProdGrid');
+    grid.innerHTML = '';
+    const sortedFiles = [...files].sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'zh-CN'));
+    for (const file of sortedFiles) {
+        const isImage = /\.(png|jpg|jpeg|webp|gif)$/i.test(file.name);
+        const card = document.createElement('div');
+        card.className = 'lib-card';
+        card.innerHTML = `
+            <div class="lib-card-img-wrap">
+                ${isImage ? `<img src="/api/library-file/${encodeURIComponent(file.key)}" alt="${esc(file.name)}" loading="lazy" onclick="openLibraryPreview('/api/library-file/${encodeURIComponent(file.key)}','${esc(file.name)}')" style="cursor:zoom-in">` : `<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`}
+            </div>
+            <div class="lib-card-body">
+                <div class="lib-card-name">${esc(file.name)}</div>
+                <div class="lib-card-meta">${formatSize(file.size)}</div>
+                <a class="lib-card-dl" href="/api/library-file/${encodeURIComponent(file.key)}?dl=1" download="${esc(file.name)}">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    下载
+                </a>
+            </div>`;
+        grid.appendChild(card);
+    }
+}
+
+function openLibraryPreview(src, name) {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:9999;display:flex;align-items:center;justify-content:center;padding:28px';
+    overlay.innerHTML = `
+        <button type="button" style="position:absolute;top:18px;right:24px;background:rgba(255,255,255,0.12);color:#fff;border:none;border-radius:50%;width:36px;height:36px;font-size:24px;line-height:1;cursor:pointer">×</button>
+        <div style="max-width:94vw;max-height:90vh;text-align:center">
+            <img src="${src}" alt="${esc(name)}" style="max-width:94vw;max-height:82vh;object-fit:contain;border-radius:10px;background:#fff;box-shadow:0 20px 60px rgba(0,0,0,0.35)">
+            <div style="margin-top:12px;color:#fff;font-size:0.9rem;word-break:break-all">${esc(name)}</div>
+        </div>`;
+    const closePreview = () => {
+        document.body.style.overflow = previousOverflow;
+        overlay.remove();
+    };
+    overlay.querySelector('button').onclick = closePreview;
+    overlay.addEventListener('click', e => { if (e.target === overlay) closePreview(); });
+    document.addEventListener('keydown', function onEsc(e) {
+        if (e.key === 'Escape') {
+            closePreview();
+            document.removeEventListener('keydown', onEsc);
+        }
+    });
+    document.body.appendChild(overlay);
+}
+
+function showCatView() {
+    document.getElementById('libProdView').hidden = true;
+    document.getElementById('libCatView').hidden = false;
+}
+
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function formatSize(b) {
+    if (!b) return '';
+    if (b < 1024) return b + ' B';
+    if (b < 1048576) return (b/1024).toFixed(1) + ' KB';
+    return (b/1048576).toFixed(1) + ' MB';
+}
+
+let shootImages = [];
+
+function getLibUser() {
+    const stored = sessionStorage.getItem('dt_user') || localStorage.getItem('dt_user');
+    if (!stored) return null;
+    try { const u = JSON.parse(stored); return u.unionId ? u : null; } catch { return null; }
+}
+
+function openShootModal() {
+    if (!getLibUser()) {
+        const m = document.getElementById('shootLoginModal');
+        m.removeAttribute('hidden'); m.classList.add('modal--visible');
+        return;
+    }
+    shootImages = [];
+    document.getElementById('shootProduct').value = '';
+    document.getElementById('shootDesc').value = '';
+    document.getElementById('shootThumbs').innerHTML = '';
+    document.getElementById('shootStatus').textContent = '';
+    const m = document.getElementById('shootModal');
+    m.removeAttribute('hidden'); m.classList.add('modal--visible');
+}
+
+function closeShootModal() {
+    const m = document.getElementById('shootModal');
+    m.classList.remove('modal--visible'); m.hidden = true;
+}
+
+function addShootImages(files) {
+    Array.from(files).forEach(file => {
+        if (shootImages.length >= 3) { alert('最多上传 3 张图片'); return; }
+        if (!file.type.startsWith('image/')) { alert('请上传图片：' + file.name); return; }
+        if (file.size > 5 * 1024 * 1024) { alert('单张图片不能超过 5MB：' + file.name); return; }
+        const reader = new FileReader();
+        reader.onload = ev => {
+            shootImages.push({ name: file.name, mimeType: file.type, dataUrl: ev.target.result });
+            renderShootThumbs();
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+function renderShootThumbs() {
+    const wrap = document.getElementById('shootThumbs');
+    wrap.innerHTML = '';
+    shootImages.forEach((f, i) => {
+        const div = document.createElement('div');
+        div.style.cssText = 'position:relative;width:70px;height:70px';
+        div.innerHTML = `<img src="${f.dataUrl}" style="width:70px;height:70px;object-fit:cover;border-radius:8px;border:1px solid #e5e7eb"><button type="button" data-i="${i}" style="position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,0.6);color:#fff;border:none;cursor:pointer;font-size:11px;line-height:18px;padding:0">×</button>`;
+        div.querySelector('button').addEventListener('click', () => { shootImages.splice(i, 1); renderShootThumbs(); });
+        wrap.appendChild(div);
+    });
+}
+
+(function initShootUpload() {
+    const drop = document.getElementById('shootDrop');
+    const input = document.getElementById('shootInput');
+    if (!drop || !input) return;
+    drop.addEventListener('click', () => input.click());
+    drop.addEventListener('dragover', e => { e.preventDefault(); drop.style.borderColor = '#111827'; });
+    drop.addEventListener('dragleave', () => drop.style.borderColor = '#d1d5db');
+    drop.addEventListener('drop', e => { e.preventDefault(); drop.style.borderColor = '#d1d5db'; addShootImages(e.dataTransfer.files); });
+    drop.addEventListener('paste', e => {
+        const item = Array.from(e.clipboardData.items).find(x => x.type.startsWith('image/'));
+        if (item) { e.preventDefault(); addShootImages([item.getAsFile()]); }
+    });
+    input.addEventListener('change', e => { addShootImages(e.target.files); e.target.value = ''; });
+})();
+
+async function submitShoot() {
+    const product = document.getElementById('shootProduct').value.trim();
+    const desc = document.getElementById('shootDesc').value.trim();
+    const status = document.getElementById('shootStatus');
+    const btn = document.getElementById('shootSubmit');
+    const user = getLibUser();
+    if (!user) { alert('请先登录'); return; }
+    if (!product) { status.textContent = '请填写产品名称'; status.style.color = '#ef4444'; return; }
+    if (!desc && !shootImages.length) { status.textContent = '请填写描述或上传参考图'; status.style.color = '#ef4444'; return; }
+
+    btn.disabled = true;
+    status.style.color = '#6b7280';
+    try {
+        const photoKeys = [];
+        if (shootImages.length) {
+            status.textContent = '上传图片中...';
+            for (const img of shootImages) {
+                const fd = new FormData();
+                const blob = await fetch(img.dataUrl).then(r => r.blob());
+                fd.append('file', blob, img.name);
+                fd.append('prefix', 'shoot/ref');
+                const upRes = await fetch('/api/studio-upload', { method: 'POST', body: fd });
+                const upJson = await upRes.json();
+                if (!upRes.ok || !upJson.ok) throw new Error('图片上传失败');
+                photoKeys.push({ key: upJson.key, name: upJson.name });
+            }
+        }
+        status.textContent = '提交中...';
+        const data = {
+            fileName: '白底拍摄需求',
+            submitTime: new Date().toLocaleString('zh-CN'),
+            basicInfo: { '型号': product, '图片数量': shootImages.length + ' 张' },
+            images: photoKeys.map((k, i) => ({ 序号: '图' + (i + 1), 区域: '拍摄参考', 图片要求: desc, photoKey: k.key, photoName: k.name })),
+            directPhotoKeys: photoKeys,
+            directDesc: desc
+        };
+        const res = await fetch('/api/submit', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ taskType: '白底拍摄需求', remarks: desc, submitter: user, data })
+        });
+        const json = await res.json();
+        if (!res.ok || !json.ok) throw new Error(json.error || res.status);
+        status.textContent = '提交成功！';
+        status.style.color = '#10b981';
+        setTimeout(closeShootModal, 1200);
+    } catch (e) {
+        status.textContent = '提交失败：' + e.message;
+        status.style.color = '#ef4444';
+        btn.disabled = false;
+    }
+}
+
+loadLibrary();
+</script>
+</body>
+</html>
