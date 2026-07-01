@@ -1338,3 +1338,11 @@ function closeProgramGuide() {
     }
     document.querySelector('.guide-modal')?.remove();
 }
+
+
+// Auto-poll check-overdue every 2 minutes while studio page is open
+(function startAutoCheckPoller() {
+    setInterval(function() {
+        fetch('/api/studio-check-overdue').catch(function() {});
+    }, 2 * 60 * 1000);
+})();
