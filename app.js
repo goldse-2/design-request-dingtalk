@@ -511,7 +511,7 @@ function addDirectImages(files) {
     Array.from(files).forEach(file => {
         if (directImages.length >= 3) { alert('最多上传 3 张图片'); return; }
         if (!file.type.startsWith('image/')) { alert('请上传图片文件：' + file.name); return; }
-        if (file.size > 5 * 1024 * 1024) { alert('单张图片不能超过 5MB：' + file.name); return; }
+        if (file.size > 8 * 1024 * 1024) { alert('单张图片不能超过 8MB：' + file.name); return; }
         const reader = new FileReader();
         reader.onload = ev => {
             directImages.push({ name: file.name, mimeType: file.type, base64: ev.target.result.split(',')[1], dataUrl: ev.target.result });
@@ -602,7 +602,7 @@ function addDesignImages(files) {
     Array.from(files).forEach(file => {
         if (designImages.length >= 3) { alert('最多上传 3 张图片'); return; }
         if (!file.type.startsWith('image/')) { alert('请上传图片文件：' + file.name); return; }
-        if (file.size > 5 * 1024 * 1024) { alert('单张图片不能超过 5MB：' + file.name); return; }
+        if (file.size > 8 * 1024 * 1024) { alert('单张图片不能超过 8MB：' + file.name); return; }
         const reader = new FileReader();
         reader.onload = ev => {
             designImages.push({ name: file.name, mimeType: file.type, base64: ev.target.result.split(',')[1], dataUrl: ev.target.result });
@@ -639,7 +639,7 @@ function addPackagingImages(files) {
     Array.from(files).forEach(file => {
         if (packagingImages.length >= 3) { alert('最多上传 3 张图片'); return; }
         if (!file.type.startsWith('image/')) { alert('请上传图片文件：' + file.name); return; }
-        if (file.size > 5 * 1024 * 1024) { alert('单张图片不能超过 5MB：' + file.name); return; }
+        if (file.size > 8 * 1024 * 1024) { alert('单张图片不能超过 8MB：' + file.name); return; }
         const reader = new FileReader();
         reader.onload = ev => {
             packagingImages.push({ name: file.name, mimeType: file.type, base64: ev.target.result.split(',')[1], dataUrl: ev.target.result });

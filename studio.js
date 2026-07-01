@@ -929,9 +929,9 @@ function wirePromptMentions() {
 function addFreeImages(files) {
     files.forEach(file => {
         if (uploads.freeImages.length >= 4) return;
-        if (file.size > 5 * 1024 * 1024) {
+        if (file.size > 8 * 1024 * 1024) {
             const status = document.getElementById('freeStatus');
-            const msg = '参考图单张不能超过 5MB：' + file.name;
+            const msg = '参考图单张不能超过 8MB：' + file.name;
             if (status) { status.textContent = msg; status.className = 'studio-status err'; }
             else alert(msg);
             return;
