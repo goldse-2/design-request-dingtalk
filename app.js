@@ -675,19 +675,19 @@ function clearPackagingImages() {
 function loadFile(file) {
     if (!file.name.match(/\.(xlsx|xls)$/i)) { alert('请上传 Excel 文件（.xlsx 或 .xls）'); return; }
     const reader = new FileReader();
-    reader.onload = async e => {
-        try {
-            const arrayBuffer = e.target.result;
-            const wb = XLSX.read(new Uint8Array(arrayBuffer), { type: 'array' });
-            const idToImage = await extractImages(arrayBuffer);
-            parsedData = parseWorkbook(wb, file.name, idToImage);
-            parsedData.originalFile = arrayBufferToBase64(arrayBuffer);
-            fileNameEl.textContent = file.name;
-            uploadEmpty.hidden = true;
-            uploadFilled.hidden = false;
-            renderPreview();
-            updateSubmitState();
-        } catch (err) { alert('解析失败：' + err.message); }
+    reader.onload = e => {
+        const arrayBuffer = e.target.result;
+        parsedData = {
+            fileName: file.name,
+            submitTime: new Date().toLocaleString('zh-CN'),
+            basicInfo: {},
+            images: [],
+            originalFile: arrayBufferToBase64(arrayBuffer)
+        };
+        fileNameEl.textContent = file.name;
+        uploadEmpty.hidden = true;
+        uploadFilled.hidden = false;
+        updateSubmitState();
     };
     reader.readAsArrayBuffer(file);
 }
