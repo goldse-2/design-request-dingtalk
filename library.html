@@ -6,6 +6,25 @@
     <title>资料库 - 作图中心</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <link rel="stylesheet" href="style.css">
+
+<style>
+.lib-tab {
+    padding: 7px 18px;
+    border: none;
+    background: transparent;
+    font-size: 0.88rem;
+    color: #6b7280;
+    cursor: pointer;
+    border-bottom: 2.5px solid transparent;
+    margin-bottom: -2px;
+    font-weight: 500;
+    transition: color .15s, border-color .15s;
+}
+.lib-tab.active, .lib-tab:hover {
+    color: #6366f1;
+    border-bottom-color: #6366f1;
+}
+</style>
 </head>
 <body class="has-sidebar">
 
@@ -39,6 +58,12 @@
                     <p style="color:#6b7280;font-size:0.9rem;margin-top:4px">选择分类查看产品、素材和文件</p>
                 </div>
 
+            </div>
+            <div id="libTabBar" style="display:flex;gap:6px;margin-bottom:20px;border-bottom:2px solid #f3f4f6;padding-bottom:0">
+                <button class="lib-tab active" data-tab="all" onclick="switchLibTab('all')">全部</button>
+                <button class="lib-tab" data-tab="product" onclick="switchLibTab('product')">产品</button>
+                <button class="lib-tab" data-tab="model" onclick="switchLibTab('model')">模特图片素材</button>
+                <button class="lib-tab" data-tab="manual" onclick="switchLibTab('manual')">说明书</button>
             </div>
             <div id="libLoading" style="color:#9ca3af;padding:40px 0;text-align:center">加载中...</div>
             <div id="libCatGrid" style="display:flex;flex-direction:column;gap:32px"></div>
@@ -348,6 +373,41 @@ async function submitShoot() {
 }
 
 loadLibrary();
+
+let _libActiveTab = 'all';
+// Tab map: which KV category names belong to each tab
+const LIB_TAB_MAP = {
+    product: ['美甲灯','工具','护理','家居','其他'],
+    model: ['模特'],
+    manual: ['说明书'],
+};
+
+function switchLibTab(tab) {
+    _libActiveTab = tab;
+    document.querySelectorAll('.lib-tab').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tab === tab);
+    });
+    const grid = document.getElementById('libCatGrid');
+    if (!grid) return;
+    // Show/hide sections based on tab
+    Array.from(grid.children).forEach(section => {
+        const title = section.querySelector('.library-section-title');
+        if (!title) return;
+        const cat = title.textContent.trim();
+        let show = false;
+        if (tab === 'all') {
+            show = true;
+        } else {
+            const matchCats = LIB_TAB_MAP[tab] || [];
+            // Fuzzy: manual = contains '说明书', model = '模特', product = everything else
+            if (tab === 'manual') show = cat.includes('说明书');
+            else if (tab === 'model') show = cat.includes('模特');
+            else if (tab === 'product') show = !cat.includes('模特') && !cat.includes('说明书');
+        }
+        section.style.display = show ? '' : 'none';
+    });
+}
+
 </script>
 </body>
 </html>

@@ -631,7 +631,7 @@ function initLibrary() {
     if (libFolderBtn) libFolderBtn.dataset.wired = '1';
 
     // ── Category management ──────────────────────────────
-    const DEFAULT_CATS = ['美甲灯', '工具', '护理', '家居', '模特'];
+    const DEFAULT_CATS = ['美甲灯', '工具', '护理', '家居', '模特', '说明书'];
     function loadCats() {
         try { return JSON.parse(localStorage.getItem('lib_categories')) || DEFAULT_CATS; }
         catch { return DEFAULT_CATS; }
@@ -703,7 +703,7 @@ function initLibrary() {
 
 // Build a category <select> for the admin product detail panel (move category)
 function buildMoveCatSelect(currentCat) {
-    const DEFAULT_CATS = ['美甲灯', '工具', '护理', '家居', '模特'];
+    const DEFAULT_CATS = ['美甲灯', '工具', '护理', '家居', '模特', '说明书'];
     let cats;
     try { cats = JSON.parse(localStorage.getItem('lib_categories')) || DEFAULT_CATS; }
     catch { cats = DEFAULT_CATS; }
@@ -960,7 +960,7 @@ function renderAdminDetail(product, files, detailPanel, groups, renderFolders) {
             const name = prompt('请输入新分类名称：');
             if (!name || !name.trim()) { moveSel.value = currentCat; return; }
             newCat = name.trim();
-            const DEFAULT_CATS = ['美甲灯', '工具', '护理', '家居', '模特'];
+            const DEFAULT_CATS = ['美甲灯', '工具', '护理', '家居', '模特', '说明书'];
             let cats;
             try { cats = JSON.parse(localStorage.getItem('lib_categories')) || DEFAULT_CATS; }
             catch { cats = DEFAULT_CATS; }

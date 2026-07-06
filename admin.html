@@ -6,6 +6,25 @@
     <title>管理台 - 作图中心</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <link rel="stylesheet" href="style.css">
+
+<style>
+.lib-admin-tab {
+    padding: 6px 16px;
+    border: 1.5px solid #e5e7eb;
+    border-radius: 20px;
+    background: #fff;
+    color: #6b7280;
+    font-size: 0.82rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all .15s;
+}
+.lib-admin-tab.active, .lib-admin-tab:hover {
+    background: #6366f1;
+    color: #fff;
+    border-color: #6366f1;
+}
+</style>
 </head>
 <body class="has-sidebar">
 
@@ -110,6 +129,12 @@
         <a href="library.html" target="_blank" style="font-size:0.8rem;color:#6366f1;text-decoration:none">查看资料库 →</a>
     </div>
 
+    <div style="display:flex;gap:8px;margin-bottom:14px">
+        <button class="lib-admin-tab active" data-cat="" onclick="setLibAdminTab(this,'')">全部</button>
+        <button class="lib-admin-tab" data-cat="product" onclick="setLibAdminTab(this,'product')">产品</button>
+        <button class="lib-admin-tab" data-cat="model" onclick="setLibAdminTab(this,'model')">模特图片素材</button>
+        <button class="lib-admin-tab" data-cat="manual" onclick="setLibAdminTab(this,'manual')">说明书</button>
+    </div>
     <div style="background:#fff;border-radius:12px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,0.07);margin-bottom:16px">
         <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px">
             <div style="min-width:140px">
@@ -206,6 +231,41 @@
     </div>
 </div>
 
+
+<script>
+function setLibAdminTab(btn, tabKey) {
+    document.querySelectorAll('.lib-admin-tab').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const catSel = document.getElementById('libCategory');
+    if (!catSel) return;
+    // Map tab key to a default category value
+    const map = { product: '美甲灯', model: '模特', manual: '说明书' };
+    if (tabKey && map[tabKey]) {
+        catSel.value = map[tabKey];
+        // If the value didn't match, try to find the option
+        if (catSel.value !== map[tabKey]) {
+            Array.from(catSel.options).forEach(o => {
+                if (o.text.includes(tabKey === 'manual' ? '说明书' : tabKey === 'model' ? '模特' : '')) {
+                    catSel.value = o.value;
+                }
+            });
+        }
+    }
+    // Filter the admin grid sections
+    const container = document.getElementById('libAdminContent');
+    if (!container) return;
+    container.querySelectorAll('.lib-admin-section').forEach(sec => {
+        const title = sec.querySelector('h3,h4,.lib-section-title');
+        if (!title) { sec.style.display = ''; return; }
+        const cat = title.textContent.trim();
+        let show = true;
+        if (tabKey === 'manual') show = cat.includes('说明书');
+        else if (tabKey === 'model') show = cat.includes('模特');
+        else if (tabKey === 'product') show = !cat.includes('模特') && !cat.includes('说明书');
+        sec.style.display = show ? '' : 'none';
+    });
+}
+</script>
 <script src="admin.js?v=20260627-feedback-modal"></script>
 </div>
 </body>
