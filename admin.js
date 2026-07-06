@@ -78,7 +78,7 @@ function showAdmin() {
     etaModal.addEventListener('click', e => { if (e.target === etaModal) { etaModal.hidden = true; etaModal.classList.remove('modal--visible'); pendingEtaId = null; } });
     etaConfirmBtn.addEventListener('click', async () => {
         if (!pendingEtaId) return;
-        if (!etaInput.value) { alert('璇烽€夋嫨棰勮瀹屾垚鏃堕棿'); return; }
+        if (!etaInput.value) { alert('请选择预计完成时间'); return; }
         etaModal.hidden = true;
         etaModal.classList.remove('modal--visible');
         await sendEta(pendingEtaId, etaInput.value, etaNote.value.trim());
@@ -112,7 +112,7 @@ authInput.addEventListener('keydown', e => {
 
 async function loadSubmissions() {
     loadingState.hidden = false;
-    loadingState.textContent = '鍔犺浇涓?..';
+    loadingState.textContent = '加载中...';
     submissionsList.innerHTML = '';
     emptyState.hidden = true;
 
@@ -124,19 +124,20 @@ async function loadSubmissions() {
 
         allData = json.submissions || [];
         
-        // 缁熻鍒嗙被锛堟ā绯婂尮閰嶏紝瑙嗛浼樺厛锛?        const categoryStats = { '鍥剧墖': 0, '瑙嗛': 0, '璁捐': 0 };
+        // 统计分类（模糊匹配，视频优先）
+        const categoryStats = { '图片': 0, '视频': 0, '设计': 0 };
         allData.forEach(sub => {
             const type = (sub.taskType || '').toLowerCase();
-            if (type.includes('瑙嗛')) categoryStats['瑙嗛']++;
-            else if (type.includes('鍥剧墖') || type.includes('鍥惧儚')) categoryStats['鍥剧墖']++;
-            else if (type.includes('璁捐')) categoryStats['璁捐']++;
+            if (type.includes('视频')) categoryStats['视频']++;
+            else if (type.includes('图片') || type.includes('图像')) categoryStats['图片']++;
+            else if (type.includes('设计')) categoryStats['设计']++;
         });
         
         renderStats(json.stats, categoryStats);
         filterAndRender(filterSelect.value);
     } catch (err) {
         loadingState.hidden = false;
-        loadingState.innerHTML = `<p style="color:#ef4444">鍔犺浇澶辫触锛?{err.message}</p>`;
+        loadingState.innerHTML = `<p style="color:#ef4444">加载失败：${err.message}</p>`;
     }
 }
 
@@ -144,15 +145,15 @@ function renderStats(stats, categoryStats) {
     if (!stats) return;
     
     let html = `
-        <div class="stat-card" style="cursor:pointer" onclick="filterByCategory('all')" title="鐐瑰嚮鏌ョ湅鍏ㄩ儴闇€姹?>
+        <div class="stat-card" style="cursor:pointer" onclick="filterByCategory('all')" title="点击查看全部需求">
             <div class="stat-val">${stats.total}</div>
-            <div class="stat-label">寰呭鐞嗛渶姹?/div>
+            <div class="stat-label">待处理需求</div>
         </div>
     `;
     
     if (categoryStats) {
         html += Object.entries(categoryStats).map(([cat, count]) => `
-            <div class="stat-card" style="cursor:pointer" onclick="filterByCategory('${cat}')" title="鐐瑰嚮绛涢€?{cat}浠诲姟">
+            <div class="stat-card" style="cursor:pointer" onclick="filterByCategory('${cat}')" title="点击筛选${cat}任务">
                 <div class="stat-val">${count}</div>
                 <div class="stat-label">${cat}</div>
             </div>
@@ -169,14 +170,14 @@ function filterByCategory(category) {
 }
 
 function filterAndRender(filter) {
-    // 绾墠绔瓫閫夛紝閫熷害瓒呭揩锛屼笉闇€瑕佽姹傛湇鍔″櫒
+    // 纯前端筛选，速度超快，不需要请求服务器
     let filtered = allData;
     if (filter !== 'all') {
         filtered = allData.filter(sub => {
             const type = (sub.taskType || '').toLowerCase();
-            if (filter === '瑙嗛') return type.includes('瑙嗛');
-            if (filter === '鍥剧墖') return !type.includes('瑙嗛') && (type.includes('鍥剧墖') || type.includes('鍥惧儚'));
-            if (filter === '璁捐') return type.includes('璁捐');
+            if (filter === '视频') return type.includes('视频');
+            if (filter === '图片') return !type.includes('视频') && (type.includes('图片') || type.includes('图像'));
+            if (filter === '设计') return type.includes('设计');
             return false;
         });
     }
@@ -198,7 +199,7 @@ function renderSubmissions(subs) {
         submissionsList.innerHTML = subs.map(sub => renderCard(sub)).join('');
     } catch (err) {
         loadingState.hidden = false;
-        loadingState.innerHTML = `<p style="color:#ef4444">娓叉煋澶辫触锛?{err.message}</p>`;
+        loadingState.innerHTML = `<p style="color:#ef4444">渲染失败：${err.message}</p>`;
     }
 }
 
@@ -216,80 +217,80 @@ function renderCard(sub) {
     return `<div class="sub-card" id="card-${sub.id}">
         <div class="sub-card-head">
             <div class="sub-card-title">
-                <span class="sub-product" id="product-${sub.id}">${esc(info['鍨嬪彿'] || '鏈煡浜у搧')}</span>
-                <button type="button" onclick="editSubmissionName('${sub.id}')" title="淇敼鍚嶇О" style="border:none;background:#f3f4f6;color:#6366f1;border-radius:7px;padding:3px 8px;cursor:pointer;font-size:0.75rem;font-weight:700">缂栬緫鍚嶇О</button>
+                <span class="sub-product" id="product-${sub.id}">${esc(info['型号'] || '未知产品')}</span>
+                <button type="button" onclick="editSubmissionName('${sub.id}')" title="修改名称" style="border:none;background:#f3f4f6;color:#6366f1;border-radius:7px;padding:3px 8px;cursor:pointer;font-size:0.75rem;font-weight:700">编辑名称</button>
                 <span class="tag tag-type">${esc(sub.taskType || '')}</span>
-                ${sub.eta ? `<span class="tag" style="background:#fef3c7;color:#f59e0b">鈴?棰勮${esc(sub.eta)}瀹屾垚</span>` : ''}
+                ${sub.eta ? `<span class="tag" style="background:#fef3c7;color:#f59e0b">⏰ 预计${esc(sub.eta)}完成</span>` : ''}
             </div>
             <div style="display:flex;align-items:center;gap:10px">
                 <div class="sub-meta">${dateStr}</div>
-                <button onclick="deleteSubmission('${sub.id}')" title="鍒犻櫎" style="background:none;border:none;cursor:pointer;color:#d1d5db;font-size:1.1rem;line-height:1;padding:2px 4px" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#d1d5db'">鉁?/button>
+                <button onclick="deleteSubmission('${sub.id}')" title="删除" style="background:none;border:none;cursor:pointer;color:#d1d5db;font-size:1.1rem;line-height:1;padding:2px 4px" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#d1d5db'">✕</button>
             </div>
         </div>
         <div class="sub-body">
-            ${info['浜よ〃鏃堕棿'] ? `<span class="sub-chip">浜よ〃 ${esc(info['浜よ〃鏃堕棿'])}</span>` : ''}
-            ${info['鍥剧墖鏁伴噺'] ? `<span class="sub-chip">${esc(String(info['鍥剧墖鏁伴噺']))}</span>` : ''}
-            ${images.length > 0 ? `<span class="sub-chip">${images.length} 寮犲浘鐗囬渶姹?/span>` : ''}
-            ${info['棰滆壊瑕佹眰'] ? `<span class="sub-chip">${esc(String(info['棰滆壊瑕佹眰']).slice(0, 20))}${String(info['棰滆壊瑕佹眰']).length > 20 ? '鈥? : ''}</span>` : ''}
-            ${info['鍝佺墝'] ? `<span class="sub-chip">鍝佺墝: ${esc(info['鍝佺墝'])}</span>` : ''}
-            ${info['浜氶┈閫婂悕绉?] ? `<span class="sub-chip">浜氶┈閫? ${esc(String(info['浜氶┈閫婂悕绉?]).slice(0, 30))}${String(info['浜氶┈閫婂悕绉?]).length > 30 ? '鈥? : ''}</span>` : ''}
-            ${info['鍞悗閭'] && info['鍞悗閭'] !== '鏈彁渚? ? `<span class="sub-chip">馃摟 ${esc(info['鍞悗閭'])}</span>` : ''}
-            ${info['鍖呰灏哄'] ? `<span class="sub-chip">馃搹 ${esc(info['鍖呰灏哄'])}</span>` : ''}
-            ${info['闇€瑕佹椂闂?] ? `<span class="sub-chip">鈴?${esc(info['闇€瑕佹椂闂?])}</span>` : ''}
+            ${info['交表时间'] ? `<span class="sub-chip">交表 ${esc(info['交表时间'])}</span>` : ''}
+            ${info['图片数量'] ? `<span class="sub-chip">${esc(String(info['图片数量']))}</span>` : ''}
+            ${images.length > 0 ? `<span class="sub-chip">${images.length} 张图片需求</span>` : ''}
+            ${info['颜色要求'] ? `<span class="sub-chip">${esc(String(info['颜色要求']).slice(0, 20))}${String(info['颜色要求']).length > 20 ? '…' : ''}</span>` : ''}
+            ${info['品牌'] ? `<span class="sub-chip">品牌: ${esc(info['品牌'])}</span>` : ''}
+            ${info['亚马逊名称'] ? `<span class="sub-chip">亚马逊: ${esc(String(info['亚马逊名称']).slice(0, 30))}${String(info['亚马逊名称']).length > 30 ? '…' : ''}</span>` : ''}
+            ${info['售后邮箱'] && info['售后邮箱'] !== '未提供' ? `<span class="sub-chip">📧 ${esc(info['售后邮箱'])}</span>` : ''}
+            ${info['包装尺寸'] ? `<span class="sub-chip">📏 ${esc(info['包装尺寸'])}</span>` : ''}
+            ${info['需要时间'] ? `<span class="sub-chip">⏰ ${esc(info['需要时间'])}</span>` : ''}
         </div>
         ${hasRemarks ? `<div class="sub-remarks">${esc(sub.remarks)}</div>` : ''}
         ${(d.directPhotoKeys && d.directPhotoKeys.length) ? `
             <div style="display:flex;flex-wrap:wrap;gap:8px;margin:10px 0">
                 ${d.directPhotoKeys.map(k => `
-                    <a href="/api/library-file/${encodeURIComponent(k.key)}?dl=1" download="${esc(k.name || '')}" title="涓嬭浇 ${esc(k.name || '')}" style="width:72px;height:72px;display:block">
+                    <a href="/api/library-file/${encodeURIComponent(k.key)}?dl=1" download="${esc(k.name || '')}" title="下载 ${esc(k.name || '')}" style="width:72px;height:72px;display:block">
                         <img src="/api/library-file/${encodeURIComponent(k.key)}" style="width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid #e5e7eb" loading="lazy">
                     </a>
                 `).join('')}
             </div>
-            ${d.directDesc ? `<div style="font-size:0.85rem;color:#374151;margin-bottom:6px">鎻忚堪锛?{esc(d.directDesc)}</div>` : ''}
+            ${d.directDesc ? `<div style="font-size:0.85rem;color:#374151;margin-bottom:6px">描述：${esc(d.directDesc)}</div>` : ''}
         ` : ''}
         ${submitter ? `
             <div class="sub-submitter">
                 ${submitter.avatar ? `<img class="sub-submitter-avatar" src="${esc(submitter.avatar)}" alt="">` : ''}
                 <span class="sub-submitter-name">${esc(submitter.name || '')}</span>
-                <span class="sub-submitter-dept">鎻愪氦</span>
+                <span class="sub-submitter-dept">提交</span>
             </div>
         ` : ''}
         ${images.length > 0 ? `
-            <span class="sub-toggle" onclick="toggleImages(this)">鏌ョ湅璇︽儏 鈫?/span>
+            <span class="sub-toggle" onclick="toggleImages(this)">查看详情 ↓</span>
             <div class="sub-images" hidden>
                 ${images.filter(img => img.photoKey).length > 0 ? `
                     <div style="margin-bottom:12px">
-                        <div style="font-size:0.85rem;font-weight:600;color:#6b7280;margin-bottom:8px">馃摲 浜у搧鍥剧墖锛?/div>
+                        <div style="font-size:0.85rem;font-weight:600;color:#6b7280;margin-bottom:8px">📷 产品图片：</div>
                         <div style="display:flex;flex-wrap:wrap;gap:8px">
                             ${images.filter(img => img.photoKey).map(img => `
-                                <a href="/api/library-file/${encodeURIComponent(img.photoKey)}?dl=1" download="${esc(img.photoName || '')}" title="涓嬭浇 ${esc(img.photoName || '')}" style="width:120px;height:120px;display:block">
+                                <a href="/api/library-file/${encodeURIComponent(img.photoKey)}?dl=1" download="${esc(img.photoName || '')}" title="下载 ${esc(img.photoName || '')}" style="width:120px;height:120px;display:block">
                                     <img src="/api/library-file/${encodeURIComponent(img.photoKey)}" style="width:120px;height:120px;object-fit:cover;border-radius:8px;border:1px solid #e5e7eb" loading="lazy">
                                 </a>
                             `).join('')}
                         </div>
                     </div>
                 ` : ''}
-                ${images.filter(img => img.鍥剧墖瑕佹眰).length > 0 ? `<div style="font-size:0.85rem;font-weight:600;color:#6b7280;margin-bottom:8px">馃搵 鍥剧墖闇€姹傦細</div>` : ''}
-                ${images.filter(img => img.鍥剧墖瑕佹眰).slice(0, 5).map(img => `
+                ${images.filter(img => img.图片要求).length > 0 ? `<div style="font-size:0.85rem;font-weight:600;color:#6b7280;margin-bottom:8px">📋 图片需求：</div>` : ''}
+                ${images.filter(img => img.图片要求).slice(0, 5).map(img => `
                     <div class="sub-img-row">
-                        <span class="sub-img-num">${esc(String(img.搴忓彿 || ''))}</span>
-                        <span>${esc(String(img.鍥剧墖瑕佹眰 || '').slice(0, 60))}${String(img.鍥剧墖瑕佹眰 || '').length > 60 ? '鈥? : ''}</span>
+                        <span class="sub-img-num">${esc(String(img.序号 || ''))}</span>
+                        <span>${esc(String(img.图片要求 || '').slice(0, 60))}${String(img.图片要求 || '').length > 60 ? '…' : ''}</span>
                     </div>
                 `).join('')}
-                ${images.filter(img => img.鍥剧墖瑕佹眰).length > 5 ? `<div style="font-size:0.8rem;color:#9ca3af;padding:4px 0">杩樻湁 ${images.filter(img => img.鍥剧墖瑕佹眰).length - 5} 寮?..</div>` : ''}
+                ${images.filter(img => img.图片要求).length > 5 ? `<div style="font-size:0.8rem;color:#9ca3af;padding:4px 0">还有 ${images.filter(img => img.图片要求).length - 5} 张...</div>` : ''}
             </div>
         ` : ''}
         <div class="sub-actions">
             <div style="display:flex;gap:6px;align-items:center">
-                <button class="btn-icon" onclick="openSortModal()" title="鎺掑簭"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg></button>
-                ${sub.fileKey ? `<button class="btn-download-original" onclick="downloadOriginal('${sub.id}')">馃搸 涓嬭浇鍘熻〃鏍?/button>` : ''}
+                <button class="btn-icon" onclick="openSortModal()" title="排序"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg></button>
+                ${sub.fileKey ? `<button class="btn-download-original" onclick="downloadOriginal('${sub.id}')">📎 下载原表格</button>` : ''}
             </div>
             <div style="display:flex;gap:8px">
-                <button class="btn-processing" onclick="markProcessing('${sub.id}')">馃洜 澶勭悊涓?/button>
-                <button class="btn-eta" onclick="openEta('${sub.id}')">鈴?棰勮瀹屾垚鏃堕棿</button>
-                <button class="btn-reject" onclick="openReject('${sub.id}')">椹冲洖</button>
-                <button class="btn-complete" onclick="completeSubmission('${sub.id}')">鉁?瀹屾垚</button>
+                <button class="btn-processing" onclick="markProcessing('${sub.id}')">🛠 处理中</button>
+                <button class="btn-eta" onclick="openEta('${sub.id}')">⏰ 预计完成时间</button>
+                <button class="btn-reject" onclick="openReject('${sub.id}')">驳回</button>
+                <button class="btn-complete" onclick="completeSubmission('${sub.id}')">✓ 完成</button>
             </div>
         </div>
     </div>`;
@@ -299,11 +300,11 @@ function toggleImages(el) {
     const imagesDiv = el.nextElementSibling;
     const hidden = imagesDiv.hidden;
     imagesDiv.hidden = !hidden;
-    el.textContent = hidden ? '鏀惰捣 鈫? : '鏌ョ湅鍥剧墖闇€姹?鈫?;
+    el.textContent = hidden ? '收起 ↑' : '查看图片需求 ↓';
 }
 
 async function deleteSubmission(id) {
-    if (!confirm('纭鍒犻櫎杩欎釜闇€姹傦紵鍒犻櫎鍚庝笉鍙仮澶嶃€?)) return;
+    if (!confirm('确认删除这个需求？删除后不可恢复。')) return;
     const card = document.getElementById('card-' + id);
     if (card) card.style.opacity = '0.55';
     try {
@@ -320,16 +321,16 @@ async function deleteSubmission(id) {
         if (!submissionsList.querySelector('.sub-card')) emptyState.hidden = false;
     } catch (e) {
         if (card) card.style.opacity = '1';
-        alert('鍒犻櫎澶辫触锛? + e.message);
+        alert('删除失败：' + e.message);
     }
 }
 
 async function editSubmissionName(id) {
     const current = document.getElementById('product-' + id)?.textContent || '';
-    const name = prompt('璇疯緭鍏ユ柊鐨勪骇鍝佸悕绉帮細', current === '鏈煡浜у搧' ? '' : current);
+    const name = prompt('请输入新的产品名称：', current === '未知产品' ? '' : current);
     if (name === null) return;
     const productName = name.trim();
-    if (!productName) return alert('鍚嶇О涓嶈兘涓虹┖');
+    if (!productName) return alert('名称不能为空');
     try {
         const res = await fetch('/api/submissions', {
             method: 'PATCH',
@@ -344,10 +345,10 @@ async function editSubmissionName(id) {
         if (item) {
             item.data = item.data || {};
             item.data.basicInfo = item.data.basicInfo || {};
-            item.data.basicInfo['鍨嬪彿'] = productName;
+            item.data.basicInfo['型号'] = productName;
         }
     } catch (e) {
-        alert('淇濆瓨澶辫触锛? + e.message);
+        alert('保存失败：' + e.message);
     }
 }
 
@@ -368,26 +369,26 @@ async function toggleHistory() {
 
 async function loadHistory() {
     const content = document.getElementById('historyContent');
-    content.innerHTML = '<div style="color:#9ca3af;font-size:0.9rem">鍔犺浇涓?..</div>';
+    content.innerHTML = '<div style="color:#9ca3af;font-size:0.9rem">加载中...</div>';
     try {
         const res = await fetch('/api/submissions?history=1');
         const json = await res.json();
         if (!res.ok || !json.ok) throw new Error(json.error || res.status);
         const list = json.submissions || [];
         if (!list.length) {
-            content.innerHTML = '<div style="color:#9ca3af;font-size:0.9rem">鏆傛棤鍘嗗彶璁板綍</div>';
+            content.innerHTML = '<div style="color:#9ca3af;font-size:0.9rem">暂无历史记录</div>';
             return;
         }
         content.innerHTML = list.map(renderHistoryCard).join('');
     } catch (e) {
-        content.innerHTML = '<div style="color:#ef4444;font-size:0.9rem">鍔犺浇澶辫触锛? + esc(e.message) + '</div>';
+        content.innerHTML = '<div style="color:#ef4444;font-size:0.9rem">加载失败：' + esc(e.message) + '</div>';
     }
 }
 
 function renderHistoryCard(sub) {
     const d = sub.data || {};
     const info = d.basicInfo || {};
-    const statusText = sub.status === 'completed' ? ['宸插畬鎴?, '#10b981', '#ecfdf5'] : ['宸查┏鍥?, '#ef4444', '#fef2f2'];
+    const statusText = sub.status === 'completed' ? ['已完成', '#10b981', '#ecfdf5'] : ['已驳回', '#ef4444', '#fef2f2'];
     const archivedStr = sub.archivedAt
         ? new Date(sub.archivedAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
         : '';
@@ -395,17 +396,17 @@ function renderHistoryCard(sub) {
     return '<div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:14px 16px;margin-bottom:10px">'
         + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
         + '<div style="display:flex;align-items:center;gap:10px">'
-        + '<span style="font-weight:700;color:#111827">' + esc(info['鍨嬪彿'] || '鏈煡浜у搧') + '</span>'
+        + '<span style="font-weight:700;color:#111827">' + esc(info['型号'] || '未知产品') + '</span>'
         + '<span style="font-size:0.75rem;color:#6b7280">' + esc(sub.taskType || '') + '</span>'
         + '<span style="font-size:0.72rem;background:' + statusText[2] + ';color:' + statusText[1] + ';padding:2px 9px;border-radius:10px">' + statusText[0] + '</span>'
         + '</div>'
         + '<span style="font-size:0.76rem;color:#9ca3af">' + archivedStr + '</span>'
         + '</div>'
-        + (sub.submitter ? '<div style="font-size:0.8rem;color:#6b7280;margin-bottom:6px">鎻愪氦浜猴細' + esc(sub.submitter.name || '') + '</div>' : '')
-        + (sub.remarks ? '<div style="font-size:0.82rem;color:#374151;margin-bottom:6px">澶囨敞锛? + esc(sub.remarks) + '</div>' : '')
-        + (sub.resultMessage ? '<div style="font-size:0.82rem;color:#6b7280;margin-bottom:6px">澶勭悊璇存槑锛? + esc(sub.resultMessage) + '</div>' : '')
+        + (sub.submitter ? '<div style="font-size:0.8rem;color:#6b7280;margin-bottom:6px">提交人：' + esc(sub.submitter.name || '') + '</div>' : '')
+        + (sub.remarks ? '<div style="font-size:0.82rem;color:#374151;margin-bottom:6px">备注：' + esc(sub.remarks) + '</div>' : '')
+        + (sub.resultMessage ? '<div style="font-size:0.82rem;color:#6b7280;margin-bottom:6px">处理说明：' + esc(sub.resultMessage) + '</div>' : '')
         + (photos.length ? '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">' + photos.map(k => '<a href="/api/library-file/' + encodeURIComponent(k.key) + '?dl=1" target="_blank" style="width:56px;height:56px;display:block"><img src="/api/library-file/' + encodeURIComponent(k.key) + '" style="width:56px;height:56px;object-fit:cover;border-radius:6px;border:1px solid #e5e7eb" loading="lazy"></a>').join('') + '</div>' : '')
-        + (sub.fileKey ? '<button onclick="downloadOriginal(\'' + sub.id + '\')" style="font-size:0.78rem;color:#6366f1;background:#fff;border:1px solid #6366f1;border-radius:7px;padding:5px 12px;cursor:pointer">涓嬭浇鍘熻〃鏍?/button>' : '')
+        + (sub.fileKey ? '<button onclick="downloadOriginal(\'' + sub.id + '\')" style="font-size:0.78rem;color:#6366f1;background:#fff;border:1px solid #6366f1;border-radius:7px;padding:5px 12px;cursor:pointer">下载原表格</button>' : '')
         + '</div>';
 }
 
@@ -424,7 +425,7 @@ function addRejectImage(file) {
         img.src = ev.target.result;
         img.style.cssText = 'width:80px;height:80px;object-fit:cover;border-radius:6px;border:1px solid #e5e7eb;display:block';
         const btn = document.createElement('button');
-        btn.textContent = '脳';
+        btn.textContent = '×';
         btn.style.cssText = 'position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.55);color:white;border:none;border-radius:50%;width:18px;height:18px;cursor:pointer;font-size:12px;line-height:1;padding:0';
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -482,17 +483,17 @@ async function sendEta(id, etaValue, note) {
                     if (body) body.parentNode.insertBefore(badge, body.nextSibling);
                     else card.appendChild(badge);
                 }
-                badge.textContent = `鈴?棰勮瀹屾垚锛?{etaText}`;
+                badge.textContent = `⏰ 预计完成：${etaText}`;
             }
             const sub = allData.find(s => s.id === id);
             if (sub) sub.eta = etaText;
         } else {
             if (card) card.style.opacity = '';
-            alert('鍙戦€佸け璐ワ細' + (json.error || res.status));
+            alert('发送失败：' + (json.error || res.status));
         }
     } catch (err) {
         if (card) card.style.opacity = '';
-        alert('缃戠粶閿欒锛? + err.message);
+        alert('网络错误：' + err.message);
     }
 }
 
@@ -517,22 +518,22 @@ async function markProcessing(id) {
                     if (body) body.parentNode.insertBefore(badge, body.nextSibling);
                     else card.appendChild(badge);
                 }
-                badge.textContent = '馃洜 澶勭悊涓?;
+                badge.textContent = '🛠 处理中';
             }
             const sub = allData.find(s => s.id === id);
             if (sub) sub.status = 'processing';
         } else {
             if (card) card.style.opacity = '';
-            alert('鎿嶄綔澶辫触锛? + (json.error || res.status));
+            alert('操作失败：' + (json.error || res.status));
         }
     } catch (err) {
         if (card) card.style.opacity = '';
-        alert('缃戠粶閿欒锛? + err.message);
+        alert('网络错误：' + err.message);
     }
 }
 
 async function completeSubmission(id) {
-    if (!confirm('纭鏍囪涓哄畬鎴愶紵瀹屾垚鍚庤褰曞皢浠庡垪琛ㄤ腑绉婚櫎骞堕€氱煡鎻愪氦浜恒€?)) return;
+    if (!confirm('确认标记为完成？完成后记录将从列表中移除并通知提交人。')) return;
     await updateStatus(id, 'complete', '');
 }
 
@@ -561,11 +562,11 @@ async function updateStatus(id, action, message, images = []) {
             if (total) total.textContent = String(Math.max(0, parseInt(total.textContent) - 1));
         } else {
             if (card) { card.style.opacity = ''; card.style.pointerEvents = ''; }
-            alert('鎿嶄綔澶辫触锛? + (json.error || res.status));
+            alert('操作失败：' + (json.error || res.status));
         }
     } catch (err) {
         if (card) { card.style.opacity = ''; card.style.pointerEvents = ''; }
-        alert('缃戠粶閿欒锛? + err.message);
+        alert('网络错误：' + err.message);
     }
 }
 
@@ -578,20 +579,20 @@ function downloadCSV(id) {
     if (!sub) return;
 
     const rows = [];
-    rows.push(['搴忓彿', '鍖哄煙', '鍥剧墖瑕佹眰', '灏哄', '鏂囨', '鍙傝€冮摼鎺?]);
+    rows.push(['序号', '区域', '图片要求', '尺寸', '文案', '参考链接']);
     for (const img of (sub.data.images || [])) {
-        rows.push([img.搴忓彿, img.鍖哄煙, img.鍥剧墖瑕佹眰, img.灏哄, img.鏂囨, img.鍙傝€冮摼鎺.map(v => `"${String(v || '').replace(/"/g, '""')}"`));
+        rows.push([img.序号, img.区域, img.图片要求, img.尺寸, img.文案, img.参考链接].map(v => `"${String(v || '').replace(/"/g, '""')}"`));
     }
 
     const info = sub.data.basicInfo || {};
     rows.unshift([]);
-    rows.unshift([`"鍨嬪彿: ${info['鍨嬪彿'] || ''}  绫诲瀷: ${sub.taskType}  浜よ〃: ${info['浜よ〃鏃堕棿'] || ''}"`]);
+    rows.unshift([`"型号: ${info['型号'] || ''}  类型: ${sub.taskType}  交表: ${info['交表时间'] || ''}"`]);
 
     const csvContent = '\uFEFF' + rows.map(r => Array.isArray(r) ? r.join(',') : r).join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `${info['鍨嬪彿'] || 'submission'}_${sub.taskType}_瑙ｆ瀽缁撴灉.csv`;
+    a.download = `${info['型号'] || 'submission'}_${sub.taskType}_解析结果.csv`;
     a.click();
     URL.revokeObjectURL(a.href);
 }
@@ -605,16 +606,16 @@ async function deleteSubmission(id) {
     try {
         const res = await fetch('/api/update-status', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ submissionId: id, action: 'reject', message: '绠＄悊鍛樺垹闄? })
+            body: JSON.stringify({ submissionId: id, action: 'reject', message: '管理员删除' })
         });
         if (res.ok) {
             const card = document.getElementById('card-' + id);
             if (card) card.remove();
         }
-    } catch(e) { alert('鍒犻櫎澶辫触锛? + e.message); }
+    } catch(e) { alert('删除失败：' + e.message); }
 }
 
-// 鈹€鈹€ Library Management 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// ── Library Management ──────────────────────────────────
 let libPendingFiles = [];
 
 function initLibrary() {
@@ -629,8 +630,8 @@ function initLibrary() {
     if (libUploadBtn) libUploadBtn.dataset.wired = '1';
     if (libFolderBtn) libFolderBtn.dataset.wired = '1';
 
-    // 鈹€鈹€ Category management 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-    const DEFAULT_CATS = ['缇庣敳鐏?, '宸ュ叿', '鎶ょ悊', '瀹跺眳', '妯＄壒', '璇存槑涔?];
+    // ── Category management ──────────────────────────────
+    const DEFAULT_CATS = ['美甲灯', '工具', '护理', '家居', '模特', '说明书'];
     function loadCats() {
         try { return JSON.parse(localStorage.getItem('lib_categories')) || DEFAULT_CATS; }
         catch { return DEFAULT_CATS; }
@@ -647,14 +648,14 @@ function initLibrary() {
             selectEl.appendChild(o);
         });
         const addOpt = document.createElement('option');
-        addOpt.value = '__add__'; addOpt.textContent = '锛?鏂板缓鍒嗙被鈥?;
+        addOpt.value = '__add__'; addOpt.textContent = '＋ 新建分类…';
         selectEl.appendChild(addOpt);
     }
 
     function handleCategorySelect(selectEl, onPick) {
         selectEl.addEventListener('change', () => {
             if (selectEl.value !== '__add__') { if (onPick) onPick(selectEl.value); return; }
-            const name = prompt('璇疯緭鍏ユ柊鍒嗙被鍚嶇О锛?);
+            const name = prompt('请输入新分类名称：');
             if (!name || !name.trim()) { selectEl.value = loadCats()[0]; return; }
             const trimmed = name.trim();
             const cats = loadCats();
@@ -668,13 +669,13 @@ function initLibrary() {
     buildCategorySelect(libCatSel, loadCats()[0]);
     handleCategorySelect(libCatSel);
 
-    // 鈹€鈹€ File pickers 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+    // ── File pickers ─────────────────────────────────────
     if (!libFileAlreadyWired) {
         libUploadBtn.onclick = () => libFileInput.click();
         libFileInput.onchange = e => {
             const files = Array.from(e.target.files);
             if (!files.length) return;
-            document.getElementById('libUploadStatus').textContent = '宸查€夋嫨 ' + files.length + ' 涓枃浠讹紝绛夊緟棰勮鍔犺浇';
+            document.getElementById('libUploadStatus').textContent = '已选择 ' + files.length + ' 个文件，等待预览加载';
             files.forEach(addLibFile);
             e.target.value = '';
         };
@@ -687,7 +688,7 @@ function initLibrary() {
             if (!files.length) return;
             const folderName = files[0].webkitRelativePath.split('/')[0];
             document.getElementById('libProduct').value = folderName;
-            document.getElementById('libUploadStatus').textContent = '宸查€夋嫨鏂囦欢澶光€? + folderName + '鈥濓紝鍏?' + files.length + ' 涓枃浠?;
+            document.getElementById('libUploadStatus').textContent = '已选择文件夹“' + folderName + '”，共 ' + files.length + ' 个文件';
             files.forEach(addLibFile);
             e.target.value = '';
         };
@@ -702,7 +703,7 @@ function initLibrary() {
 
 // Build a category <select> for the admin product detail panel (move category)
 function buildMoveCatSelect(currentCat) {
-    const DEFAULT_CATS = ['缇庣敳鐏?, '宸ュ叿', '鎶ょ悊', '瀹跺眳', '妯＄壒', '璇存槑涔?];
+    const DEFAULT_CATS = ['美甲灯', '工具', '护理', '家居', '模特', '说明书'];
     let cats;
     try { cats = JSON.parse(localStorage.getItem('lib_categories')) || DEFAULT_CATS; }
     catch { cats = DEFAULT_CATS; }
@@ -710,7 +711,7 @@ function buildMoveCatSelect(currentCat) {
     cats.forEach(c => {
         html += `<option value="${esc(c)}"${c === currentCat ? ' selected' : ''}>${esc(c)}</option>`;
     });
-    html += `<option value="__add__">锛?鏂板缓鍒嗙被鈥?/option>`;
+    html += `<option value="__add__">＋ 新建分类…</option>`;
     return html;
 }
 
@@ -728,8 +729,8 @@ function addLibFile(file) {
         wrap.className = 'lib-upload-thumb';
         wrap.dataset.idx = idx;
         wrap.innerHTML = `
-            ${isImage ? `<img src="${ev.target.result}" alt="">` : `<div style="height:80px;background:#f3f4f6;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#9ca3af;font-size:0.75rem">鏂囦欢</div>`}
-            <button onclick="removeLibFile(${idx}, this.parentNode)">脳</button>
+            ${isImage ? `<img src="${ev.target.result}" alt="">` : `<div style="height:80px;background:#f3f4f6;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#9ca3af;font-size:0.75rem">文件</div>`}
+            <button onclick="removeLibFile(${idx}, this.parentNode)">×</button>
             <div class="lib-upload-name">${esc(file.name)}</div>`;
         preview.appendChild(wrap);
         document.getElementById('libConfirmBtn').hidden = false;
@@ -760,18 +761,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function doLibUpload() {
     const product = document.getElementById('libProduct').value.trim();
-    const category = document.getElementById('libCategory')?.value || '鏈垎绫?;
-    if (!product) { alert('璇峰厛濉啓浜у搧鍚嶇О'); document.getElementById('libProduct').focus(); return; }
+    const category = document.getElementById('libCategory')?.value || '未分类';
+    if (!product) { alert('请先填写产品名称'); document.getElementById('libProduct').focus(); return; }
     const files = libPendingFiles.filter(Boolean);
-    if (!files.length) { alert('璇峰厛閫夋嫨鏂囦欢'); return; }
+    if (!files.length) { alert('请先选择文件'); return; }
 
     const status = document.getElementById('libUploadStatus');
-    status.textContent = '涓婁紶涓?..';
+    status.textContent = '上传中...';
 
     try {
         const uploaded = [];
         for (let i = 0; i < files.length; i++) {
-            status.textContent = '涓婁紶涓?..锛? + (i + 1) + '/' + files.length + '锛?;
+            status.textContent = '上传中...（' + (i + 1) + '/' + files.length + '）';
             const res = await fetch('/api/library-upload', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -779,12 +780,12 @@ async function doLibUpload() {
             });
             const json = await res.json();
             if (!res.ok || !json.ok) {
-                throw new Error(json.error || ('绗?' + (i + 1) + ' 涓枃浠朵笂浼犲け璐?));
+                throw new Error(json.error || ('第 ' + (i + 1) + ' 个文件上传失败'));
             }
             uploaded.push(...(json.uploaded || []));
         }
 
-        status.textContent = `鉁?宸蹭笂浼?${uploaded.length} 涓枃浠禶;
+        status.textContent = `✓ 已上传 ${uploaded.length} 个文件`;
         libPendingFiles = [];
         document.getElementById('libUploadPreview').innerHTML = '';
         document.getElementById('libUploadPreview').style.display = 'none';
@@ -792,18 +793,18 @@ async function doLibUpload() {
         document.getElementById('libConfirmBtn').hidden = true;
         loadLibraryAdmin();
     } catch (e) {
-        status.textContent = '涓婁紶澶辫触锛? + e.message;
+        status.textContent = '上传失败：' + e.message;
     }
 }
 
 async function loadLibraryAdmin() {
     const container = document.getElementById('libAdminContent');
-    container.innerHTML = '<p style="color:#9ca3af;font-size:0.85rem">鍔犺浇涓?..</p>';
+    container.innerHTML = '<p style="color:#9ca3af;font-size:0.85rem">加载中...</p>';
     try {
         const res = await fetch('/api/library');
         const json = await res.json();
         if (!json.ok || !Object.keys(json.categories || {}).length) {
-            container.innerHTML = '<p style="color:#9ca3af;font-size:0.85rem;padding:16px 0">鏆傛棤鏂囦欢</p>';
+            container.innerHTML = '<p style="color:#9ca3af;font-size:0.85rem;padding:16px 0">暂无文件</p>';
             return;
         }
         container.innerHTML = '';
@@ -837,20 +838,20 @@ async function loadLibraryAdmin() {
                 card.innerHTML = `
                     <div class="lib-card-img-wrap" style="position:relative">
                         ${isImg ? `<img src="/api/library-file/${encodeURIComponent(cover.key)}" alt="" loading="lazy">` : `<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" stroke-width="1.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`}
-                        <span style="position:absolute;bottom:6px;right:8px;background:rgba(0,0,0,0.5);color:#fff;font-size:0.7rem;padding:2px 7px;border-radius:10px">${files.length} 涓?/span>
+                        <span style="position:absolute;bottom:6px;right:8px;background:rgba(0,0,0,0.5);color:#fff;font-size:0.7rem;padding:2px 7px;border-radius:10px">${files.length} 个</span>
                     </div>
                     <div class="lib-card-body">
                         <div class="lib-card-name">${esc(product)}</div>
                         <div class="lib-card-meta" style="color:#9ca3af">${esc(cat)}</div>
-                        <div class="lib-card-meta" style="color:#6366f1">鐐瑰嚮绠＄悊 鈫?/div>
+                        <div class="lib-card-meta" style="color:#6366f1">点击管理 →</div>
                     </div>`;
                 const delBtn = document.createElement('button');
-                delBtn.title = '鍒犻櫎鏁翠釜鏂囦欢澶?;
+                delBtn.title = '删除整个文件夹';
                 delBtn.style.cssText = 'position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:50%;background:rgba(220,38,38,0.85);color:#fff;border:none;cursor:pointer;font-size:13px;line-height:1;display:flex;align-items:center;justify-content:center;z-index:10;opacity:0;transition:opacity 0.15s';
-                delBtn.textContent = '脳';
+                delBtn.textContent = '×';
                 delBtn.addEventListener('click', async (e) => {
                     e.stopPropagation();
-                    if (!confirm(`纭鍒犻櫎銆?{product}銆嶆枃浠跺す鍙婂叾鍏ㄩ儴 ${files.length} 涓枃浠讹紵`)) return;
+                    if (!confirm(`确认删除「${product}」文件夹及其全部 ${files.length} 个文件？`)) return;
                     for (const f of files) {
                         await fetch('/api/library-upload', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: f.key }) });
                     }
@@ -865,13 +866,13 @@ async function loadLibraryAdmin() {
                 folderGrid.appendChild(card);
             }
             if (!Object.keys(allGroups).length) {
-                folderGrid.innerHTML = '<p style="color:#9ca3af;font-size:0.85rem;padding:8px 0">鏆傛棤鏂囦欢</p>';
+                folderGrid.innerHTML = '<p style="color:#9ca3af;font-size:0.85rem;padding:8px 0">暂无文件</p>';
             }
         }
         renderFolders();
 
     } catch (e) {
-        container.innerHTML = '<p style="color:#ef4444;font-size:0.85rem">鍔犺浇澶辫触锛? + e.message + '</p>';
+        container.innerHTML = '<p style="color:#ef4444;font-size:0.85rem">加载失败：' + e.message + '</p>';
     }
 }
 
@@ -892,7 +893,7 @@ function renderAdminDetail(product, files, detailPanel, groups, renderFolders) {
     left.style.cssText = 'display:flex;align-items:center;gap:10px';
 
     const collapseBtn = document.createElement('button');
-    collapseBtn.textContent = '鈫?鏀惰捣';
+    collapseBtn.textContent = '← 收起';
     collapseBtn.style.cssText = 'background:none;border:1.5px solid #e5e7eb;border-radius:7px;padding:4px 10px;font-size:0.8rem;color:#6b7280;cursor:pointer';
     collapseBtn.onclick = () => { detailPanel.hidden = true; };
 
@@ -901,22 +902,22 @@ function renderAdminDetail(product, files, detailPanel, groups, renderFolders) {
     titleEl.textContent = product;
 
     const renameBtn = document.createElement('button');
-    renameBtn.textContent = '閲嶅懡鍚?;
+    renameBtn.textContent = '重命名';
     renameBtn.style.cssText = 'font-size:0.76rem;color:#6366f1;background:#eef2ff;border:1px solid #c7d2fe;border-radius:7px;padding:4px 9px;cursor:pointer;font-weight:600';
     renameBtn.onclick = async () => {
-        const currentCat = (files[0]?.key || '').split('/')[1] ? decodeURIComponent((files[0].key).split('/')[1]) : '鏈垎绫?;
-        const newName = prompt('璇疯緭鍏ユ柊鐨勬枃浠跺す鍚嶇О锛?, product);
+        const currentCat = (files[0]?.key || '').split('/')[1] ? decodeURIComponent((files[0].key).split('/')[1]) : '未分类';
+        const newName = prompt('请输入新的文件夹名称：', product);
         if (!newName || !newName.trim()) return;
         const trimmed = newName.trim();
         if (trimmed === product) return;
-        if (!confirm(`纭灏嗐€?{product}銆嶉噸鍛藉悕涓恒€?{trimmed}銆嶏紵`)) return;
+        if (!confirm(`确认将「${product}」重命名为「${trimmed}」？`)) return;
         renameBtn.disabled = true;
-        renameBtn.textContent = '閲嶅懡鍚嶄腑...';
+        renameBtn.textContent = '重命名中...';
         try {
             for (const f of files) {
                 const oldKey = f.key;
                 const getRes = await fetch(`/api/library-file/${encodeURIComponent(oldKey)}`);
-                if (!getRes.ok) throw new Error('璇诲彇鏂囦欢澶辫触锛? + f.name);
+                if (!getRes.ok) throw new Error('读取文件失败：' + f.name);
                 const blob = await getRes.blob();
                 const base64 = await new Promise(resolve => {
                     const fr = new FileReader();
@@ -931,99 +932,87 @@ function renderAdminDetail(product, files, detailPanel, groups, renderFolders) {
             detailPanel.hidden = true;
             loadLibraryAdmin();
         } catch (err) {
-            alert('閲嶅懡鍚嶅け璐ワ細' + err.message);
+            alert('重命名失败：' + err.message);
             renameBtn.disabled = false;
-            renameBtn.textContent = '閲嶅懡鍚?;
+            renameBtn.textContent = '重命名';
         }
     };
 
     const countEl = document.createElement('span');
     countEl.style.cssText = 'font-size:0.8rem;color:#9ca3af';
-    countEl.textContent = files.length + ' 涓枃浠?;
+    countEl.textContent = files.length + ' 个文件';
 
     left.append(collapseBtn, titleEl, renameBtn, countEl);
 
     const appendBtn = document.createElement('button');
-    appendBtn.textContent = '+ 杩藉姞鏂囦欢';
+    appendBtn.textContent = '+ 追加文件';
     appendBtn.style.cssText = 'font-size:0.8rem;color:#6366f1;background:none;border:1.5px dashed #c7d2fe;border-radius:7px;padding:5px 12px;cursor:pointer';
     appendBtn.onclick = () => doLibUploadToProduct(product, currentCat, appendBtn);
 
-    // -- Big category selector: product / model / manual --
-    const currentCat = (files[0]?.key || '').split('/')[1]
-        ? decodeURIComponent((files[0].key).split('/')[1]) : '鏈垎绫?;
-
+    // ── Move category select ─────────────────────────────
+    const currentCat = (files[0]?.key || '').split('/')[1] ? decodeURIComponent((files[0].key).split('/')[1]) : '未分类';
+    // Big category selector
     function getBigCat(cat) {
-        if (cat.includes('璇存槑涔?)) return 'manual';
-        if (cat.includes('妯＄壒')) return 'model';
+        if (cat.includes('\u8bf4\u660e\u4e66')) return 'manual';
+        if (cat.includes('\u6a21\u7279')) return 'model';
         return 'product';
     }
-
     const bigCatWrap = document.createElement('div');
     bigCatWrap.style.cssText = 'display:flex;align-items:center;gap:6px';
     const bigCatLabel = document.createElement('span');
-    bigCatLabel.textContent = '澶у垎绫伙細';
+    bigCatLabel.textContent = '\u5927\u5206\u7c7b\uff1a';
     bigCatLabel.style.cssText = 'font-size:0.8rem;color:#6b7280;white-space:nowrap';
     const bigCatSel = document.createElement('select');
     bigCatSel.style.cssText = 'font-size:0.8rem;border:1.5px solid #a5b4fc;border-radius:7px;padding:5px 10px;cursor:pointer;color:#374151;background:#eef2ff;font-weight:600';
-    bigCatSel.innerHTML = '<option value="product">浜у搧</option><option value="model">妯＄壒鍥剧墖绱犳潗</option><option value="manual">璇存槑涔?/option>';
+    bigCatSel.innerHTML = '<option value="product">\u4ea7\u54c1</option><option value="model">\u6a21\u7279\u56fe\u7247\u7d20\u6750</option><option value="manual">\u8bf4\u660e\u4e66</option>';
     bigCatSel.value = getBigCat(currentCat);
     bigCatWrap.append(bigCatLabel, bigCatSel);
-
     bigCatSel.addEventListener('change', async () => {
-        const newBigCat = bigCatSel.value;
-        const oldBigCat = getBigCat(currentCat);
-        if (newBigCat === oldBigCat) return;
+        const newBig = bigCatSel.value;
+        const oldBig = getBigCat(currentCat);
+        if (newBig === oldBig) return;
         let targetCat;
-        if (newBigCat === 'manual') targetCat = '璇存槑涔?;
-        else if (newBigCat === 'model') targetCat = '妯＄壒';
-        else targetCat = currentCat.replace(/妯＄壒|璇存槑涔?g, '').trim() || '鏈垎绫?;
+        if (newBig === 'manual') targetCat = '\u8bf4\u660e\u4e66';
+        else if (newBig === 'model') targetCat = '\u6a21\u7279';
+        else targetCat = currentCat.replace(/\u6a21\u7279|\u8bf4\u660e\u4e66/g, '').trim() || '\u672a\u5206\u7c7b';
         if (targetCat === currentCat) return;
-        if (!confirm(灏嗐€屻€嶇Щ鑷冲ぇ鍒嗙被銆娿€嬶紵)) { bigCatSel.value = oldBigCat; return; }
+        if (!confirm('\u5c06\u300c' + product + '\u300d\u79fb\u81f3\u5927\u5206\u7c7b\u300a' + targetCat + '\u300b\uff1f')) { bigCatSel.value = oldBig; return; }
         bigCatSel.disabled = true;
         try {
             for (const f of files) {
                 const oldKey = f.key;
-                const getRes = await fetch(/api/library-file/);
+                const getRes = await fetch('/api/library-file/' + encodeURIComponent(oldKey));
                 if (!getRes.ok) continue;
                 const blob = await getRes.blob();
-                const base64 = await new Promise(resolve => {
-                    const fr = new FileReader();
-                    fr.onload = () => resolve(fr.result.split(',')[1]);
-                    fr.readAsDataURL(blob);
-                });
-                await fetch('/api/library-upload', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ product, category: targetCat, files: [{ name: f.name, base64, mimeType: blob.type }] }) });
-                await fetch('/api/library-upload', { method: 'DELETE', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ key: oldKey }) });
+                const base64 = await new Promise(resolve => { const fr = new FileReader(); fr.onload = () => resolve(fr.result.split(',')[1]); fr.readAsDataURL(blob); });
+                await fetch('/api/library-upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ product, category: targetCat, files: [{ name: f.name, base64, mimeType: blob.type }] }) });
+                await fetch('/api/library-upload', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: oldKey }) });
             }
             detailPanel.hidden = true;
             loadLibraryAdmin();
         } catch (err) {
-            alert('绉诲姩澶辫触锛? + err.message);
+            alert('\u79fb\u52a8\u5931\u8d25\uff1a' + err.message);
             bigCatSel.disabled = false;
-            bigCatSel.value = oldBigCat;
+            bigCatSel.value = oldBig;
         }
     });
-
-    // 鈹€鈹€ Move category select 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-    // currentCat already declared in big-cat block above
     const moveSel = document.createElement('select');
     moveSel.style.cssText = 'font-size:0.8rem;border:1.5px solid #e5e7eb;border-radius:7px;padding:5px 10px;cursor:pointer;color:#374151;background:#fff';
     moveSel.innerHTML = buildMoveCatSelect(currentCat);
     moveSel.addEventListener('change', async () => {
         let newCat = moveSel.value;
         if (newCat === '__add__') {
-            const name = prompt('璇疯緭鍏ユ柊鍒嗙被鍚嶇О锛?);
+            const name = prompt('请输入新分类名称：');
             if (!name || !name.trim()) { moveSel.value = currentCat; return; }
             newCat = name.trim();
-            const DEFAULT_CATS = ['缇庣敳鐏?, '宸ュ叿', '鎶ょ悊', '瀹跺眳', '妯＄壒', '璇存槑涔?];
+            const DEFAULT_CATS = ['美甲灯', '工具', '护理', '家居', '模特', '说明书'];
             let cats;
             try { cats = JSON.parse(localStorage.getItem('lib_categories')) || DEFAULT_CATS; }
             catch { cats = DEFAULT_CATS; }
             if (!cats.includes(newCat)) { cats.push(newCat); localStorage.setItem('lib_categories', JSON.stringify(cats)); }
         }
         if (newCat === currentCat) return;
-        if (!confirm(`灏嗐€?{product}銆嶇Щ鍔ㄥ埌鍒嗙被銆?{newCat}銆嶏紵`)) { moveSel.value = currentCat; return; }
+        if (!confirm(`将「${product}」移动到分类「${newCat}」？`)) { moveSel.value = currentCat; return; }
         moveSel.disabled = true;
         for (const f of files) {
             const oldKey = f.key;
@@ -1070,12 +1059,12 @@ function renderAdminDetail(product, files, detailPanel, groups, renderFolders) {
         } else {
             const placeholder = document.createElement('div');
             placeholder.style.cssText = 'height:80px;background:#f3f4f6;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#9ca3af;font-size:0.7rem';
-            placeholder.textContent = '鏂囦欢';
+            placeholder.textContent = '文件';
             wrap.appendChild(placeholder);
         }
 
         const delBtn = document.createElement('button');
-        delBtn.textContent = '脳';
+        delBtn.textContent = '×';
         delBtn.style.cssText = 'position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.5);color:#fff;border:none;border-radius:50%;width:18px;height:18px;cursor:pointer;font-size:12px;line-height:1;padding:0';
         delBtn.onclick = () => deleteLibFile(file.key, wrap);
         wrap.appendChild(delBtn);
@@ -1092,7 +1081,7 @@ function renderAdminDetail(product, files, detailPanel, groups, renderFolders) {
 
 
 async function deleteLibFile(key, el) {
-    if (!confirm('纭鍒犻櫎姝ゆ枃浠讹紵')) return;
+    if (!confirm('确认删除此文件？')) return;
     try {
         const res = await fetch('/api/library-upload', {
             method: 'DELETE',
@@ -1101,8 +1090,8 @@ async function deleteLibFile(key, el) {
         });
         const json = await res.json();
         if (res.ok && json.ok) { el.remove(); }
-        else alert('鍒犻櫎澶辫触锛? + (json.error || res.status));
-    } catch (e) { alert('缃戠粶閿欒锛? + e.message); }
+        else alert('删除失败：' + (json.error || res.status));
+    } catch (e) { alert('网络错误：' + e.message); }
 }
 
 function doLibUploadToProduct(product, category, btn) {
@@ -1120,12 +1109,12 @@ function doLibUploadToProduct(product, category, btn) {
         btn.disabled = true;
         try {
             for (let i = 0; i < files.length; i++) {
-                btn.textContent = '涓婁紶涓?' + (i + 1) + '/' + files.length;
+                btn.textContent = '上传中 ' + (i + 1) + '/' + files.length;
                 const file = files[i];
                 const base64 = await new Promise((resolve, reject) => {
                     const reader = new FileReader();
                     reader.onload = ev => resolve(ev.target.result.split(',')[1]);
-                    reader.onerror = () => reject(new Error('璇诲彇澶辫触锛? + file.name));
+                    reader.onerror = () => reject(new Error('读取失败：' + file.name));
                     reader.readAsDataURL(file);
                 });
                 const res = await fetch('/api/library-upload', {
@@ -1134,12 +1123,12 @@ function doLibUploadToProduct(product, category, btn) {
                     body: JSON.stringify({ product, category, files: [{ name: file.name, base64, mimeType: file.type }] })
                 });
                 const json = await res.json();
-                if (!res.ok || !json.ok) throw new Error(json.error || ('涓婁紶澶辫触锛? + file.name));
+                if (!res.ok || !json.ok) throw new Error(json.error || ('上传失败：' + file.name));
             }
-            btn.textContent = '鉁?宸茶拷鍔?;
+            btn.textContent = '✓ 已追加';
             setTimeout(loadLibraryAdmin, 400);
         } catch (err) {
-            alert('杩藉姞澶辫触锛? + err.message);
+            alert('追加失败：' + err.message);
             btn.disabled = false;
             btn.textContent = oldText;
         }
@@ -1150,30 +1139,30 @@ function doLibUploadToProduct(product, category, btn) {
 checkAuth();
 
 
-// 鈹€鈹€ Studio task management (admin) 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// ── Studio task management (admin) ───────────────────────
 async function loadStudioAdmin() {
     const container = document.getElementById('studioAdminContent');
     if (!container) return;
-    container.innerHTML = '<p style="color:#9ca3af;font-size:0.85rem">鍔犺浇涓?..</p>';
+    container.innerHTML = '<p style="color:#9ca3af;font-size:0.85rem">加载中...</p>';
     try {
         const res = await fetch('/api/studio-tasks?all=1');
         const json = await res.json();
-        // 鍙戦€佺粰 RPA 鍚庣户缁樉绀猴紱瀹屾垚鍚庝篃鍏堜繚鐣欙紝鍙湁閽夐拤閫氱煡鎴愬姛鍚庢墠娑堝け
+        // 发送给 RPA 后继续显示；完成后也先保留，只有钉钉通知成功后才消失
         const tasks = (json.tasks || []).filter(t => {
             if (t.status === 'rejected') return false;
             if (t.status === 'done' && (t.dingtalkNotified || t.r2AutoNotified)) return false;
             return true;
         });
         
-        // 缁熻鍒嗙被
-        const stats = { '鍥剧墖': 0, '瑙嗛': 0, '璁捐': 0 };
+        // 统计分类
+        const stats = { '图片': 0, '视频': 0, '设计': 0 };
         tasks.forEach(t => {
             if (t.category && stats.hasOwnProperty(t.category)) {
                 stats[t.category]++;
             }
         });
         
-        // 鏄剧ず缁熻
+        // 显示统计
         const statsContainer = document.getElementById('studioStats');
         if (statsContainer) {
             statsContainer.innerHTML = Object.entries(stats).map(([cat, count]) => 
@@ -1184,14 +1173,14 @@ async function loadStudioAdmin() {
             ).join('');
         }
         
-        // 璁剧疆绛涢€夊櫒
+        // 设置筛选器
         const filterSelect = document.getElementById('studioCategoryFilter');
         if (filterSelect) {
             filterSelect.onchange = () => renderStudioTasks(tasks, filterSelect.value);
         }
         
         if (!tasks.length) {
-            container.innerHTML = '<p style="color:#9ca3af;font-size:0.85rem;padding:8px 0">鏆傛棤寰呭鐞嗕换鍔?/p>';
+            container.innerHTML = '<p style="color:#9ca3af;font-size:0.85rem;padding:8px 0">暂无待处理任务</p>';
             return;
         }
         
@@ -1204,7 +1193,7 @@ async function loadStudioAdmin() {
             }
         });
     } catch (e) {
-        container.innerHTML = '<p style="color:#ef4444;font-size:0.85rem">鍔犺浇澶辫触锛? + e.message + '</p>';
+        container.innerHTML = '<p style="color:#ef4444;font-size:0.85rem">加载失败：' + e.message + '</p>';
     }
 }
 
@@ -1215,7 +1204,7 @@ function renderStudioTasks(allTasks, category) {
     const filtered = category === 'all' ? allTasks : allTasks.filter(t => t.category === category);
     
     if (!filtered.length) {
-        container.innerHTML = '<p style="color:#9ca3af;font-size:0.85rem;padding:8px 0">璇ュ垎绫绘殏鏃犱换鍔?/p>';
+        container.innerHTML = '<p style="color:#9ca3af;font-size:0.85rem;padding:8px 0">该分类暂无任务</p>';
         return;
     }
     
@@ -1225,26 +1214,26 @@ function renderStudioTasks(allTasks, category) {
 
 function renderStudioTask(task) {
     const st = task.status === 'done'
-        ? ['寰呴€氱煡', '#16a34a', '#dcfce7']
+        ? ['待通知', '#16a34a', '#dcfce7']
         : task.status === 'processing'
-            ? ['澶勭悊涓?, '#3b82f6', '#dbeafe']
-            : ['寰呭鐞?, '#f59e0b', '#fef3c7'];
-    const modeText = task.mode === 'free' ? '鑷敱妯″紡' : '绋嬪簭妯″紡';
+            ? ['处理中', '#3b82f6', '#dbeafe']
+            : ['待处理', '#f59e0b', '#fef3c7'];
+    const modeText = task.mode === 'free' ? '自由模式' : '程序模式';
     const time = new Date(task.timestamp).toLocaleString('zh-CN', { timeZone:'Asia/Shanghai', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
 
     const card = document.createElement('div');
     card.id = 'studio-card-' + task.id;
     card.style.cssText = 'background:#fff;border-radius:12px;padding:18px 20px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,0.07);position:relative';
     const delBtn = document.createElement('button');
-    delBtn.title = '鍒犻櫎';
-    delBtn.innerHTML = '鉁?;
+    delBtn.title = '删除';
+    delBtn.innerHTML = '✕';
     delBtn.style.cssText = 'position:absolute;top:14px;right:14px;background:none;border:none;cursor:pointer;color:#d1d5db;font-size:1.1rem;line-height:1';
     delBtn.onmouseover = () => delBtn.style.color = '#ef4444';
     delBtn.onmouseout = () => delBtn.style.color = '#d1d5db';
     delBtn.onclick = () => deleteStudioTask(task.id, card);
     // delBtn appended after html set
 
-    const displayTaskTitle = task.imageName ? task.imageName.replace(/^[^-]+-/, '') : (task.submitter && task.submitter.name || '鍖垮悕');
+    const displayTaskTitle = task.imageName ? task.imageName.replace(/^[^-]+-/, '') : (task.submitter && task.submitter.name || '匿名');
     let html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'
         + '<div style="display:flex;align-items:center;gap:10px">'
         + '<span style="font-weight:700;color:#111827">' + esc(displayTaskTitle) + '</span>'
@@ -1258,35 +1247,35 @@ function renderStudioTask(task) {
             const remaining = Math.max(0, Math.floor((autoSendThreshold - elapsed) / 1000));
             const mins = Math.floor(remaining / 60);
             const secs = remaining % 60;
-            html += '<span id="countdown-' + task.id + '" style="font-size:0.72rem;background:#fef3c7;color:#f59e0b;padding:2px 10px;border-radius:10px">鈴?' + mins + '鍒? + secs + '绉掑悗鑷姩鍙戦€?/span>';
+            html += '<span id="countdown-' + task.id + '" style="font-size:0.72rem;background:#fef3c7;color:#f59e0b;padding:2px 10px;border-radius:10px">⏱ ' + mins + '分' + secs + '秒后自动发送</span>';
         }
     }
     html += '</div>'
         + '<span style="font-size:0.78rem;color:#9ca3af">' + time + '</span>'
         + '</div>';
-    if (task.desc) html += '<div style="font-size:0.85rem;color:#374151;margin-bottom:3px">闇€姹傦細' + esc(task.desc) + '</div>';
+    if (task.desc) html += '<div style="font-size:0.85rem;color:#374151;margin-bottom:3px">需求：' + esc(task.desc) + '</div>';
     const displayTitle = task.imageName ? task.imageName.replace(/^[^-]+-/, '') : '';
     if (displayTitle) html += '<div style="font-size:0.95rem;font-weight:600;color:#111827;margin-bottom:6px">' + esc(displayTitle) + '</div>';
-    if (task.note) html += '<div style="font-size:0.85rem;color:#6b7280;margin-bottom:3px">琛ュ厖锛? + esc(task.note) + '</div>';
+    if (task.note) html += '<div style="font-size:0.85rem;color:#6b7280;margin-bottom:3px">补充：' + esc(task.note) + '</div>';
     card.innerHTML = html;
     card.appendChild(delBtn);
 
     const editBtn = document.createElement('button');
     editBtn.type = 'button';
-    editBtn.textContent = '鉁?缂栬緫闇€姹?;
+    editBtn.textContent = '✎ 编辑需求';
     editBtn.style.cssText = 'margin:4px 0 2px;font-size:0.78rem;color:#374151;background:#f3f4f6;border:none;border-radius:7px;padding:5px 14px;cursor:pointer;font-weight:600';
 
     const editWrap = document.createElement('div');
     editWrap.style.cssText = 'margin:8px 0';
     editWrap.hidden = true;
-    editWrap.innerHTML = '<label style="font-size:0.78rem;color:#6b7280;display:block;margin-bottom:4px">缂栬緫闇€姹傛彁绀?/label>'
+    editWrap.innerHTML = '<label style="font-size:0.78rem;color:#6b7280;display:block;margin-bottom:4px">编辑需求提示</label>'
         + '<textarea id="studioDesc-' + task.id + '" style="width:100%;min-height:64px;font-size:0.82rem;color:#374151;border:1px solid #e5e7eb;border-radius:8px;padding:8px;resize:vertical;line-height:1.5">' + esc(task.desc || '') + '</textarea>'
-        + '<button type="button" id="studioDescSave-' + task.id + '" style="margin-top:6px;font-size:0.78rem;color:#6366f1;background:#fff;border:1px solid #6366f1;border-radius:7px;padding:5px 14px;cursor:pointer;font-weight:600">淇濆瓨闇€姹?/button>';
+        + '<button type="button" id="studioDescSave-' + task.id + '" style="margin-top:6px;font-size:0.78rem;color:#6366f1;background:#fff;border:1px solid #6366f1;border-radius:7px;padding:5px 14px;cursor:pointer;font-weight:600">保存需求</button>';
     card.appendChild(editBtn);
     card.appendChild(editWrap);
     editBtn.onclick = () => {
         editWrap.hidden = !editWrap.hidden;
-        editBtn.textContent = editWrap.hidden ? '鉁?缂栬緫闇€姹? : '鏀惰捣缂栬緫';
+        editBtn.textContent = editWrap.hidden ? '✎ 编辑需求' : '收起编辑';
         if (!editWrap.hidden) editWrap.querySelector('textarea').focus();
     };
     editWrap.querySelector('#studioDescSave-' + task.id).onclick = (e) => saveStudioDesc(task.id, e.target);
@@ -1300,7 +1289,7 @@ function renderStudioTask(task) {
             const a = document.createElement('a');
             a.href = '/api/library-file/' + encodeURIComponent(k.key) + '?dl=1';
             a.download = k.name;
-            a.title = '涓嬭浇 ' + k.name;
+            a.title = '下载 ' + k.name;
             a.style.cssText = 'width:70px;height:70px;display:block;flex-shrink:0';
             a.innerHTML = '<img src="/api/library-file/' + encodeURIComponent(k.key) + '" style="width:70px;height:70px;object-fit:cover;border-radius:8px;border:1px solid #e5e7eb" loading="lazy">';
             row.appendChild(a);
@@ -1308,27 +1297,27 @@ function renderStudioTask(task) {
         card.appendChild(row);
     }
 
-    // Action bar: only 鍙嶉 and 鍙戦€佺粰RPA
+    // Action bar: only 反馈 and 发送给RPA
     const actions = document.createElement('div');
     actions.style.cssText = 'display:flex;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid #f3f4f6;justify-content:flex-end';
 
     const feedbackBtn = document.createElement('button');
-    feedbackBtn.textContent = '馃挰 鍙戦€佸弽棣?;
+    feedbackBtn.textContent = '💬 发送反馈';
     feedbackBtn.style.cssText = 'font-size:0.82rem;color:#10b981;background:#fff;border:1px solid #10b981;border-radius:7px;padding:7px 16px;cursor:pointer;font-weight:600';
     feedbackBtn.onclick = () => sendFeedback(task, feedbackBtn);
 
     const rpaBtn = document.createElement('button');
-    rpaBtn.textContent = task.sentToRpa ? '馃攧 閲嶆柊鍙戦€丷PA' : '馃 鍙戦€佺粰RPA';
+    rpaBtn.textContent = task.sentToRpa ? '🔄 重新发送RPA' : '🤖 发送给RPA';
     rpaBtn.style.cssText = 'font-size:0.82rem;color:#fff;background:' + (task.sentToRpa ? '#f59e0b' : '#6366f1') + ';border:none;border-radius:7px;padding:7px 16px;cursor:pointer;font-weight:600';
     rpaBtn.onclick = () => sendToRpa(task.id, rpaBtn, card);
 
     const viewCodeBtn = document.createElement('button');
-    viewCodeBtn.textContent = '馃搵 鏌ョ湅RPA浠ｇ爜';
+    viewCodeBtn.textContent = '📋 查看RPA代码';
     viewCodeBtn.style.cssText = 'font-size:0.82rem;color:#6366f1;background:#fff;border:1px solid #6366f1;border-radius:7px;padding:7px 16px;cursor:pointer;font-weight:600';
     viewCodeBtn.onclick = () => viewRpaCode(task);
 
     const uploadBtn = document.createElement('button');
-    uploadBtn.textContent = '馃摛 鎵嬪姩涓婁紶鍥剧墖';
+    uploadBtn.textContent = '📤 手动上传图片';
     uploadBtn.style.cssText = 'font-size:0.82rem;color:#16a34a;background:#fff;border:1px solid #16a34a;border-radius:7px;padding:7px 16px;cursor:pointer;font-weight:600';
     uploadBtn.onclick = () => openManualUpload(task.id, card);
 
@@ -1346,12 +1335,12 @@ function startCountdownTimer(taskId, createdAt) {
         const remaining = Math.max(0, Math.floor((autoSendThreshold - elapsed) / 1000));
         if (remaining <= 0) {
             clearInterval(interval);
-            countdownEl.textContent = '鈴?鍗冲皢鑷姩鍙戦€?..';
+            countdownEl.textContent = '⏱ 即将自动发送...';
             setTimeout(() => loadStudioAdmin(), 3000);
         } else {
             const mins = Math.floor(remaining / 60);
             const secs = remaining % 60;
-            countdownEl.textContent = '鈴?' + mins + '鍒? + secs + '绉掑悗鑷姩鍙戦€?;
+            countdownEl.textContent = '⏱ ' + mins + '分' + secs + '秒后自动发送';
         }
     }, 1000);
 }
@@ -1362,7 +1351,7 @@ async function saveStudioDesc(taskId, btn) {
     const desc = el.value;
     const original = btn.textContent;
     btn.disabled = true;
-    btn.textContent = '淇濆瓨涓?..';
+    btn.textContent = '保存中...';
     try {
         const res = await fetch('/api/studio-tasks', {
             method: 'PATCH', headers: { 'Content-Type': 'application/json' },
@@ -1370,20 +1359,20 @@ async function saveStudioDesc(taskId, btn) {
         });
         const json = await res.json();
         if (res.ok && json.ok) {
-            btn.textContent = '鉁?宸蹭繚瀛?;
+            btn.textContent = '✓ 已保存';
             setTimeout(() => { btn.disabled = false; btn.textContent = original; }, 1500);
         } else {
-            alert('淇濆瓨澶辫触锛? + (json.error || res.status));
+            alert('保存失败：' + (json.error || res.status));
             btn.disabled = false; btn.textContent = original;
         }
     } catch (e) {
-        alert('缃戠粶閿欒锛? + e.message);
+        alert('网络错误：' + e.message);
         btn.disabled = false; btn.textContent = original;
     }
 }
 
 async function sendFeedback(task, btn) {
-    openFeedbackModal(task.id, task.submitter && task.submitter.name || '鐢ㄦ埛');
+    openFeedbackModal(task.id, task.submitter && task.submitter.name || '用户');
 }
 
 function openFeedbackModal(taskId, submitterName) {
@@ -1396,16 +1385,16 @@ function openFeedbackModal(taskId, submitterName) {
     const box = document.createElement('div');
     box.style.cssText = 'background:#fff;border-radius:14px;padding:24px 28px;max-width:520px;width:90%;max-height:80vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,0.18)';
     box.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">'
-        + '<span style="font-size:1.05rem;font-weight:700;color:#111827">鍙戦€佸弽棣堢粰 ' + esc(submitterName) + '</span>'
+        + '<span style="font-size:1.05rem;font-weight:700;color:#111827">发送反馈给 ' + esc(submitterName) + '</span>'
         + '<button id="fbModalClose" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:#9ca3af">&times;</button>'
         + '</div>'
-        + '<textarea id="fbContent" placeholder="杈撳叆鍙嶉鍐呭..." style="width:100%;min-height:120px;font-size:0.9rem;color:#374151;border:1px solid #e5e7eb;border-radius:8px;padding:10px;resize:vertical;line-height:1.5;margin-bottom:12px"></textarea>'
+        + '<textarea id="fbContent" placeholder="输入反馈内容..." style="width:100%;min-height:120px;font-size:0.9rem;color:#374151;border:1px solid #e5e7eb;border-radius:8px;padding:10px;resize:vertical;line-height:1.5;margin-bottom:12px"></textarea>'
         + '<div id="fbImagePreview" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px"></div>'
-        + '<div id="fbPasteZone" tabindex="0" style="border:1.5px dashed #d1d5db;border-radius:8px;padding:14px;text-align:center;color:#9ca3af;font-size:0.85rem;cursor:pointer;margin-bottom:14px">鐐瑰嚮閫夋嫨 鎴?Ctrl+V 绮樿创鍥剧墖锛堝彲澶氬紶锛?/div>'
+        + '<div id="fbPasteZone" tabindex="0" style="border:1.5px dashed #d1d5db;border-radius:8px;padding:14px;text-align:center;color:#9ca3af;font-size:0.85rem;cursor:pointer;margin-bottom:14px">点击选择 或 Ctrl+V 粘贴图片（可多张）</div>'
         + '<input type="file" id="fbImageInput" accept="image/*" multiple style="display:none">'
         + '<div style="display:flex;gap:8px">'
-        + '<button id="fbCancelBtn" style="flex:1;padding:9px;background:#fff;color:#374151;border:1px solid #d1d5db;border-radius:8px;cursor:pointer;font-weight:600">鍙栨秷</button>'
-        + '<button id="fbSendBtn" style="flex:1;padding:9px;background:#10b981;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600">鍙戦€?/button>'
+        + '<button id="fbCancelBtn" style="flex:1;padding:9px;background:#fff;color:#374151;border:1px solid #d1d5db;border-radius:8px;cursor:pointer;font-weight:600">取消</button>'
+        + '<button id="fbSendBtn" style="flex:1;padding:9px;background:#10b981;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600">发送</button>'
         + '</div>';
     modal.appendChild(box);
     document.body.appendChild(modal);
@@ -1426,7 +1415,7 @@ function openFeedbackModal(taskId, submitterName) {
             img.src = ev.target.result;
             img.style.cssText = 'width:70px;height:70px;object-fit:cover;border-radius:6px;border:1px solid #e5e7eb;display:block';
             const rm = document.createElement('button');
-            rm.textContent = '脳';
+            rm.textContent = '×';
             rm.style.cssText = 'position:absolute;top:-4px;right:-4px;background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:50%;width:18px;height:18px;cursor:pointer;font-size:12px;line-height:1;padding:0';
             rm.onclick = e => { e.stopPropagation(); fbImages.splice(fbImages.indexOf(base64), 1); wrap.remove(); };
             wrap.appendChild(img);
@@ -1457,24 +1446,24 @@ function openFeedbackModal(taskId, submitterName) {
     
     box.querySelector('#fbSendBtn').onclick = async () => {
         const message = box.querySelector('#fbContent').value.trim();
-        if (!message && !fbImages.length) { alert('璇疯緭鍏ュ弽棣堝唴瀹规垨娣诲姞鍥剧墖'); return; }
+        if (!message && !fbImages.length) { alert('请输入反馈内容或添加图片'); return; }
         const sendBtn = box.querySelector('#fbSendBtn');
         sendBtn.disabled = true;
-        sendBtn.textContent = '鍙戦€佷腑...';
+        sendBtn.textContent = '发送中...';
         try {
             const res = await fetch('/api/send-feedback', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ submissionId: taskId, message: message || '宸插弽棣?, images: fbImages })
+                body: JSON.stringify({ submissionId: taskId, message: message || '已反馈', images: fbImages })
             });
             const json = await res.json();
             if (!res.ok || !json.ok) throw new Error(json.error || res.status);
-            sendBtn.textContent = '鉁?宸插彂閫?;
+            sendBtn.textContent = '✓ 已发送';
             setTimeout(() => modal.remove(), 1200);
         } catch(e) {
-            alert('鍙戦€佸け璐? ' + e.message);
+            alert('发送失败: ' + e.message);
             sendBtn.disabled = false;
-            sendBtn.textContent = '鍙戦€?;
+            sendBtn.textContent = '发送';
         }
     };
 }
@@ -1489,11 +1478,11 @@ async function sendToRpa(taskId, btn, card) {
     const url = mode === 'program' ? programWebhook : freeWebhook;
     
     const wasResend = task?.sentToRpa;
-    if (wasResend && !confirm('璇ヤ换鍔″凡缁忓彂閫佽繃RPA浜嗭紝纭瑕侀噸鏂板彂閫佸悧锛?)) return;
+    if (wasResend && !confirm('该任务已经发送过RPA了，确认要重新发送吗？')) return;
     
     const originalText = btn.textContent;
     btn.disabled = true;
-    btn.textContent = wasResend ? '閲嶅彂涓?..' : '鍙戦€佷腑...';
+    btn.textContent = wasResend ? '重发中...' : '发送中...';
     try {
         const res = await fetch('/api/studio-webhook', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1503,12 +1492,12 @@ async function sendToRpa(taskId, btn, card) {
         btn.disabled = false;
         if (res.ok && json.ok) {
             showRpaResult(true, json.sentBody, json.status, json.response);
-            btn.textContent = wasResend ? '馃攧 閲嶆柊鍙戦€丷PA' : '鉁?宸插彂閫丷PA';
+            btn.textContent = wasResend ? '🔄 重新发送RPA' : '✓ 已发送RPA';
             btn.style.background = wasResend ? '#f59e0b' : '#8b5cf6';
             setTimeout(loadStudioAdmin, 300);
         } else {
             btn.textContent = originalText;
-            showRpaResult(false, null, res.status, json.error || '鍙戦€佸け璐?);
+            showRpaResult(false, null, res.status, json.error || '发送失败');
         }
     } catch (e) {
         btn.disabled = false;
@@ -1524,27 +1513,27 @@ async function viewRpaCode(task) {
     const refUrls = toUrls(task.refKeys);
     const modelUrls = toUrls(task.modelKeys);
     const allImageUrls = [...productUrls, ...refUrls].filter(Boolean);
-    const userDesc = [task.desc, task.want, task.note].filter(Boolean).join('锛?);
-    const cleanUserDesc = userDesc.replace(/@鍙傝€冨浘(\d+)/g, '鍙傝€冨浘鐗?1').replace(/@鍥剧墖(\d+)/g, '鍙傝€冨浘鐗?1');
-    const pickedSize = task.size ? String(task.size).match(/\d{3,5}\s*[x脳]\s*\d{3,5}/)?.[0].replace(/[脳\s]/g, 'x') || '1600x1600' : '1600x1600';
-    const sizeInfo = '灏哄鎴戣' + pickedSize + 'px';
-    const referenceInfo = allImageUrls.length ? allImageUrls.map((url, i) => '鍥? + (i + 1) + '閾炬帴 ' + url).join(' ') : '';
-    const modelInfo = modelUrls.length ? modelUrls.map(url => '璇峰弬鑰冩垜涓婁紶鐨勪汉鐗╁浘鐗囷紝淇濈暀浜虹墿鐨勮劯鍨嬨€佸彂鍨嬨€佷簲瀹樼壒寰佸拰鏁翠綋姘旇川锛屼笉鍙傝€冨師鍥剧殑濮垮娍銆佸姩浣溿€佹墜閮ㄤ綅缃€佽韩浣撹搴﹀拰鏋勫浘锛岃韩浣撳姩浣滅湡瀹炪€佺ǔ瀹氥€佺鍚堟棩甯哥敓娲伙紝韬綋濮垮娍鑷劧銆備汉鐗╅摼鎺ワ細 ' + url).join(' ') : '';
-    const userNeed = cleanUserDesc ? '鎴戦渶瑕侊細' + cleanUserDesc : '';
-    const imageNameInfo = task.imageName ? '鍥剧墖鍛藉悕涓?' + task.imageName + '"' : '';
-    const descText = [referenceInfo, modelInfo, sizeInfo, '璇峰彧鐢熸垚涓€寮犲浘鐗?, userNeed, imageNameInfo].filter(Boolean).join(' ');
+    const userDesc = [task.desc, task.want, task.note].filter(Boolean).join('；');
+    const cleanUserDesc = userDesc.replace(/@参考图(\d+)/g, '参考图片$1').replace(/@图片(\d+)/g, '参考图片$1');
+    const pickedSize = task.size ? String(task.size).match(/\d{3,5}\s*[x×]\s*\d{3,5}/)?.[0].replace(/[×\s]/g, 'x') || '1600x1600' : '1600x1600';
+    const sizeInfo = '尺寸我要' + pickedSize + 'px';
+    const referenceInfo = allImageUrls.length ? allImageUrls.map((url, i) => '图' + (i + 1) + '链接 ' + url).join(' ') : '';
+    const modelInfo = modelUrls.length ? modelUrls.map(url => '请参考我上传的人物图片，保留人物的脸型、发型、五官特征和整体气质，不参考原图的姿势、动作、手部位置、身体角度和构图，身体动作真实、稳定、符合日常生活，身体姿势自然。人物链接： ' + url).join(' ') : '';
+    const userNeed = cleanUserDesc ? '我需要：' + cleanUserDesc : '';
+    const imageNameInfo = task.imageName ? '图片命名为"' + task.imageName + '"' : '';
+    const descText = [referenceInfo, modelInfo, sizeInfo, '请只生成一张图片', userNeed, imageNameInfo].filter(Boolean).join(' ');
 
     const modal = document.createElement('div');
     modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;display:flex;align-items:center;justify-content:center';
     const box = document.createElement('div');
     box.style.cssText = 'background:#fff;border-radius:14px;padding:24px 28px;max-width:620px;width:90%;max-height:80vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,0.18)';
     box.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">'
-        + '<span style="font-size:1.05rem;font-weight:700;color:#111827">RPA 鎻忚堪浠ｇ爜</span>'
+        + '<span style="font-size:1.05rem;font-weight:700;color:#111827">RPA 描述代码</span>'
         + '<button onclick="this.closest(\'div[style*=fixed]\').remove()" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:#9ca3af">&times;</button>'
         + '</div>'
-        + '<div style="font-size:0.82rem;color:#6b7280;margin-bottom:12px">浠ヤ笅鏄細鍙戠粰鍏埅楸?RPA 鐨勫畬鏁存弿杩版枃鏈細</div>'
+        + '<div style="font-size:0.82rem;color:#6b7280;margin-bottom:12px">以下是会发给八爪鱼 RPA 的完整描述文本：</div>'
         + '<textarea readonly style="width:100%;min-height:180px;padding:12px;border:1px solid #e5e7eb;border-radius:8px;font-size:0.85rem;font-family:monospace;line-height:1.6;resize:vertical">' + descText + '</textarea>'
-        + '<button onclick="navigator.clipboard.writeText(this.previousElementSibling.value).then(()=>{this.textContent=\'鉁?宸插鍒禱';setTimeout(()=>this.textContent=\'澶嶅埗浠ｇ爜\',1500)})" style="margin-top:12px;padding:9px 18px;background:#6366f1;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600">澶嶅埗浠ｇ爜</button>';
+        + '<button onclick="navigator.clipboard.writeText(this.previousElementSibling.value).then(()=>{this.textContent=\'✓ 已复制\';setTimeout(()=>this.textContent=\'复制代码\',1500)})" style="margin-top:12px;padding:9px 18px;background:#6366f1;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600">复制代码</button>';
     modal.appendChild(box);
     modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
     document.body.appendChild(modal);
@@ -1556,13 +1545,13 @@ async function openManualUpload(taskId, card) {
     const box = document.createElement('div');
     box.style.cssText = 'background:#fff;border-radius:14px;padding:24px 28px;max-width:520px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.18)';
     box.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">'
-        + '<span style="font-size:1.05rem;font-weight:700;color:#111827">鎵嬪姩涓婁紶鎴愬搧鍥?/span>'
+        + '<span style="font-size:1.05rem;font-weight:700;color:#111827">手动上传成品图</span>'
         + '<button onclick="this.closest(\'div[style*=fixed]\').remove()" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:#9ca3af">&times;</button>'
         + '</div>'
         + '<input type="file" id="manualUploadInput" accept="image/*" multiple style="display:block;width:100%;padding:10px;border:1.5px dashed #d1d5db;border-radius:8px;font-size:0.85rem;margin-bottom:12px;cursor:pointer">'
         + '<div id="manualUploadPreview" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px"></div>'
         + '<div id="manualUploadStatus" style="font-size:0.85rem;color:#6b7280;margin-bottom:12px"></div>'
-        + '<button id="manualUploadSubmit" style="width:100%;padding:10px;background:#16a34a;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600">涓婁紶骞跺畬鎴愪换鍔?/button>';
+        + '<button id="manualUploadSubmit" style="width:100%;padding:10px;background:#16a34a;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600">上传并完成任务</button>';
     modal.appendChild(box);
     document.body.appendChild(modal);
 
@@ -1585,14 +1574,14 @@ async function openManualUpload(taskId, card) {
             };
             reader.readAsDataURL(f);
         });
-        status.textContent = `宸查€夋嫨 ${files.length} 寮犲浘鐗嘸;
+        status.textContent = `已选择 ${files.length} 张图片`;
     };
 
     submit.onclick = async () => {
-        if (!files.length) { status.textContent = '璇峰厛閫夋嫨鍥剧墖'; status.style.color = '#ef4444'; return; }
+        if (!files.length) { status.textContent = '请先选择图片'; status.style.color = '#ef4444'; return; }
         submit.disabled = true;
-        submit.textContent = '涓婁紶涓?..';
-        status.textContent = '姝ｅ湪涓婁紶...';
+        submit.textContent = '上传中...';
+        status.textContent = '正在上传...';
         status.style.color = '#6b7280';
         try {
             const fd = new FormData();
@@ -1602,14 +1591,14 @@ async function openManualUpload(taskId, card) {
             const res = await fetch('/api/studio-result-upload', { method: 'POST', body: fd });
             const json = await res.json();
             if (!res.ok || !json.ok) throw new Error(json.error || res.status);
-            status.textContent = '鉁?涓婁紶鎴愬姛锛屼换鍔″凡瀹屾垚';
+            status.textContent = '✓ 上传成功，任务已完成';
             status.style.color = '#16a34a';
             setTimeout(() => { modal.remove(); if (card) card.remove(); loadStudioAdmin(); }, 1500);
         } catch (err) {
-            status.textContent = '涓婁紶澶辫触锛? + err.message;
+            status.textContent = '上传失败：' + err.message;
             status.style.color = '#ef4444';
             submit.disabled = false;
-            submit.textContent = '涓婁紶骞跺畬鎴愪换鍔?;
+            submit.textContent = '上传并完成任务';
         }
     };
 }
@@ -1619,16 +1608,16 @@ async function deleteStudioTask(id, card) {
     try {
         const res = await fetch('/api/studio-complete', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ taskId: id, action: 'reject', message: '绠＄悊鍛樺垹闄? })
+            body: JSON.stringify({ taskId: id, action: 'reject', message: '管理员删除' })
         });
         if (res.ok) {
             if (card) card.remove();
             const cont = document.getElementById('studioAdminContent');
             if (cont && !cont.querySelector('[id^=\"studio-card-\"]')) {
-                cont.innerHTML = '<p style=\"color:#9ca3af;font-size:0.85rem;padding:8px 0\">鏆傛棤寰呭鐞嗕换鍔?/p>';
+                cont.innerHTML = '<p style=\"color:#9ca3af;font-size:0.85rem;padding:8px 0\">暂无待处理任务</p>';
             }
         }
-    } catch(e) { alert('鍒犻櫎澶辫触锛? + e.message); }
+    } catch(e) { alert('删除失败：' + e.message); }
 }
 
 function showRpaResult(ok, sentBody, httpStatus, response) {
@@ -1639,7 +1628,7 @@ function showRpaResult(ok, sentBody, httpStatus, response) {
     modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;display:flex;align-items:center;justify-content:center';
     const box = document.createElement('div');
     box.style.cssText = 'background:#fff;border-radius:14px;padding:24px 28px;max-width:520px;width:90%;max-height:80vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,0.18)';
-    const title = ok ? '鉁?鍙戦€佹垚鍔? : '鉁?鍙戦€佸け璐?;
+    const title = ok ? '✓ 发送成功' : '✗ 发送失败';
     const titleColor = ok ? '#16a34a' : '#ef4444';
     const bodyStr = sentBody ? JSON.stringify(sentBody, null, 2) : '';
     const closeSnippet = 'document.getElementById(\"rpaResultModal\").remove()';
@@ -1647,12 +1636,12 @@ function showRpaResult(ok, sentBody, httpStatus, response) {
         + '<span style="font-size:1.05rem;font-weight:700;color:' + titleColor + '">' + title + '</span>'
         + '<button onclick="' + closeSnippet + '" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:#9ca3af">&times;</button>'
         + '</div>';
-    if (httpStatus) html += '<div style="font-size:0.82rem;color:#6b7280;margin-bottom:12px">HTTP 鐘舵€佺爜锛? + httpStatus + '</div>';
-    if (bodyStr) html += '<div style="font-size:0.82rem;color:#374151;font-weight:600;margin-bottom:6px">鍙戦€佺殑 Body锛?/div>'
+    if (httpStatus) html += '<div style="font-size:0.82rem;color:#6b7280;margin-bottom:12px">HTTP 状态码：' + httpStatus + '</div>';
+    if (bodyStr) html += '<div style="font-size:0.82rem;color:#374151;font-weight:600;margin-bottom:6px">发送的 Body：</div>'
         + '<pre style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:12px;font-size:0.8rem;overflow-x:auto;white-space:pre-wrap;word-break:break-all">' + bodyStr + '</pre>';
-    if (response) html += '<div style="font-size:0.82rem;color:#374151;font-weight:600;margin-top:12px;margin-bottom:6px">鍏埅楸煎搷搴旓細</div>'
+    if (response) html += '<div style="font-size:0.82rem;color:#374151;font-weight:600;margin-top:12px;margin-bottom:6px">八爪鱼响应：</div>'
         + '<pre style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:12px;font-size:0.8rem;overflow-x:auto;white-space:pre-wrap;word-break:break-all">' + String(response) + '</pre>';
-    html += '<button onclick="' + closeSnippet + '" style="margin-top:16px;width:100%;padding:9px;background:#6366f1;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600">鍏抽棴</button>';
+    html += '<button onclick="' + closeSnippet + '" style="margin-top:16px;width:100%;padding:9px;background:#6366f1;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600">关闭</button>';
     box.innerHTML = html;
     modal.appendChild(box);
     modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
@@ -1677,19 +1666,19 @@ async function toggleStudioHistory() {
 
 async function loadStudioHistory() {
     const content = document.getElementById('studioHistoryContent');
-    content.innerHTML = '<div style="color:#9ca3af;font-size:0.9rem;padding:8px 0">鍔犺浇涓?..</div>';
+    content.innerHTML = '<div style="color:#9ca3af;font-size:0.9rem;padding:8px 0">加载中...</div>';
     try {
         const res = await fetch('/api/studio-tasks?all=1');
         const json = await res.json();
         const tasks = (json.tasks || []).filter(t => t.status === 'done' && (t.dingtalkNotified || t.r2AutoNotified));
         if (!tasks.length) {
-            content.innerHTML = '<div style="color:#9ca3af;font-size:0.9rem;padding:8px 0">鏆傛棤鍘嗗彶璁板綍</div>';
+            content.innerHTML = '<div style="color:#9ca3af;font-size:0.9rem;padding:8px 0">暂无历史记录</div>';
             return;
         }
         content.innerHTML = '';
         tasks.forEach(task => content.appendChild(renderStudioHistoryCard(task)));
     } catch (e) {
-        content.innerHTML = '<div style="color:#ef4444;font-size:0.9rem;padding:8px 0">鍔犺浇澶辫触锛? + e.message + '</div>';
+        content.innerHTML = '<div style="color:#ef4444;font-size:0.9rem;padding:8px 0">加载失败：' + e.message + '</div>';
     }
 }
 
@@ -1697,34 +1686,34 @@ function renderStudioHistoryCard(task) {
     const card = document.createElement('div');
     card.style.cssText = 'background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:14px 16px;margin-bottom:10px';
     
-    const modeText = task.mode === 'free' ? '鑷敱妯″紡' : '绋嬪簭妯″紡';
+    const modeText = task.mode === 'free' ? '自由模式' : '程序模式';
     const time = new Date(task.timestamp).toLocaleString('zh-CN', { timeZone:'Asia/Shanghai', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
     
     let html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
         + '<div style="display:flex;align-items:center;gap:10px">'
-        + '<span style="font-weight:700;color:#111827">' + esc(task.submitter && task.submitter.name || '鍖垮悕') + '</span>'
+        + '<span style="font-weight:700;color:#111827">' + esc(task.submitter && task.submitter.name || '匿名') + '</span>'
         + '<span style="font-size:0.8rem;color:#6b7280">' + modeText + '</span>'
-        + '<span style="font-size:0.72rem;background:#dcfce7;color:#16a34a;padding:2px 9px;border-radius:10px">宸插畬鎴?/span>'
+        + '<span style="font-size:0.72rem;background:#dcfce7;color:#16a34a;padding:2px 9px;border-radius:10px">已完成</span>'
         + '</div>'
         + '<span style="font-size:0.76rem;color:#9ca3af">' + time + '</span>'
         + '</div>';
     
-    if (task.desc) html += '<div style="font-size:0.82rem;color:#374151;margin-bottom:6px">闇€姹傦細' + esc(task.desc) + '</div>';
+    if (task.desc) html += '<div style="font-size:0.82rem;color:#374151;margin-bottom:6px">需求：' + esc(task.desc) + '</div>';
     const displayNameShort = task.imageName ? task.imageName.replace(/^[^-]+-/, '') : '';
-    if (displayNameShort) html += '<div style="font-size:0.82rem;color:#6b7280;margin-bottom:6px">鍥剧墖鍛藉悕锛? + esc(displayNameShort) + '</div>';
+    if (displayNameShort) html += '<div style="font-size:0.82rem;color:#6b7280;margin-bottom:6px">图片命名：' + esc(displayNameShort) + '</div>';
     
     card.innerHTML = html;
     
     const btnRow = document.createElement('div');
     btnRow.style.cssText = 'display:flex;gap:8px;margin:10px 0';
     const viewCodeBtn = document.createElement('button');
-    viewCodeBtn.textContent = '馃搵 鏌ョ湅RPA浠ｇ爜';
+    viewCodeBtn.textContent = '📋 查看RPA代码';
     viewCodeBtn.style.cssText = 'font-size:0.78rem;color:#6366f1;background:#fff;border:1px solid #6366f1;border-radius:7px;padding:5px 12px;cursor:pointer;font-weight:600';
     viewCodeBtn.onclick = () => viewRpaCode(task);
     btnRow.appendChild(viewCodeBtn);
     if (task.submitter) {
         const feedbackBtn = document.createElement('button');
-        feedbackBtn.textContent = '鍙戦€佸弽棣?;
+        feedbackBtn.textContent = '发送反馈';
         feedbackBtn.style.cssText = 'font-size:0.78rem;color:#10b981;background:#fff;border:1px solid #10b981;border-radius:7px;padding:5px 12px;cursor:pointer;font-weight:600';
         feedbackBtn.onclick = () => openFeedbackModal(task.id, task.submitter.name || '');
         btnRow.appendChild(feedbackBtn);
@@ -1734,7 +1723,7 @@ function renderStudioHistoryCard(task) {
     if (task.desc) {
         const toggleBtn = document.createElement('button');
         toggleBtn.type = 'button';
-        toggleBtn.textContent = '鏌ョ湅鍏抽敭璇?鈻?;
+        toggleBtn.textContent = '查看关键词 ▼';
         toggleBtn.style.cssText = 'font-size:0.78rem;color:#6366f1;background:none;border:none;cursor:pointer;padding:4px 0;margin:6px 0';
         const keywordBox = document.createElement('div');
         keywordBox.hidden = true;
@@ -1742,7 +1731,7 @@ function renderStudioHistoryCard(task) {
         keywordBox.textContent = task.desc;
         toggleBtn.onclick = () => {
             keywordBox.hidden = !keywordBox.hidden;
-            toggleBtn.textContent = keywordBox.hidden ? '鏌ョ湅鍏抽敭璇?鈻? : '鏀惰捣鍏抽敭璇?鈻?;
+            toggleBtn.textContent = keywordBox.hidden ? '查看关键词 ▼' : '收起关键词 ▲';
         };
         card.appendChild(toggleBtn);
         card.appendChild(keywordBox);
@@ -1752,7 +1741,7 @@ function renderStudioHistoryCard(task) {
     if (allSrc.length) {
         const label = document.createElement('div');
         label.style.cssText = 'font-size:0.78rem;color:#9ca3af;margin:10px 0 6px';
-        label.textContent = '鎻愪氦绱犳潗';
+        label.textContent = '提交素材';
         card.appendChild(label);
         const row = document.createElement('div');
         row.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px';
@@ -1776,7 +1765,7 @@ function renderStudioHistoryCard(task) {
     if (task.resultKeys && task.resultKeys.length) {
         const label = document.createElement('div');
         label.style.cssText = 'font-size:0.82rem;color:#16a34a;font-weight:600;margin:14px 0 6px';
-        label.textContent = '鉁?鎴愬搧鍥撅紙鐐瑰嚮涓嬭浇锛?;
+        label.textContent = '✓ 成品图（点击下载）';
         card.appendChild(label);
         const row = document.createElement('div');
         row.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px';
@@ -1784,7 +1773,7 @@ function renderStudioHistoryCard(task) {
             const a = document.createElement('a');
             a.href = '/api/library-file/' + encodeURIComponent(k.key) + '?dl=1';
             a.download = k.name;
-            a.title = '涓嬭浇 ' + k.name;
+            a.title = '下载 ' + k.name;
             a.style.cssText = 'width:80px;height:80px;display:block';
             a.innerHTML = '<img src="/api/library-file/' + encodeURIComponent(k.key) + '" style="width:80px;height:80px;object-fit:cover;border-radius:8px;border:1px solid #e5e7eb" loading="lazy">';
             row.appendChild(a);
@@ -1811,27 +1800,27 @@ function initExamplesToggle() {
 async function loadExamplesAdmin() {
     const box = document.getElementById('examplesAdminContent');
     if (!box) return;
-    box.innerHTML = '<div style="color:#9ca3af;font-size:0.9rem">鍔犺浇涓?..</div>';
+    box.innerHTML = '<div style="color:#9ca3af;font-size:0.9rem">加载中...</div>';
     try {
         const res = await fetch('/api/studio-examples?all=1');
         const json = await res.json();
         if (!json.ok) throw new Error(json.error || res.status);
         const list = (json.examples || []).filter(x => x.source === 'custom');
         if (!list.length) {
-            box.innerHTML = '<div style="color:#9ca3af;font-size:0.9rem">鏆傛棤鐢ㄦ埛涓婁紶妗堜緥</div>';
+            box.innerHTML = '<div style="color:#9ca3af;font-size:0.9rem">暂无用户上传案例</div>';
             return;
         }
         const pending = list.filter(x => x.status !== 'approved');
         const approved = list.filter(x => x.status === 'approved');
-        box.innerHTML = section('寰呭鏍?(' + pending.length + ')', pending)
-            + section('宸查€氳繃 (' + approved.length + ')', approved);
+        box.innerHTML = section('待审核 (' + pending.length + ')', pending)
+            + section('已通过 (' + approved.length + ')', approved);
     } catch (err) {
-        box.innerHTML = '<div style="color:#ef4444;font-size:0.9rem">鍔犺浇澶辫触锛? + escapeHtml(err.message) + '</div>';
+        box.innerHTML = '<div style="color:#ef4444;font-size:0.9rem">加载失败：' + escapeHtml(err.message) + '</div>';
     }
 }
 
 function section(title, list) {
-    if (!list.length) return '<div style="margin-bottom:18px"><div style="font-weight:700;font-size:0.95rem;color:#111827;margin-bottom:10px">' + title + '</div><div style="color:#9ca3af;font-size:0.85rem">鏃?/div></div>';
+    if (!list.length) return '<div style="margin-bottom:18px"><div style="font-weight:700;font-size:0.95rem;color:#111827;margin-bottom:10px">' + title + '</div><div style="color:#9ca3af;font-size:0.85rem">无</div></div>';
     return '<div style="margin-bottom:24px"><div style="font-weight:700;font-size:0.95rem;color:#111827;margin-bottom:10px">' + title + '</div>'
         + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px">'
         + list.map(item => exampleCard(item)).join('')
@@ -1843,14 +1832,14 @@ function exampleCard(item) {
     return '<div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;background:#fff;display:flex;flex-direction:column">'
         + '<img src="' + item.image + '" style="width:100%;height:160px;object-fit:cover;display:block">'
         + '<div style="padding:12px;display:flex;flex-direction:column;gap:8px;flex:1">'
-        + '<div style="font-weight:700;font-size:0.86rem;color:#111827">' + escapeHtml(item.title || '鏈懡鍚嶆渚?) + '</div>'
+        + '<div style="font-weight:700;font-size:0.86rem;color:#111827">' + escapeHtml(item.title || '未命名案例') + '</div>'
         + '<textarea id="exPrompt-' + item.id + '" style="width:100%;min-height:70px;font-size:0.78rem;color:#374151;border:1px solid #e5e7eb;border-radius:8px;padding:8px;resize:vertical;line-height:1.45">' + escapeHtml(item.prompt || '') + '</textarea>'
         + '<div style="display:flex;gap:8px;margin-top:auto">'
-        + '<button onclick="saveExamplePrompt(\'' + item.id + '\')" style="flex:1;padding:7px;border:1px solid #6366f1;background:#fff;color:#6366f1;border-radius:8px;cursor:pointer;font-size:0.78rem">淇濆瓨鎻愮ず璇?/button>'
+        + '<button onclick="saveExamplePrompt(\'' + item.id + '\')" style="flex:1;padding:7px;border:1px solid #6366f1;background:#fff;color:#6366f1;border-radius:8px;cursor:pointer;font-size:0.78rem">保存提示词</button>'
         + (approved
-            ? '<button onclick="setExampleStatus(\'' + item.id + '\',\'reject\')" style="flex:1;padding:7px;border:1px solid #f59e0b;background:#fff;color:#f59e0b;border-radius:8px;cursor:pointer;font-size:0.78rem">涓嬫灦</button>'
-            : '<button onclick="setExampleStatus(\'' + item.id + '\',\'approve\')" style="flex:1;padding:7px;border:1px solid #10b981;background:#10b981;color:#fff;border-radius:8px;cursor:pointer;font-size:0.78rem">瀹℃牳閫氳繃</button>')
-        + '<button onclick="deleteStudioExample(\'' + item.id + '\')" style="padding:7px 10px;border:1px solid #ef4444;background:#fff;color:#ef4444;border-radius:8px;cursor:pointer;font-size:0.78rem">鍒犻櫎</button>'
+            ? '<button onclick="setExampleStatus(\'' + item.id + '\',\'reject\')" style="flex:1;padding:7px;border:1px solid #f59e0b;background:#fff;color:#f59e0b;border-radius:8px;cursor:pointer;font-size:0.78rem">下架</button>'
+            : '<button onclick="setExampleStatus(\'' + item.id + '\',\'approve\')" style="flex:1;padding:7px;border:1px solid #10b981;background:#10b981;color:#fff;border-radius:8px;cursor:pointer;font-size:0.78rem">审核通过</button>')
+        + '<button onclick="deleteStudioExample(\'' + item.id + '\')" style="padding:7px 10px;border:1px solid #ef4444;background:#fff;color:#ef4444;border-radius:8px;cursor:pointer;font-size:0.78rem">删除</button>'
         + '</div></div></div>';
 }
 
@@ -1861,7 +1850,7 @@ async function setExampleStatus(id, action) {
         body: JSON.stringify({ id, action })
     });
     const json = await res.json().catch(() => ({}));
-    if (!res.ok || !json.ok) { alert('鎿嶄綔澶辫触锛? + (json.error || res.status)); return; }
+    if (!res.ok || !json.ok) { alert('操作失败：' + (json.error || res.status)); return; }
     loadExamplesAdmin();
 }
 
@@ -1869,26 +1858,26 @@ async function saveExamplePrompt(id) {
     const el = document.getElementById('exPrompt-' + id);
     if (!el) return;
     const prompt = el.value.trim();
-    if (!prompt) { alert('鎻愮ず璇嶄笉鑳戒负绌?); return; }
+    if (!prompt) { alert('提示词不能为空'); return; }
     const res = await fetch('/api/studio-examples', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, prompt })
     });
     const json = await res.json().catch(() => ({}));
-    if (!res.ok || !json.ok) { alert('淇濆瓨澶辫触锛? + (json.error || res.status)); return; }
+    if (!res.ok || !json.ok) { alert('保存失败：' + (json.error || res.status)); return; }
     loadExamplesAdmin();
 }
 
 async function deleteStudioExample(id) {
-    if (!confirm('纭畾鍒犻櫎杩欎釜妗堜緥锛?)) return;
+    if (!confirm('确定删除这个案例？')) return;
     const res = await fetch('/api/studio-examples', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id })
     });
     const json = await res.json().catch(() => ({}));
-    if (!res.ok || !json.ok) { alert('鍒犻櫎澶辫触锛? + (json.error || res.status)); return; }
+    if (!res.ok || !json.ok) { alert('删除失败：' + (json.error || res.status)); return; }
     loadExamplesAdmin();
 }
 
@@ -1907,11 +1896,11 @@ async function reorderTask(id, direction) {
         if (!res.ok || !json.ok) throw new Error(json.error || res.status);
         await loadSubmissions();
     } catch (e) {
-        alert('鎺掑簭澶辫触锛? + e.message);
+        alert('排序失败：' + e.message);
     }
 }
 
-// 鈹€鈹€ Sort Modal & Urgent 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// ── Sort Modal & Urgent ──────────────────────────
 let _sortModalEl, _sortListEl, _sortSaveBtn, _sortCloseBtn;
 let _sortOrder = [];
 
@@ -1941,12 +1930,12 @@ function closeSortModal() {
 
 async function _loadSortList() {
     if (!_sortListEl) return;
-    _sortListEl.innerHTML = '<div style="color:#9ca3af;padding:12px">鍔犺浇涓?..</div>';
+    _sortListEl.innerHTML = '<div style="color:#9ca3af;padding:12px">加载中...</div>';
     try {
         const res = await fetch('/api/submissions');
         const json = await res.json();
         if (!json.ok || !json.submissions) {
-            _sortListEl.innerHTML = '<div style="color:#9ca3af;padding:12px">鏆傛棤鏁版嵁</div>';
+            _sortListEl.innerHTML = '<div style="color:#9ca3af;padding:12px">暂无数据</div>';
             return;
         }
         _sortOrder = json.submissions
@@ -1954,12 +1943,12 @@ async function _loadSortList() {
             .map(function(s) {
                 return {
                     id: s.id,
-                    name: (s.data && s.data.basicInfo && s.data.basicInfo['鍨嬪彿']) || s.taskType || '鏈懡鍚?
+                    name: (s.data && s.data.basicInfo && s.data.basicInfo['型号']) || s.taskType || '未命名'
                 };
             });
         _renderSortItems();
     } catch(e) {
-        _sortListEl.innerHTML = '<div style="color:#ef4444;padding:12px">鍔犺浇澶辫触: ' + e.message + '</div>';
+        _sortListEl.innerHTML = '<div style="color:#ef4444;padding:12px">加载失败: ' + e.message + '</div>';
     }
 }
 
@@ -1973,7 +1962,7 @@ function _renderSortItems() {
         nameSpan.className = 'sort-item-name';
         nameSpan.textContent = item.name;
         nameSpan.style.cursor = 'pointer';
-        nameSpan.title = '鐐瑰嚮鍦ㄧ鐞嗗彴楂樹寒鏄剧ず';
+        nameSpan.title = '点击在管理台高亮显示';
         nameSpan.onclick = (function(id) { return function() { _highlightCard(id); }; })(item.id);
         div.appendChild(nameSpan);
         var actions = document.createElement('div');
@@ -1981,19 +1970,19 @@ function _renderSortItems() {
         var topBtn = document.createElement('button');
         topBtn.className = 'btn-sort-arrow';
         topBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 11 12 5 6 11"/><polyline points="18 18 12 12 6 18"/></svg>';
-        topBtn.title = '缃《';
+        topBtn.title = '置顶';
         topBtn.disabled = idx === 0;
         topBtn.onclick = (function(i) { return function() { _moveToTop(i); }; })(idx);
         actions.appendChild(topBtn);
         var upBtn = document.createElement('button');
         upBtn.className = 'btn-sort-arrow';
-        upBtn.innerHTML = '鈫?;
+        upBtn.innerHTML = '↑';
         upBtn.disabled = idx === 0;
         upBtn.onclick = (function(i) { return function() { _moveItem(i, -1); }; })(idx);
         actions.appendChild(upBtn);
         var downBtn = document.createElement('button');
         downBtn.className = 'btn-sort-arrow';
-        downBtn.innerHTML = '鈫?;
+        downBtn.innerHTML = '↓';
         downBtn.disabled = idx === _sortOrder.length - 1;
         downBtn.onclick = (function(i) { return function() { _moveItem(i, 1); }; })(idx);
         actions.appendChild(downBtn);
@@ -2021,7 +2010,7 @@ function _moveToTop(idx) {
 function _highlightCard(id) {
     var card = document.getElementById('card-' + id);
     if (!card) return;
-    // 涓存椂鍏抽棴寮圭獥浠ヤ究鐪嬪埌鍗＄墖
+    // 临时关闭弹窗以便看到卡片
     if (_sortModalEl) {
         _sortModalEl.style.opacity = '0.15';
         _sortModalEl.style.pointerEvents = 'none';
@@ -2045,7 +2034,7 @@ function _highlightCard(id) {
 async function saveSortOrder() {
     if (!_sortSaveBtn) return;
     _sortSaveBtn.disabled = true;
-    _sortSaveBtn.textContent = '淇濆瓨涓?..';
+    _sortSaveBtn.textContent = '保存中...';
     try {
         var newOrder = _sortOrder.map(function(s) { return s.id; });
         var res = await fetch('/api/save-order', {
@@ -2055,7 +2044,7 @@ async function saveSortOrder() {
         });
         var json = await res.json();
         if (!res.ok || !json.ok) throw new Error(json.error || res.status);
-        // 绔嬪嵆鏈湴閲嶆帓锛堥伩鍏?KV 鏈€缁堜竴鑷存€у欢杩燂級
+        // 立即本地重排（避免 KV 最终一致性延迟）
         if (typeof allData !== 'undefined' && Array.isArray(allData)) {
             var idxMap = {};
             newOrder.forEach(function(id, i) { idxMap[id] = i; });
@@ -2071,10 +2060,10 @@ async function saveSortOrder() {
         }
         closeSortModal();
     } catch(e) {
-        alert('淇濆瓨澶辫触: ' + e.message);
+        alert('保存失败: ' + e.message);
     } finally {
         _sortSaveBtn.disabled = false;
-        _sortSaveBtn.textContent = '淇濆瓨';
+        _sortSaveBtn.textContent = '保存';
     }
 }
 
@@ -2089,7 +2078,7 @@ async function markUrgent(id) {
         if (!res.ok || !json.ok) throw new Error(json.error || res.status);
         await loadSubmissions();
     } catch(e) {
-        alert('缃《澶辫触: ' + e.message);
+        alert('置顶失败: ' + e.message);
     }
 }
 
