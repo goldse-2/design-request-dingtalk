@@ -1,4 +1,4 @@
-export async function onRequestGet(context) {
+﻿export async function onRequestGet(context) {
     const { params, request, env } = context;
     const key = decodeURIComponent(params.key);
     if (!env.SUBMISSION_FILES) return new Response('Not configured', { status: 500 });
@@ -14,7 +14,10 @@ export async function onRequestGet(context) {
     const contentType = mimeMap[ext] || 'application/octet-stream';
 
     const headers = { 'Content-Type': contentType, 'Cache-Control': 'public, max-age=3600' };
-    if (isDownload) headers['Content-Disposition'] = `attachment; filename="${encodeURIComponent(fileName)}"`;
+    if (isDownload) {
+        // RFC 5987: filename*=UTF-8''<encoded> correctly handles non-ASCII filenames
+        headers['Content-Disposition'] = "attachment; filename*=UTF-8''" + encodeURIComponent(fileName);
+    }
 
     return new Response(obj.body, { headers });
 }

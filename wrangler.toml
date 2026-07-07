@@ -3,3 +3,15 @@ compatibility_date = "2024-01-01"
 
 [triggers]
 crons = ["*/3 * * * *"]
+
+[[kv_namespaces]]
+binding = "SUBMISSIONS"
+id = "e9850753791740ba9b54752c93f39665"
+
+[[kv_namespaces]]
+binding = "SUBMISSION_FILES"
+id = "5325f7e24cbc4e73869ea281f45790e6"
+
+[[kv_namespaces]]
+binding = "STUDIO_TASKS"
+id = "0bf03299ece941f794761ca57d1ce546"
