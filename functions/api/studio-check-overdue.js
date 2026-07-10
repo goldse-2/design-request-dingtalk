@@ -22,7 +22,7 @@ export async function onRequestGet(context) {
         const autoErrors = [];
         const notified = [];
 
-        const programWebhook = env.RPA_WEBHOOK_URL_PROGRAM || await env.SUBMISSIONS.get('studio:rpaWebhookUrl:program') || 'https://api-rpa.bazhuayu.com/api/v1/bots/webhooks/6a3a40ac622e84b667229fde/invoke';
+        const programWebhook = await env.SUBMISSIONS.get('studio:rpaWebhookUrl:program') || env.RPA_WEBHOOK_URL_PROGRAM || 'https://api-rpa.bazhuayu.com/api/v1/bots/webhooks/6a3a40ac622e84b667229fde/invoke';
         const freeWebhook = env.RPA_WEBHOOK_URL_FREE || await env.SUBMISSIONS.get('studio:rpaWebhookUrl:free') || 'https://api-rpa.bazhuayu.com/api/v1/bots/webhooks/6a31134a622e84b6672263ee/invoke';
         
         if (programWebhook || freeWebhook) {
