@@ -52,13 +52,6 @@ export async function onRequestPost(context) {
 
     // 统计当前排队任务数量（用于计算预计等待时间）
     let queueCount = 0;
-    try {
-        const allKeys = await env.SUBMISSIONS.list({ prefix: 'studio-' });
-        for (const key of allKeys.keys) {
-            const status = key.metadata?.status;
-            if (status === 'pending' || status === 'processing') queueCount++;
-        }
-    } catch {}
 
     // 发送钉钉通知给管理员
     if (env.DINGTALK_APPKEY && env.DINGTALK_APPSECRET && env.ADMIN_USER_ID) {
