@@ -24,11 +24,25 @@ export async function onRequestPost(context) {
         task.pausedAuto = !!pausedAuto;
 
         await env.SUBMISSIONS.put(taskId, JSON.stringify(task), {
-            metadata: { kind: 'studio', mode: task.mode, timestamp: task.timestamp }
+            metadata: studioTaskMetadata(task)
         });
 
         return Response.json({ ok: true });
     } catch (err) {
         return Response.json({ ok: false, error: err.message }, { status: 500 });
     }
+}
+
+function studioTaskMetadata(task) {
+    return {
+        kind: 'studio',
+        mode: task.mode,
+        status: task.status,
+        timestamp: task.timestamp,
+        unionId: task.submitter?.unionId || '',
+        sentToRpa: Boolean(task.sentToRpa),
+        sentToRpaAt: task.sentToRpaAt || '',
+        pausedAuto: Boolean(task.pausedAuto),
+        overdueNotified: Boolean(task.overdueNotified)
+    };
 }

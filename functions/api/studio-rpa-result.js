@@ -62,7 +62,7 @@ export async function onRequestPost(context) {
         if (message) task.completeNote = message;
 
         await env.SUBMISSIONS.put(taskId, JSON.stringify(task), {
-            metadata: { kind: 'studio', mode: task.mode, timestamp: task.timestamp }
+            metadata: studioTaskMetadata(task)
         });
 
         if (task.submitter?.unionId && env.DINGTALK_APPKEY && env.DINGTALK_APPSECRET) {
@@ -72,7 +72,7 @@ export async function onRequestPost(context) {
                     task.dingtalkNotified = true;
                     task.dingtalkNotifiedAt = new Date().toISOString();
                     return env.SUBMISSIONS.put(taskId, JSON.stringify(task), {
-                        metadata: { kind: 'studio', mode: task.mode, timestamp: task.timestamp }
+                        metadata: studioTaskMetadata(task)
                     });
                 })
                 .catch(e => console.error('Notify failed:', e.message));
@@ -128,4 +128,18 @@ function base64ToBytes(base64) {
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
     return bytes;
+}
+
+function studioTaskMetadata(task) {
+    return {
+        kind: 'studio',
+        mode: task.mode,
+        status: task.status,
+        timestamp: task.timestamp,
+        unionId: task.submitter?.unionId || '',
+        sentToRpa: Boolean(task.sentToRpa),
+        sentToRpaAt: task.sentToRpaAt || '',
+        pausedAuto: Boolean(task.pausedAuto),
+        overdueNotified: Boolean(task.overdueNotified)
+    };
 }

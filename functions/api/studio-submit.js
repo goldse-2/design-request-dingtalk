@@ -44,7 +44,7 @@ export async function onRequestPost(context) {
 
     try {
         await env.SUBMISSIONS.put(taskId, JSON.stringify(task), {
-            metadata: { kind: 'studio', mode, timestamp }
+            metadata: studioTaskMetadata(task)
         });
     } catch (err) {
         return Response.json({ ok: false, error: 'Storage failed' }, { status: 500 });
@@ -55,15 +55,8 @@ export async function onRequestPost(context) {
     try {
         const allKeys = await env.SUBMISSIONS.list({ prefix: 'studio-' });
         for (const key of allKeys.keys) {
-            try {
-                const data = await env.SUBMISSIONS.get(key.name);
-                if (data) {
-                    const t = JSON.parse(data);
-                    if (t.status === 'pending' || t.status === 'processing') {
-                        queueCount++;
-                    }
-                }
-            } catch {}
+            const status = key.metadata?.status;
+            if (status === 'pending' || status === 'processing') queueCount++;
         }
     } catch {}
 
@@ -118,6 +111,20 @@ export async function onRequestPost(context) {
     }
 
     return Response.json({ ok: true, id: taskId });
+}
+
+function studioTaskMetadata(task) {
+    return {
+        kind: 'studio',
+        mode: task.mode,
+        status: task.status,
+        timestamp: task.timestamp,
+        unionId: task.submitter?.unionId || '',
+        sentToRpa: Boolean(task.sentToRpa),
+        sentToRpaAt: task.sentToRpaAt || '',
+        pausedAuto: Boolean(task.pausedAuto),
+        overdueNotified: Boolean(task.overdueNotified)
+    };
 }
 
 async function getAccessToken(env) {

@@ -47,7 +47,7 @@ export async function onRequestPost(context) {
         }
 
         await env.SUBMISSIONS.put(taskId, JSON.stringify(task), {
-            metadata: { kind: 'studio', mode: task.mode, timestamp: task.timestamp }
+            metadata: studioTaskMetadata(task)
         });
 
         if (task.submitter?.unionId && env.DINGTALK_APPKEY && env.DINGTALK_APPSECRET) {
@@ -58,7 +58,7 @@ export async function onRequestPost(context) {
                         task.dingtalkNotified = true;
                         task.dingtalkNotifiedAt = new Date().toISOString();
                         return env.SUBMISSIONS.put(taskId, JSON.stringify(task), {
-                            metadata: { kind: 'studio', mode: task.mode, timestamp: task.timestamp }
+                            metadata: studioTaskMetadata(task)
                         });
                     }
                 })
@@ -70,6 +70,20 @@ export async function onRequestPost(context) {
     } catch (err) {
         return Response.json({ ok: false, error: err.message }, { status: 500 });
     }
+}
+
+function studioTaskMetadata(task) {
+    return {
+        kind: 'studio',
+        mode: task.mode,
+        status: task.status,
+        timestamp: task.timestamp,
+        unionId: task.submitter?.unionId || '',
+        sentToRpa: Boolean(task.sentToRpa),
+        sentToRpaAt: task.sentToRpaAt || '',
+        pausedAuto: Boolean(task.pausedAuto),
+        overdueNotified: Boolean(task.overdueNotified)
+    };
 }
 
 async function notifyUser(env, task, action, message, origin) {

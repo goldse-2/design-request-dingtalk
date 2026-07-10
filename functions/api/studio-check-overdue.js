@@ -5,16 +5,6 @@ export async function onRequestGet(context) {
     }
 
     try {
-        const list = await env.SUBMISSIONS.list({ limit: 1000 });
-        const results = await Promise.all(list.keys.map(k => env.SUBMISSIONS.get(k.name)));
-        const allStudioTasks = results
-            .filter(Boolean)
-            .map(r => { try { return JSON.parse(r); } catch { return null; } })
-            .filter(t => t && t.kind === 'studio');
-
-        const tasks = allStudioTasks.filter(t => t.sentToRpa && t.status === 'processing');
-        const autoSendTasks = allStudioTasks.filter(t => !t.sentToRpa && t.status === 'pending' && !t.pausedAuto);
-
         const now = Date.now();
         const autoSendThreshold = 3 * 60 * 1000;
         const overdueThreshold = 15 * 60 * 1000;
@@ -22,8 +12,30 @@ export async function onRequestGet(context) {
         const autoErrors = [];
         const notified = [];
 
-        const programWebhook = await env.SUBMISSIONS.get('studio:rpaWebhookUrl:program') || env.RPA_WEBHOOK_URL_PROGRAM || 'https://api-rpa.bazhuayu.com/api/v1/bots/webhooks/6a3a40ac622e84b667229fde/invoke';
-        const freeWebhook = env.RPA_WEBHOOK_URL_FREE || await env.SUBMISSIONS.get('studio:rpaWebhookUrl:free') || 'https://api-rpa.bazhuayu.com/api/v1/bots/webhooks/6a31134a622e84b6672263ee/invoke';
+        const list = await env.SUBMISSIONS.list({ prefix: 'studio-', limit: 1000 });
+        const autoSendKeys = [];
+        const overdueKeys = [];
+
+        for (const key of list.keys) {
+            const meta = key.metadata || {};
+            if (meta.kind !== 'studio') continue;
+
+            const createdAt = Number(meta.timestamp || 0);
+            if (meta.status === 'pending' && !meta.sentToRpa && !meta.pausedAuto) {
+                if (createdAt && (now - createdAt) >= autoSendThreshold) autoSendKeys.push(key.name);
+            }
+
+            const sentAt = meta.sentToRpaAt ? new Date(meta.sentToRpaAt).getTime() : 0;
+            if (meta.status === 'processing' && meta.sentToRpa && !meta.overdueNotified) {
+                if (sentAt && (now - sentAt) >= overdueThreshold) overdueKeys.push(key.name);
+            }
+        }
+
+        const autoSendTasks = await readStudioTasks(env, autoSendKeys);
+        const tasks = await readStudioTasks(env, overdueKeys);
+
+        const programWebhook = await safeKvGet(env.SUBMISSIONS, 'studio:rpaWebhookUrl:program') || env.RPA_WEBHOOK_URL_PROGRAM || 'https://api-rpa.bazhuayu.com/api/v1/bots/webhooks/6a3a40ac622e84b667229fde/invoke';
+        const freeWebhook = env.RPA_WEBHOOK_URL_FREE || await safeKvGet(env.SUBMISSIONS, 'studio:rpaWebhookUrl:free') || 'https://api-rpa.bazhuayu.com/api/v1/bots/webhooks/6a31134a622e84b6672263ee/invoke';
         
         if (programWebhook || freeWebhook) {
             const origin = new URL(request.url).origin;
@@ -54,7 +66,7 @@ export async function onRequestGet(context) {
                     task.rpaSentPayload = payload;
                     if (!task.size && pickedSize) task.size = pickedSize;
                     await env.SUBMISSIONS.put(task.id, JSON.stringify(task), {
-                        metadata: { kind: 'studio', mode: task.mode, timestamp: task.timestamp }
+                        metadata: studioTaskMetadata(task)
                     });
 
                     autoSent.push(task.id);
@@ -67,7 +79,7 @@ export async function onRequestGet(context) {
                     task.autoRpaLastError = errMsg;
                     task.autoRpaLastAttemptAt = new Date().toISOString();
                     await env.SUBMISSIONS.put(task.id, JSON.stringify(task), {
-                        metadata: { kind: 'studio', mode: task.mode, timestamp: task.timestamp }
+                        metadata: studioTaskMetadata(task)
                     });
                     console.error('Auto send RPA failed:', task.id, e.message);
                 }
@@ -83,7 +95,7 @@ export async function onRequestGet(context) {
                 const p = notifyOverdue(env, task).then(() => {
                     task.overdueNotified = true;
                     return env.SUBMISSIONS.put(task.id, JSON.stringify(task), {
-                        metadata: { kind: 'studio', mode: task.mode, timestamp: task.timestamp }
+                        metadata: studioTaskMetadata(task)
                     });
                 }).catch(e => console.error('Notify overdue failed:', e.message));
                 if (waitUntil) waitUntil(p);
@@ -105,6 +117,44 @@ export async function onRequestGet(context) {
     } catch (err) {
         return Response.json({ ok: false, error: err.message }, { status: 500 });
     }
+}
+
+async function safeKvGet(kv, key) {
+    try {
+        return await kv.get(key);
+    } catch (err) {
+        console.error('KV get failed:', key, err.message);
+        return null;
+    }
+}
+
+async function readStudioTasks(env, keys) {
+    const tasks = [];
+    for (const key of keys) {
+        try {
+            const raw = await env.SUBMISSIONS.get(key);
+            if (!raw) continue;
+            const task = JSON.parse(raw);
+            if (task && task.kind === 'studio') tasks.push(task);
+        } catch (err) {
+            console.error('Read studio task failed:', key, err.message);
+        }
+    }
+    return tasks;
+}
+
+function studioTaskMetadata(task) {
+    return {
+        kind: 'studio',
+        mode: task.mode,
+        status: task.status,
+        timestamp: task.timestamp,
+        unionId: task.submitter?.unionId || '',
+        sentToRpa: Boolean(task.sentToRpa),
+        sentToRpaAt: task.sentToRpaAt || '',
+        pausedAuto: Boolean(task.pausedAuto),
+        overdueNotified: Boolean(task.overdueNotified)
+    };
 }
 
 function buildRpaPayload(task, origin) {

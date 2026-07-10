@@ -45,7 +45,7 @@ export async function onRequestPost(context) {
     task.completeNote = task.completeNote || '成品图已上传';
 
     await env.SUBMISSIONS.put(taskId, JSON.stringify(task), {
-        metadata: { kind: 'studio', mode: task.mode, timestamp: task.timestamp }
+        metadata: studioTaskMetadata(task)
     });
 
     if (task.submitter?.unionId && env.DINGTALK_APPKEY && env.DINGTALK_APPSECRET) {
@@ -54,7 +54,7 @@ export async function onRequestPost(context) {
                 task.dingtalkNotified = true;
                 task.dingtalkNotifiedAt = new Date().toISOString();
                 return env.SUBMISSIONS.put(taskId, JSON.stringify(task), {
-                    metadata: { kind: 'studio', mode: task.mode, timestamp: task.timestamp }
+                    metadata: studioTaskMetadata(task)
                 });
             })
             .catch(e => console.error('Notify failed:', e.message));
@@ -73,6 +73,20 @@ function guessContentType(name) {
     const ext = name.split('.').pop().toLowerCase();
     const map = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif' };
     return map[ext] || 'application/octet-stream';
+}
+
+function studioTaskMetadata(task) {
+    return {
+        kind: 'studio',
+        mode: task.mode,
+        status: task.status,
+        timestamp: task.timestamp,
+        unionId: task.submitter?.unionId || '',
+        sentToRpa: Boolean(task.sentToRpa),
+        sentToRpaAt: task.sentToRpaAt || '',
+        pausedAuto: Boolean(task.pausedAuto),
+        overdueNotified: Boolean(task.overdueNotified)
+    };
 }
 
 async function notifyUserDone(env, task, origin) {

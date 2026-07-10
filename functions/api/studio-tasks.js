@@ -21,7 +21,7 @@ export async function onRequestPatch(context) {
     if (typeof note === 'string') task.note = note;
 
     await env.SUBMISSIONS.put(id, JSON.stringify(task), {
-        metadata: { kind: 'studio', mode: task.mode, timestamp: task.timestamp }
+        metadata: studioTaskMetadata(task)
     });
     return Response.json({ ok: true, task });
 }
@@ -41,8 +41,12 @@ export async function onRequestGet(context) {
             await syncR2StudioResults(env, request);
         }
 
-        const list = await env.SUBMISSIONS.list({ limit: 1000 });
-        const results = await Promise.all(list.keys.map(k => env.SUBMISSIONS.get(k.name)));
+        const list = await env.SUBMISSIONS.list({ prefix: 'studio-', limit: 1000 });
+        const keys = list.keys
+            .filter(k => (k.metadata || {}).kind === 'studio')
+            .filter(k => all || !unionId || k.metadata?.unionId === unionId)
+            .map(k => k.name);
+        const results = await Promise.all(keys.map(k => env.SUBMISSIONS.get(k)));
 
         let tasks = results
             .filter(Boolean)
@@ -62,8 +66,12 @@ export async function onRequestGet(context) {
 }
 
 async function syncR2StudioResults(env, request) {
-    const pendingList = await env.SUBMISSIONS.list({ limit: 1000 });
-    const raws = await Promise.all(pendingList.keys.map(k => env.SUBMISSIONS.get(k.name)));
+    const pendingList = await env.SUBMISSIONS.list({ prefix: 'studio-', limit: 1000 });
+    const keys = pendingList.keys
+        .filter(k => (k.metadata || {}).kind === 'studio')
+        .filter(k => k.metadata?.status && k.metadata.status !== 'done' && k.metadata.status !== 'rejected')
+        .map(k => k.name);
+    const raws = await Promise.all(keys.map(k => env.SUBMISSIONS.get(k)));
     const tasks = raws
         .filter(Boolean)
         .map(r => {
@@ -90,17 +98,31 @@ async function syncR2StudioResults(env, request) {
         task.r2AutoCompleted = true;
 
         await env.SUBMISSIONS.put(task.id, JSON.stringify(task), {
-            metadata: { kind: 'studio', mode: task.mode, timestamp: task.timestamp }
+            metadata: studioTaskMetadata(task)
         });
 
         if (!task.r2AutoNotified && task.submitter?.unionId && env.DINGTALK_APPKEY && env.DINGTALK_APPSECRET) {
             await notifyUserDone(env, task, new URL(request.url).origin).catch(e => console.error('Auto notify failed:', e.message));
             task.r2AutoNotified = true;
             await env.SUBMISSIONS.put(task.id, JSON.stringify(task), {
-                metadata: { kind: 'studio', mode: task.mode, timestamp: task.timestamp }
+                metadata: studioTaskMetadata(task)
             });
         }
     }
+}
+
+function studioTaskMetadata(task) {
+    return {
+        kind: 'studio',
+        mode: task.mode,
+        status: task.status,
+        timestamp: task.timestamp,
+        unionId: task.submitter?.unionId || '',
+        sentToRpa: Boolean(task.sentToRpa),
+        sentToRpaAt: task.sentToRpaAt || '',
+        pausedAuto: Boolean(task.pausedAuto),
+        overdueNotified: Boolean(task.overdueNotified)
+    };
 }
 
 async function notifyUserDone(env, task, origin) {
