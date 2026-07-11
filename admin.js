@@ -1249,8 +1249,10 @@ function renderStudioTask(task) {
     } else if (task.status === 'pending' && !task.sentToRpa) {
         const createdAt = typeof task.timestamp === 'number' ? task.timestamp : new Date(task.createdAt || task.timestamp || 0).getTime();
         const elapsed = Date.now() - createdAt;
-        const autoSendThreshold = 3 * 60 * 1000;
-        if (elapsed < autoSendThreshold) {
+        const autoSendThreshold = 80 * 1000;
+        if (!isStudioAutoSendWindow()) {
+            html += '<span id="countdown-' + task.id + '" style="font-size:0.72rem;background:#f3f4f6;color:#6b7280;padding:2px 10px;border-radius:10px">非自动发送时段，08:00恢复</span>';
+        } else if (elapsed < autoSendThreshold) {
             const remaining = Math.max(0, Math.floor((autoSendThreshold - elapsed) / 1000));
             const mins = Math.floor(remaining / 60);
             const secs = remaining % 60;
@@ -1336,8 +1338,12 @@ function renderStudioTask(task) {
 function startCountdownTimer(taskId, createdAt) {
     const countdownEl = document.getElementById('countdown-' + taskId);
     if (!countdownEl) return;
-    const autoSendThreshold = 3 * 60 * 1000;
+    const autoSendThreshold = 80 * 1000;
     const interval = setInterval(() => {
+        if (!isStudioAutoSendWindow()) {
+            countdownEl.textContent = '非自动发送时段，08:00恢复';
+            return;
+        }
         const elapsed = Date.now() - createdAt;
         const remaining = Math.max(0, Math.floor((autoSendThreshold - elapsed) / 1000));
         if (remaining <= 0) {
@@ -1350,6 +1356,18 @@ function startCountdownTimer(taskId, createdAt) {
             countdownEl.textContent = '⏱ ' + mins + '分' + secs + '秒后自动发送';
         }
     }, 1000);
+}
+
+function isStudioAutoSendWindow(date = new Date()) {
+    const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Shanghai',
+        hour: '2-digit',
+        minute: '2-digit',
+        hourCycle: 'h23'
+    }).formatToParts(date);
+    const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+    const minutes = Number(values.hour) * 60 + Number(values.minute);
+    return minutes >= 8 * 60 && minutes < 19 * 60 + 30;
 }
 
 async function saveStudioDesc(taskId, btn) {

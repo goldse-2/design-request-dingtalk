@@ -6,11 +6,27 @@ export async function onRequestGet(context) {
 
     try {
         const now = Date.now();
-        const autoSendThreshold = 3 * 60 * 1000;
+        const autoSendThreshold = 80 * 1000;
         const overdueThreshold = 15 * 60 * 1000;
         const autoSent = [];
         const autoErrors = [];
         const notified = [];
+
+        // Outside business hours, skip KV entirely so paused overnight checks cost no operations.
+        if (!isAutoSendWindow(now)) {
+            return Response.json({
+                ok: true,
+                suspended: true,
+                schedule: '08:00-19:30 Asia/Shanghai',
+                checked: 0,
+                autoChecked: 0,
+                autoSent: 0,
+                autoSentTasks: [],
+                autoErrors: [],
+                notified: 0,
+                tasks: []
+            });
+        }
 
         const list = await env.SUBMISSIONS.list({ prefix: 'studio-', limit: 1000 });
         const autoSendKeys = [];
@@ -116,6 +132,18 @@ export async function onRequestGet(context) {
     } catch (err) {
         return Response.json({ ok: false, error: err.message }, { status: 500 });
     }
+}
+
+function isAutoSendWindow(timestamp) {
+    const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Shanghai',
+        hour: '2-digit',
+        minute: '2-digit',
+        hourCycle: 'h23'
+    }).formatToParts(new Date(timestamp));
+    const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+    const minutes = Number(values.hour) * 60 + Number(values.minute);
+    return minutes >= 8 * 60 && minutes < 19 * 60 + 30;
 }
 
 async function safeKvGet(kv, key) {
