@@ -486,23 +486,31 @@ function fillPreset(key) {
 
 function renderForm() {
     const area = document.getElementById('studioFormArea');
+    const preservedPreview = area.querySelector('.studio-preview');
     uploads.freeImages = []; uploads.freeModel = null; uploads.freeScene = null; uploads.freeProduct = []; uploads.freeProduct1 = null; uploads.freeProduct2 = null; uploads.progRef = []; uploads.progProduct = [];
     if (currentMode === 'free') {
         area.innerHTML = FREE_FORM;
+        restoreStudioPreview(area, preservedPreview);
         wireFreeUpload('freeProductDrop', 'freeProductInput');
         wirePromptMentions();
         wireSizeResizeHint('freeSizeSelect', 'freeSizeHint');
         document.getElementById('freeSubmit').addEventListener('click', submitFree);
-        renderStudioGallery();
     } else {
         area.innerHTML = PROGRAM_FORM;
+        restoreStudioPreview(area, preservedPreview);
         wireDrop('progRefDrop', 'progRefInput', 'progRefThumbs', 'progRef');
         wireDrop('progProductDrop', 'progProductInput', 'progProductThumbs', 'progProduct');
         wireSizeResizeHint('progSizeSelect', 'progSizeHint');
         document.getElementById('progSubmit').addEventListener('click', submitProgram);
-        renderStudioGallery();
     }
+    if (!preservedPreview) renderStudioGallery();
     applyAgreementGate();
+}
+
+function restoreStudioPreview(area, preservedPreview) {
+    if (!preservedPreview) return;
+    const replacement = area.querySelector('.studio-preview');
+    if (replacement) replacement.replaceWith(preservedPreview);
 }
 
 function wireSizeResizeHint(selectId, hintId) {
@@ -890,7 +898,7 @@ async function submitTask(mode, payload, statusEl, btn, onSuccess) {
         if (res.ok && json.ok) {
             statusEl.textContent = '';
             renderForm();
-            if (onSuccess) onSuccess();
+            if (onSuccess) onSuccess(json);
         } else {
             statusEl.textContent = '提交失败：' + (json.error || res.status);
             statusEl.classList.add('err');
@@ -1010,7 +1018,6 @@ function renderFreePreview() {
 function removeFreeImage(i) {
     uploads.freeImages.splice(i, 1);
     renderFreePreview();
-    renderStudioGallery();
 }
 
 function renderFreeModelPreview() {
@@ -1199,20 +1206,24 @@ function renderLibPickerImages(categories, cat, prod, body, modal) {
     body.appendChild(grid);
 }
 
-function showSuccessModal() {
+function showSuccessModal(task) {
     const overlay = document.createElement('div');
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-label', '任务提交成功');
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;display:flex;align-items:center;justify-content:center';
     const box = document.createElement('div');
-    box.style.cssText = 'background:#fff;border-radius:20px;padding:36px 32px;width:min(380px,90vw);text-align:center;box-shadow:0 8px 40px rgba(0,0,0,0.15)';
+    box.style.cssText = 'background:#fff;border-radius:16px;padding:32px;width:min(420px,90vw);text-align:center;box-shadow:0 8px 40px rgba(0,0,0,0.15)';
     box.innerHTML = '<div style="width:56px;height:56px;border-radius:50%;background:#ecfdf5;display:flex;align-items:center;justify-content:center;margin:0 auto 16px">'
         + '<svg viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5" width="28" height="28"><polyline points="20 6 9 17 4 12"/></svg></div>'
-        + '<div style="font-size:1.1rem;font-weight:700;color:#111827;margin-bottom:10px">图片已收到</div>'
-        + '<div style="font-size:0.88rem;color:#6b7280;line-height:1.7">正在生图中，请留意钉钉通知</div>';
-    const closeBtn = document.createElement('button');
-    closeBtn.textContent = '知道了';
-    closeBtn.style.cssText = 'margin-top:24px;width:100%;padding:11px;background:#6366f1;color:#fff;border:none;border-radius:10px;font-size:0.95rem;font-weight:600;cursor:pointer';
-    closeBtn.onclick = () => overlay.remove();
-    box.appendChild(closeBtn);
+        + '<div style="font-size:1.15rem;font-weight:700;color:#111827;margin-bottom:10px">任务提交成功</div>'
+        + '<div style="font-size:0.88rem;color:#6b7280;line-height:1.7">网站已收到你的任务并进入处理队列。<br>可在「我的任务」查看进度，完成后会通过钉钉通知。</div>'
+        + (task && task.id ? '<div style="margin-top:12px;color:#9ca3af;font-size:.72rem">任务编号：' + String(task.id).replace(/[<>&]/g, '') + '</div>' : '')
+        + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:24px">'
+        + '<button type="button" id="successContinueBtn" style="padding:11px;background:#fff;color:#374151;border:1px solid #d1d5db;border-radius:8px;font-size:.92rem;font-weight:600;cursor:pointer">继续制作</button>'
+        + '<a href="studio-tasks.html" style="display:flex;align-items:center;justify-content:center;padding:11px;background:#111827;color:#fff;border-radius:8px;font-size:.92rem;font-weight:600;text-decoration:none">查看我的任务</a>'
+        + '</div>';
+    box.querySelector('#successContinueBtn').onclick = () => overlay.remove();
     overlay.appendChild(box);
     overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
     document.body.appendChild(overlay);
@@ -1262,7 +1273,7 @@ function submitProgram() {
     if (!size) { showStudioFieldError(status, '请选择尺寸', document.getElementById('progSizeSelect')); return; }
     if (uploads.progRef.length !== 1) { showStudioFieldError(status, '请上传1张要模仿的图', document.getElementById('progRefDrop')); return; }
     if (uploads.progProduct.length !== 2) { showStudioFieldError(status, '请上传2张白底产品图（当前' + uploads.progProduct.length + '张）', document.getElementById('progProductDrop')); return; }
-    submitTask('program', { productName, title, subtitle, otherText, size, analyzePrompt: ANALYZE_PROMPT, refImages: uploads.progRef, productImages: uploads.progProduct }, status, document.getElementById('progSubmit'));
+    submitTask('program', { productName, title, subtitle, otherText, size, analyzePrompt: ANALYZE_PROMPT, refImages: uploads.progRef, productImages: uploads.progProduct }, status, document.getElementById('progSubmit'), showSuccessModal);
 }
 
 document.querySelectorAll('.studio-tab').forEach(tab => {
