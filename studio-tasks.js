@@ -81,8 +81,8 @@ async function loadTasks() {
         const list = document.getElementById('taskList');
         json.tasks.forEach(task => list.appendChild(renderTask(task)));
         
-        // 启动定时刷新（每30秒更新一次进度）
-        setInterval(() => refreshQueueStatus(), 30000);
+        // Long-lived tabs refresh infrequently to stay within the free KV list quota.
+        setInterval(() => refreshQueueStatus(), 5 * 60 * 60 * 1000);
     } catch (e) {
         document.getElementById('taskLoading').hidden = false;
         document.getElementById('taskLoading').textContent = '加载失败：' + e.message;
