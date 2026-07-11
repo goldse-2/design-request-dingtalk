@@ -522,36 +522,58 @@ function fillPreset(key) {
     el.focus();
 }
 
+let cachedStudioGalleryPreview = null;
+
 function renderForm() {
     const area = document.getElementById('studioFormArea');
-    const preservedPreview = area.querySelector('.studio-gallery-preview');
+    const attachedGallery = area.querySelector('.studio-gallery-preview');
+    if (attachedGallery) cachedStudioGalleryPreview = attachedGallery;
     uploads.freeImages = []; uploads.freeModel = null; uploads.freeScene = null; uploads.freeProduct = []; uploads.freeProduct1 = null; uploads.freeProduct2 = null; uploads.progRef = []; uploads.progProduct = [];
+    let galleryWasReady = false;
     if (currentMode === 'free') {
-        area.innerHTML = FREE_FORM;
-        restoreStudioPreview(area, preservedPreview);
+        galleryWasReady = renderGenerationMode(area, FREE_FORM);
         wireFreeUpload('freeProductDrop', 'freeProductInput');
         wirePromptMentions();
         wireSizeResizeHint('freeSizeSelect', 'freeSizeHint');
         document.getElementById('freeSubmit').addEventListener('click', submitFree);
     } else if (currentMode === 'program') {
-        area.innerHTML = PROGRAM_FORM;
-        restoreStudioPreview(area, preservedPreview);
+        galleryWasReady = renderGenerationMode(area, PROGRAM_FORM);
         wireDrop('progRefDrop', 'progRefInput', 'progRefThumbs', 'progRef');
         wireDrop('progProductDrop', 'progProductInput', 'progProductThumbs', 'progProduct');
         wireSizeResizeHint('progSizeSelect', 'progSizeHint');
         document.getElementById('progSubmit').addEventListener('click', submitProgram);
     } else {
+        if (attachedGallery) attachedGallery.remove();
         area.innerHTML = RESIZE_FORM;
         initResizeTool();
     }
-    if (currentMode !== 'resize' && !preservedPreview) renderStudioGallery();
+    if (currentMode !== 'resize' && !galleryWasReady) renderStudioGallery();
     applyAgreementGate();
 }
 
-function restoreStudioPreview(area, preservedPreview) {
-    if (!preservedPreview) return;
+function renderGenerationMode(area, formHtml) {
+    const currentLayout = area.querySelector('.studio-layout');
+    const attachedGallery = currentLayout?.querySelector('.studio-gallery-preview');
+    const template = document.createElement('template');
+    template.innerHTML = formHtml.trim();
+    const nextLayout = template.content.firstElementChild;
+
+    if (attachedGallery && currentLayout) {
+        const currentPanel = currentLayout.querySelector('.studio-panel');
+        const nextPanel = nextLayout.querySelector('.studio-panel');
+        if (currentPanel && nextPanel) currentPanel.replaceWith(nextPanel);
+        return true;
+    }
+
+    const hadCachedGallery = Boolean(cachedStudioGalleryPreview);
+    area.replaceChildren(nextLayout);
     const replacement = area.querySelector('.studio-gallery-preview');
-    if (replacement) replacement.replaceWith(preservedPreview);
+    if (cachedStudioGalleryPreview && replacement) {
+        replacement.replaceWith(cachedStudioGalleryPreview);
+    } else {
+        cachedStudioGalleryPreview = replacement;
+    }
+    return hadCachedGallery;
 }
 
 function initResizeTool() {
