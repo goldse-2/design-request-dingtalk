@@ -33,6 +33,8 @@ function isRegularSubmission(sub) {
 
 function toPublicQueueItem(sub) {
     const info = sub.data?.basicInfo || {};
+    const productName = String(info['型号'] || '').trim()
+        || spreadsheetBaseName(sub.fileName || sub.data?.fileName || sub.fileKey);
     return {
         id: sub.id,
         taskType: sub.taskType || '',
@@ -47,6 +49,12 @@ function toPublicQueueItem(sub) {
             name: sub.submitter?.name || '',
             avatar: sub.submitter?.avatar || ''
         },
-        data: { basicInfo: { '型号': info['型号'] || '' } }
+        data: { basicInfo: { '型号': productName } }
     };
+}
+
+function spreadsheetBaseName(value) {
+    let name = String(value || '').trim().split(/[\\/]/).pop() || '';
+    try { name = decodeURIComponent(name); } catch {}
+    return name.replace(/\.(xlsx|xls)$/i, '').trim();
 }

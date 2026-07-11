@@ -24,6 +24,12 @@ export async function onRequestPost(context) {
     const fileName = data.fileName || 'submission.xlsx';
     const dataForStorage = { ...data };
     delete dataForStorage.originalFile;
+    dataForStorage.basicInfo = { ...(dataForStorage.basicInfo || {}) };
+    const currentProductName = String(dataForStorage.basicInfo['型号'] || '').trim();
+    if (!currentProductName || currentProductName === '未知产品') {
+        const inferredName = spreadsheetBaseName(fileName);
+        if (inferredName) dataForStorage.basicInfo['型号'] = inferredName;
+    }
 
     let fileKey = '';
     if (originalFile && env.SUBMISSION_FILES) {
@@ -242,4 +248,10 @@ function base64ToBytes(base64) {
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
     return bytes;
+}
+
+function spreadsheetBaseName(value) {
+    let name = String(value || '').trim().split(/[\\/]/).pop() || '';
+    try { name = decodeURIComponent(name); } catch {}
+    return name.replace(/\.(xlsx|xls)$/i, '').trim();
 }

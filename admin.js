@@ -232,6 +232,7 @@ function renderCard(sub) {
     const images = d.images || [];
     const hasRemarks = sub.remarks && sub.remarks.trim();
     const submitter = sub.submitter;
+    const displayProductName = getSubmissionProductName(sub);
 
     const dateStr = sub.createdAt
         ? new Date(sub.createdAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
@@ -240,7 +241,7 @@ function renderCard(sub) {
     return `<div class="sub-card" id="card-${sub.id}">
         <div class="sub-card-head">
             <div class="sub-card-title">
-                <span class="sub-product" id="product-${sub.id}">${esc(info['型号'] || '未知产品')}</span>
+                <span class="sub-product" id="product-${sub.id}">${esc(displayProductName)}</span>
                 <button type="button" onclick="editSubmissionName('${sub.id}')" title="修改名称" style="border:none;background:#f3f4f6;color:#6366f1;border-radius:7px;padding:3px 8px;cursor:pointer;font-size:0.75rem;font-weight:700">编辑名称</button>
                 <span class="tag tag-type">${esc(sub.taskType || '')}</span>
                 ${sub.eta ? `<span class="tag" style="background:#fef3c7;color:#f59e0b">⏰ 预计${esc(sub.eta)}完成</span>` : ''}
@@ -1379,6 +1380,18 @@ function startCountdownTimer(taskId, createdAt) {
             countdownEl.textContent = '⏱ ' + mins + '分' + secs + '秒后自动发送';
         }
     }, 1000);
+}
+
+function getSubmissionProductName(sub) {
+    const explicitName = String(sub?.data?.basicInfo?.['型号'] || '').trim();
+    if (explicitName && explicitName !== '未知产品') return explicitName;
+    return spreadsheetBaseName(sub?.fileName || sub?.data?.fileName || sub?.fileKey) || '未知产品';
+}
+
+function spreadsheetBaseName(value) {
+    let name = String(value || '').trim().split(/[\\/]/).pop() || '';
+    try { name = decodeURIComponent(name); } catch {}
+    return name.replace(/\.(xlsx|xls)$/i, '').trim();
 }
 
 function isStudioAutoSendWindow(date = new Date()) {
