@@ -55,9 +55,15 @@
 
 <!-- AI自动化审核 -->
 <div id="studioSection" class="container" hidden style="margin-top:0;padding-top:0">
-    <div style="margin:32px 0 16px">
-        <h2 style="font-size:1.2rem;font-weight:700;color:#111827">AI自动化审核</h2>
-        <p style="color:#6b7280;font-size:0.85rem;margin-top:2px">待处理的图片制作需求</p>
+    <div style="margin:32px 0 16px;display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap">
+        <div>
+            <h2 style="font-size:1.2rem;font-weight:700;color:#111827">AI自动化审核</h2>
+            <p style="color:#6b7280;font-size:0.85rem;margin-top:2px">待处理的图片制作需求</p>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button type="button" id="studioBatchPauseBtn" style="font-size:0.84rem;color:#b45309;background:#fff;border:1px solid #f59e0b;border-radius:7px;padding:8px 14px;cursor:pointer;font-weight:600">一键挂起</button>
+            <button type="button" id="studioBatchSendBtn" style="font-size:0.84rem;color:#fff;background:#4f46e5;border:1px solid #4f46e5;border-radius:7px;padding:8px 14px;cursor:pointer;font-weight:600">一键发送</button>
+        </div>
     </div>
     <div id="studioAdminContent"></div>
     <div style="margin-top:28px;border-top:1px solid #e5e7eb;padding-top:18px">

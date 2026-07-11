@@ -1140,19 +1140,24 @@ checkAuth();
 
 
 // ── Studio task management (admin) ───────────────────────
+let studioAdminTasks = [];
+
 async function loadStudioAdmin() {
     const container = document.getElementById('studioAdminContent');
     if (!container) return;
     container.innerHTML = '<p style="color:#9ca3af;font-size:0.85rem">加载中...</p>';
     try {
-        const res = await fetch('/api/studio-tasks?all=1');
+        const res = await fetch('/api/studio-tasks?active=1');
         const json = await res.json();
+        if (!res.ok || !json.ok) throw new Error(json.error || '加载失败');
         // 发送给 RPA 后继续显示；完成后也先保留，只有钉钉通知成功后才消失
         const tasks = (json.tasks || []).filter(t => {
             if (t.status === 'rejected') return false;
             if (t.status === 'done' && (t.dingtalkNotified || t.r2AutoNotified)) return false;
             return true;
         });
+        studioAdminTasks = tasks;
+        bindStudioBatchActions();
         
         // 统计分类
         const stats = { '图片': 0, '视频': 0, '设计': 0 };
@@ -1187,7 +1192,7 @@ async function loadStudioAdmin() {
         renderStudioTasks(tasks, 'all');
         
         tasks.forEach(task => {
-            if (task.status === 'pending' && !task.sentToRpa) {
+            if (task.status === 'pending' && !task.sentToRpa && !task.pausedAuto) {
                 const createdAt = typeof task.timestamp === 'number' ? task.timestamp : new Date(task.createdAt || task.timestamp || 0).getTime();
                 startCountdownTimer(task.id, createdAt);
             }
@@ -1239,7 +1244,9 @@ function renderStudioTask(task) {
         + '<span style="font-weight:700;color:#111827">' + esc(displayTaskTitle) + '</span>'
         + '<span style="font-size:0.8rem;color:#6b7280">' + modeText + '</span>'
         + '<span style="font-size:0.75rem;background:' + st[2] + ';color:' + st[1] + ';padding:2px 10px;border-radius:10px">' + st[0] + '</span>';
-    if (task.status === 'pending' && !task.sentToRpa) {
+    if (task.status === 'pending' && !task.sentToRpa && task.pausedAuto) {
+        html += '<span style="font-size:0.72rem;background:#fff7ed;color:#b45309;padding:2px 10px;border-radius:10px">已挂起自动发送</span>';
+    } else if (task.status === 'pending' && !task.sentToRpa) {
         const createdAt = typeof task.timestamp === 'number' ? task.timestamp : new Date(task.createdAt || task.timestamp || 0).getTime();
         const elapsed = Date.now() - createdAt;
         const autoSendThreshold = 3 * 60 * 1000;
@@ -1309,7 +1316,7 @@ function renderStudioTask(task) {
     const rpaBtn = document.createElement('button');
     rpaBtn.textContent = task.sentToRpa ? '🔄 重新发送RPA' : '🤖 发送给RPA';
     rpaBtn.style.cssText = 'font-size:0.82rem;color:#fff;background:' + (task.sentToRpa ? '#f59e0b' : '#6366f1') + ';border:none;border-radius:7px;padding:7px 16px;cursor:pointer;font-weight:600';
-    rpaBtn.onclick = () => sendToRpa(task.id, rpaBtn, card);
+    rpaBtn.onclick = () => sendToRpa(task.id, rpaBtn, card, task);
 
     const viewCodeBtn = document.createElement('button');
     viewCodeBtn.textContent = '📋 查看RPA代码';
@@ -1468,9 +1475,8 @@ function openFeedbackModal(taskId, submitterName) {
     };
 }
 
-async function sendToRpa(taskId, btn, card) {
-    const taskRaw = await fetch(`/api/studio-tasks?id=${taskId}`).then(r => r.json()).catch(() => null);
-    const task = taskRaw?.task;
+async function sendToRpa(taskId, btn, card, knownTask) {
+    const task = knownTask || (await fetch(`/api/studio-tasks?id=${encodeURIComponent(taskId)}`).then(r => r.json()).catch(() => null))?.task;
     const mode = task?.mode || 'free';
     
     const programWebhook = 'https://api-rpa.bazhuayu.com/api/v1/bots/webhooks/6a3a40ac622e84b667229fde/invoke';
@@ -1503,6 +1509,89 @@ async function sendToRpa(taskId, btn, card) {
         btn.disabled = false;
         btn.textContent = originalText;
         showRpaResult(false, null, null, e.message);
+    }
+}
+
+function bindStudioBatchActions() {
+    const sendBtn = document.getElementById('studioBatchSendBtn');
+    const pauseBtn = document.getElementById('studioBatchPauseBtn');
+    if (sendBtn) sendBtn.onclick = () => batchSendStudioTasks(sendBtn);
+    if (pauseBtn) pauseBtn.onclick = () => batchPauseStudioTasks(pauseBtn);
+}
+
+async function batchSendStudioTasks(btn) {
+    const tasks = studioAdminTasks.filter(task => task.status === 'pending' && !task.sentToRpa);
+    if (!tasks.length) {
+        alert('当前没有待发送任务');
+        return;
+    }
+    if (!confirm('确认立即发送全部 ' + tasks.length + ' 个待处理任务吗？')) return;
+
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    let sent = 0;
+    const failed = [];
+    try {
+        for (let i = 0; i < tasks.length; i++) {
+            const task = tasks[i];
+            btn.textContent = '发送中 ' + (i + 1) + '/' + tasks.length;
+            const programWebhook = 'https://api-rpa.bazhuayu.com/api/v1/bots/webhooks/6a3a40ac622e84b667229fde/invoke';
+            const freeWebhook = 'https://api-rpa.bazhuayu.com/api/v1/bots/webhooks/6a31134a622e84b6672263ee/invoke';
+            try {
+                const res = await fetch('/api/studio-webhook', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ taskId: task.id, webhookUrl: task.mode === 'program' ? programWebhook : freeWebhook })
+                });
+                const json = await res.json().catch(() => ({}));
+                if (res.ok && json.ok) sent++;
+                else failed.push(task.id);
+            } catch {
+                failed.push(task.id);
+            }
+        }
+        alert('一键发送完成：成功 ' + sent + ' 个' + (failed.length ? '，失败 ' + failed.length + ' 个' : ''));
+        await loadStudioAdmin();
+    } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
+    }
+}
+
+async function batchPauseStudioTasks(btn) {
+    const tasks = studioAdminTasks.filter(task => task.status === 'pending' && !task.sentToRpa && !task.pausedAuto);
+    if (!tasks.length) {
+        alert('当前没有可挂起的待发送任务');
+        return;
+    }
+    if (!confirm('确认挂起全部 ' + tasks.length + ' 个待发送任务吗？挂起后不会自动发送，但仍可手动发送。')) return;
+
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    let paused = 0;
+    const failed = [];
+    try {
+        for (let i = 0; i < tasks.length; i++) {
+            const task = tasks[i];
+            btn.textContent = '挂起中 ' + (i + 1) + '/' + tasks.length;
+            try {
+                const res = await fetch('/api/studio-pause-auto', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ taskId: task.id, pausedAuto: true })
+                });
+                const json = await res.json().catch(() => ({}));
+                if (res.ok && json.ok) paused++;
+                else failed.push(task.id);
+            } catch {
+                failed.push(task.id);
+            }
+        }
+        alert('一键挂起完成：成功 ' + paused + ' 个' + (failed.length ? '，失败 ' + failed.length + ' 个' : ''));
+        await loadStudioAdmin();
+    } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
     }
 }
 
@@ -1668,9 +1757,10 @@ async function loadStudioHistory() {
     const content = document.getElementById('studioHistoryContent');
     content.innerHTML = '<div style="color:#9ca3af;font-size:0.9rem;padding:8px 0">加载中...</div>';
     try {
-        const res = await fetch('/api/studio-tasks?all=1');
+        const res = await fetch('/api/studio-tasks?history=1');
         const json = await res.json();
-        const tasks = (json.tasks || []).filter(t => t.status === 'done' && (t.dingtalkNotified || t.r2AutoNotified));
+        if (!res.ok || !json.ok) throw new Error(json.error || '加载失败');
+        const tasks = json.tasks || [];
         if (!tasks.length) {
             content.innerHTML = '<div style="color:#9ca3af;font-size:0.9rem;padding:8px 0">暂无历史记录</div>';
             return;

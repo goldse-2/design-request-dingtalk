@@ -140,6 +140,8 @@ function studioTaskMetadata(task) {
         sentToRpa: Boolean(task.sentToRpa),
         sentToRpaAt: task.sentToRpaAt || '',
         pausedAuto: Boolean(task.pausedAuto),
-        overdueNotified: Boolean(task.overdueNotified)
+        overdueNotified: Boolean(task.overdueNotified),
+        dingtalkNotified: Boolean(task.dingtalkNotified),
+        r2AutoNotified: Boolean(task.r2AutoNotified)
     };
 }

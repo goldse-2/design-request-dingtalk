@@ -34,10 +34,9 @@ export async function onRequestGet(context) {
         const autoSendTasks = await readStudioTasks(env, autoSendKeys);
         const tasks = await readStudioTasks(env, overdueKeys);
 
-        const programWebhook = await safeKvGet(env.SUBMISSIONS, 'studio:rpaWebhookUrl:program') || env.RPA_WEBHOOK_URL_PROGRAM || 'https://api-rpa.bazhuayu.com/api/v1/bots/webhooks/6a3a40ac622e84b667229fde/invoke';
-        const freeWebhook = env.RPA_WEBHOOK_URL_FREE || await safeKvGet(env.SUBMISSIONS, 'studio:rpaWebhookUrl:free') || 'https://api-rpa.bazhuayu.com/api/v1/bots/webhooks/6a31134a622e84b6672263ee/invoke';
-        
-        if (programWebhook || freeWebhook) {
+        if (autoSendTasks.length) {
+            const programWebhook = await safeKvGet(env.SUBMISSIONS, 'studio:rpaWebhookUrl:program') || env.RPA_WEBHOOK_URL_PROGRAM || 'https://api-rpa.bazhuayu.com/api/v1/bots/webhooks/6a3a40ac622e84b667229fde/invoke';
+            const freeWebhook = env.RPA_WEBHOOK_URL_FREE || await safeKvGet(env.SUBMISSIONS, 'studio:rpaWebhookUrl:free') || 'https://api-rpa.bazhuayu.com/api/v1/bots/webhooks/6a31134a622e84b6672263ee/invoke';
             const origin = new URL(request.url).origin;
             for (const task of autoSendTasks) {
                 const createdAt = typeof task.timestamp === 'number'
@@ -153,7 +152,9 @@ function studioTaskMetadata(task) {
         sentToRpa: Boolean(task.sentToRpa),
         sentToRpaAt: task.sentToRpaAt || '',
         pausedAuto: Boolean(task.pausedAuto),
-        overdueNotified: Boolean(task.overdueNotified)
+        overdueNotified: Boolean(task.overdueNotified),
+        dingtalkNotified: Boolean(task.dingtalkNotified),
+        r2AutoNotified: Boolean(task.r2AutoNotified)
     };
 }
 

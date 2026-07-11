@@ -33,20 +33,45 @@ export async function onRequestGet(context) {
     }
 
     const url = new URL(request.url);
+    const id = url.searchParams.get('id');
     const unionId = url.searchParams.get('unionId');
     const all = url.searchParams.get('all') === '1';
+    const active = url.searchParams.get('active') === '1';
+    const history = url.searchParams.get('history') === '1';
 
     try {
-        if (env.SUBMISSION_FILES) {
-            await syncR2StudioResults(env, request);
+        if (id) {
+            const raw = await env.SUBMISSIONS.get(id);
+            if (!raw) return Response.json({ ok: false, error: 'Not found' }, { status: 404 });
+            const task = JSON.parse(raw);
+            if (task.kind !== 'studio') return Response.json({ ok: false, error: 'Not a studio task' }, { status: 400 });
+            return Response.json({ ok: true, task });
         }
 
         const list = await env.SUBMISSIONS.list({ prefix: 'studio-', limit: 1000 });
+        let syncedTasks = new Map();
+        if (env.SUBMISSION_FILES && active) {
+            syncedTasks = await syncR2StudioResults(env, request, list.keys);
+        }
+
         const keys = list.keys
             .filter(k => (k.metadata || {}).kind === 'studio')
             .filter(k => all || !unionId || k.metadata?.unionId === unionId)
+            .filter(k => {
+                const meta = k.metadata || {};
+                if (active) {
+                    if (meta.status === 'pending' || meta.status === 'processing') return true;
+                    const hasNotifyMetadata = Object.prototype.hasOwnProperty.call(meta, 'dingtalkNotified')
+                        || Object.prototype.hasOwnProperty.call(meta, 'r2AutoNotified');
+                    return meta.status === 'done' && hasNotifyMetadata && !meta.dingtalkNotified && !meta.r2AutoNotified;
+                }
+                if (history) return meta.status === 'done';
+                return true;
+            })
             .map(k => k.name);
-        const results = await Promise.all(keys.map(k => env.SUBMISSIONS.get(k)));
+        const results = await Promise.all(keys.map(k => syncedTasks.has(k)
+            ? JSON.stringify(syncedTasks.get(k))
+            : env.SUBMISSIONS.get(k)));
 
         let tasks = results
             .filter(Boolean)
@@ -55,6 +80,15 @@ export async function onRequestGet(context) {
 
         if (!all && unionId) {
             tasks = tasks.filter(t => t.submitter?.unionId === unionId);
+        }
+        if (active) {
+            tasks = tasks.filter(t => {
+                if (t.status === 'rejected') return false;
+                return t.status !== 'done' || (!t.dingtalkNotified && !t.r2AutoNotified);
+            });
+        }
+        if (history) {
+            tasks = tasks.filter(t => t.status === 'done' && (t.dingtalkNotified || t.r2AutoNotified));
         }
 
         tasks.sort((a, b) => b.timestamp - a.timestamp);
@@ -65,11 +99,10 @@ export async function onRequestGet(context) {
     }
 }
 
-async function syncR2StudioResults(env, request) {
-    const pendingList = await env.SUBMISSIONS.list({ prefix: 'studio-', limit: 1000 });
-    const keys = pendingList.keys
+async function syncR2StudioResults(env, request, listedKeys) {
+    const keys = listedKeys
         .filter(k => (k.metadata || {}).kind === 'studio')
-        .filter(k => k.metadata?.status && k.metadata.status !== 'done' && k.metadata.status !== 'rejected')
+        .filter(k => k.metadata?.status === 'processing')
         .map(k => k.name);
     const raws = await Promise.all(keys.map(k => env.SUBMISSIONS.get(k)));
     const tasks = raws
@@ -78,6 +111,7 @@ async function syncR2StudioResults(env, request) {
             try { return JSON.parse(r); } catch { return null; }
         })
         .filter(t => t && t.kind === 'studio' && t.status !== 'done');
+    const taskMap = new Map(tasks.map(task => [task.id, task]));
 
     for (const task of tasks) {
         const prefix = `studio-results/${task.id}/`;
@@ -109,6 +143,7 @@ async function syncR2StudioResults(env, request) {
             });
         }
     }
+    return taskMap;
 }
 
 function studioTaskMetadata(task) {
@@ -121,7 +156,9 @@ function studioTaskMetadata(task) {
         sentToRpa: Boolean(task.sentToRpa),
         sentToRpaAt: task.sentToRpaAt || '',
         pausedAuto: Boolean(task.pausedAuto),
-        overdueNotified: Boolean(task.overdueNotified)
+        overdueNotified: Boolean(task.overdueNotified),
+        dingtalkNotified: Boolean(task.dingtalkNotified),
+        r2AutoNotified: Boolean(task.r2AutoNotified)
     };
 }
 
