@@ -274,6 +274,13 @@ const FREE_FORM = `
                 <div class="sf-label">提示词 <span class="sf-req">*</span></div>
                 <textarea class="sf-textarea" id="freeDesc" rows="5" maxlength="3000" placeholder="你想创作什么？描述风格、场景、文案排版等" oninput="updateCharCount(this,'freeDescCount',3000)"></textarea>
                 <div style="text-align:right;font-size:0.78rem;color:#9ca3af;margin-top:4px"><span id="freeDescCount">0</span> / 3000</div>
+                <div class="prompt-optimize-row">
+                    <button type="button" class="prompt-optimize-btn" id="optimizePromptBtn">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.5 3.5L7 8l3.5 1.5L12 13l1.5-3.5L17 8l-3.5-1.5L12 3Z"/><path d="m5 14-.8 1.8L2.5 16.5l1.7.7L5 19l.8-1.8 1.7-.7-1.7-.7L5 14Z"/><path d="m18 14-1.2 2.8L14 18l2.8 1.2L18 22l1.2-2.8L22 18l-2.8-1.2L18 14Z"/></svg>
+                        <span>AI 美化提示词</span>
+                    </button>
+                    <span class="prompt-optimize-status" id="optimizePromptStatus"></span>
+                </div>
                 <div class="prompt-mention-hint">提示：上传图片后，可在提示词中输入 <strong>@</strong> 引用图片，例如 <strong>@参考图1</strong></div>
                 <div class="sf-preset-row">
                     <button type="button" class="sf-preset-btn" data-preset="white" onclick="fillPreset('white')">白底图</button>
@@ -534,6 +541,7 @@ function renderForm() {
         galleryWasReady = renderGenerationMode(area, FREE_FORM);
         wireFreeUpload('freeProductDrop', 'freeProductInput');
         wirePromptMentions();
+        wirePromptOptimizer();
         wireSizeResizeHint('freeSizeSelect', 'freeSizeHint');
         document.getElementById('freeSubmit').addEventListener('click', submitFree);
     } else if (currentMode === 'program') {
@@ -720,6 +728,56 @@ function showResizeReminderModal() {
     overlay.querySelector('#resizeReminderClose').addEventListener('click', close);
     overlay.addEventListener('click', event => { if (event.target === overlay) close(); });
     document.body.appendChild(overlay);
+}
+
+function wirePromptOptimizer() {
+    const button = document.getElementById('optimizePromptBtn');
+    const textarea = document.getElementById('freeDesc');
+    const status = document.getElementById('optimizePromptStatus');
+    if (!button || !textarea || !status) return;
+
+    button.addEventListener('click', async () => {
+        const prompt = textarea.value.trim();
+        if (!prompt) {
+            status.textContent = '请先输入提示词';
+            status.className = 'prompt-optimize-status error';
+            textarea.focus();
+            return;
+        }
+
+        const originalLabel = button.querySelector('span').textContent;
+        button.disabled = true;
+        button.classList.add('loading');
+        button.querySelector('span').textContent = '正在美化...';
+        status.textContent = '';
+        status.className = 'prompt-optimize-status';
+        try {
+            const response = await fetch('/api/optimize-prompt', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    prompt,
+                    size: document.getElementById('freeSizeSelect')?.value || ''
+                })
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok || !data.ok || !data.optimized) {
+                throw new Error(data.error || 'AI 美化失败，请稍后重试');
+            }
+            textarea.value = data.optimized;
+            updateCharCount(textarea, 'freeDescCount', 3000);
+            textarea.focus();
+            status.textContent = '已完成，可继续修改';
+            status.className = 'prompt-optimize-status success';
+        } catch (error) {
+            status.textContent = error.message || 'AI 美化失败，请稍后重试';
+            status.className = 'prompt-optimize-status error';
+        } finally {
+            button.disabled = false;
+            button.classList.remove('loading');
+            button.querySelector('span').textContent = originalLabel;
+        }
+    });
 }
 
 let studioExamplesCache = null;
