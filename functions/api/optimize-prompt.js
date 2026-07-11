@@ -36,6 +36,7 @@ export async function onRequestPost({ request, env }) {
 
     const prompt = String(body.prompt || '').trim();
     const userId = String(body.userId || '').trim();
+    const action = body.action === 'translate' ? 'translate' : 'optimize';
     if (!userId) {
         return Response.json({ ok: false, error: '请先登录后使用 AI 功能' }, { status: 401 });
     }
@@ -47,6 +48,19 @@ export async function onRequestPost({ request, env }) {
     }
 
     const size = String(body.size || '').slice(0, 80);
+    const requestContent = action === 'translate'
+        ? {
+            system: '你是专业的中英翻译。把用户输入忠实翻译成自然、准确、可直接使用的英文。保留产品名称、品牌、数字、单位、尺寸、专有名词和原有格式，不扩写、不美化、不解释。只输出英文译文，不要标题、引号或 Markdown。',
+            user: prompt,
+            temperature: 0.1,
+            maxTokens: 700
+        }
+        : {
+            system: '你是专业电商视觉提示词编辑。把用户的原始描述优化为适合 GPT Image 2.0 的中文生图提示词。保留用户的产品、数量、文字内容、品牌要求和核心意图，不得擅自改变；补充清晰的主体、构图、场景、材质、光线、镜头、色彩、空间关系和电商画面质量要求。避免空泛形容词，避免解释、标题、Markdown、引号和负面提示词列表。只输出可直接用于生图的一段提示词，控制在 800 个中文字符内。',
+            user: `目标尺寸：${size || '未指定'}\n原始提示词：${prompt}`,
+            temperature: 0.45,
+            maxTokens: 900
+        };
     const apiBase = String(env.AI_API_BASE || DEFAULT_API_BASE).replace(/\/+$/, '');
     const model = String(env.AI_TEXT_MODEL || DEFAULT_MODEL);
     const controller = new AbortController();
@@ -71,16 +85,16 @@ export async function onRequestPost({ request, env }) {
             },
             body: JSON.stringify({
                 model,
-                temperature: 0.45,
-                max_tokens: 900,
+                temperature: requestContent.temperature,
+                max_tokens: requestContent.maxTokens,
                 messages: [
                     {
                         role: 'system',
-                        content: '你是专业电商视觉提示词编辑。把用户的原始描述优化为适合 GPT Image 2.0 的中文生图提示词。保留用户的产品、数量、文字内容、品牌要求和核心意图，不得擅自改变；补充清晰的主体、构图、场景、材质、光线、镜头、色彩、空间关系和电商画面质量要求。避免空泛形容词，避免解释、标题、Markdown、引号和负面提示词列表。只输出可直接用于生图的一段提示词，控制在 800 个中文字符内。'
+                        content: requestContent.system
                     },
                     {
                         role: 'user',
-                        content: `目标尺寸：${size || '未指定'}\n原始提示词：${prompt}`
+                        content: requestContent.user
                     }
                 ]
             }),
@@ -103,7 +117,7 @@ export async function onRequestPost({ request, env }) {
             await restoreDailyQuota(env.SUBMISSIONS, quota);
             return Response.json({ ok: false, error: 'AI 没有返回有效提示词，请重试', remaining: quota.previousRemaining }, { status: 502 });
         }
-        return Response.json({ ok: true, optimized, limit: DAILY_LIMIT, remaining: quota.remaining });
+        return Response.json({ ok: true, optimized, action, limit: DAILY_LIMIT, remaining: quota.remaining });
     } catch (error) {
         await restoreDailyQuota(env.SUBMISSIONS, quota);
         const message = error?.name === 'AbortError'
