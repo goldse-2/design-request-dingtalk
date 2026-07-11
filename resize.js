@@ -1,5 +1,7 @@
 const SIZE_PRESETS = {
-    aplus: { sourceWidth: 1536, sourceHeight: 608, width: 1464, height: 600 }
+    aplus1536: { sourceWidth: 1536, sourceHeight: 608, width: 1464, height: 600 },
+    aplus1472: { sourceWidth: 1472, sourceHeight: 608, width: 1464, height: 600 },
+    wide2560: { sourceWidth: 2560, sourceHeight: 1024, width: 1464, height: 600 }
 };
 
 const imageInput = document.getElementById('imageInput');
@@ -10,8 +12,14 @@ const downloadBtn = document.getElementById('downloadBtn');
 const emptyPreview = document.getElementById('emptyPreview');
 const canvas = document.getElementById('canvas');
 const context = canvas.getContext('2d');
+const dropText = document.getElementById('dropText');
 let sourceName = 'aplus-image';
 let outputType = 'image/png';
+
+sizePreset.addEventListener('change', () => {
+    updatePresetText();
+    resetIdle();
+});
 
 imageInput.addEventListener('change', () => {
     if (imageInput.files[0]) loadFile(imageInput.files[0]);
@@ -60,7 +68,7 @@ function loadFile(file) {
     const image = new Image();
     image.onload = () => {
         URL.revokeObjectURL(url);
-        const preset = SIZE_PRESETS[sizePreset.value];
+        const preset = getCurrentPreset();
         if (image.naturalWidth !== preset.sourceWidth || image.naturalHeight !== preset.sourceHeight) {
             showError(`当前图片是 ${image.naturalWidth} × ${image.naturalHeight}，请上传 ${preset.sourceWidth} × ${preset.sourceHeight} 图片。`);
             return;
@@ -72,7 +80,7 @@ function loadFile(file) {
         context.imageSmoothingEnabled = true;
         context.imageSmoothingQuality = 'high';
         context.clearRect(0, 0, preset.width, preset.height);
-        context.drawImage(image, 0, 0, preset.width, preset.height);
+        drawWithoutVerticalCrop(image, preset);
         canvas.style.display = 'block';
         emptyPreview.hidden = true;
         downloadBtn.disabled = false;
@@ -86,6 +94,28 @@ function loadFile(file) {
     image.src = url;
 }
 
+function getCurrentPreset() {
+    return SIZE_PRESETS[sizePreset.value] || SIZE_PRESETS.aplus1536;
+}
+
+function drawWithoutVerticalCrop(image, preset) {
+    const scaledWidth = image.naturalWidth * (preset.height / image.naturalHeight);
+    const drawX = (preset.width - scaledWidth) / 2;
+
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, preset.width, preset.height);
+    if (scaledWidth < preset.width) {
+        context.drawImage(image, 0, 0, preset.width, preset.height);
+        return;
+    }
+    context.drawImage(image, drawX, 0, scaledWidth, preset.height);
+}
+
+function updatePresetText() {
+    const preset = getCurrentPreset();
+    dropText.textContent = `上传 ${preset.sourceWidth} × ${preset.sourceHeight} 图片`;
+}
+
 function resetOutput() {
     downloadBtn.disabled = true;
     canvas.style.display = 'none';
@@ -94,7 +124,17 @@ function resetOutput() {
     status.textContent = '正在读取图片...';
 }
 
+function resetIdle() {
+    downloadBtn.disabled = true;
+    canvas.style.display = 'none';
+    emptyPreview.hidden = false;
+    status.className = 'status';
+    status.textContent = '等待上传图片';
+}
+
 function showError(message) {
     status.className = 'status error';
     status.textContent = message;
 }
+
+updatePresetText();

@@ -8,7 +8,7 @@
     <style>
         * { box-sizing: border-box; }
         body { margin: 0; min-height: 100vh; background: #f4f5f7; color: #111827; font-family: "Microsoft YaHei", sans-serif; }
-        .shell { width: min(1180px, calc(100% - 32px)); margin: 0 auto; padding: 34px 0 50px; }
+        .shell { width: calc(100% - 32px); margin: 0 auto; padding: 34px 0 50px; }
         h1 { margin: 0; font-size: 22px; }
         .subtitle { margin: 7px 0 20px; color: #6b7280; font-size: 14px; }
         .tabs { display: flex; align-items: center; gap: 8px; margin-bottom: 20px; }
@@ -34,7 +34,7 @@
         .preview-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
         .size-badge { padding: 4px 9px; border-radius: 5px; background: #eef2ff; color: #4338ca; font-size: 12px; font-weight: 700; }
         .canvas-wrap { flex: 1; min-height: 430px; display: grid; place-items: center; overflow: auto; padding: 20px; border-radius: 6px; background-color: #eef0f3; background-image: linear-gradient(45deg,#e3e5e8 25%,transparent 25%),linear-gradient(-45deg,#e3e5e8 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#e3e5e8 75%),linear-gradient(-45deg,transparent 75%,#e3e5e8 75%); background-size: 20px 20px; background-position: 0 0,0 10px,10px -10px,-10px 0; }
-        canvas { display: none; width: 100%; height: auto; background: #fff; box-shadow: 0 2px 10px rgba(15,23,42,.15); }
+        canvas { display: none; width: min(100%, 1464px); height: auto; background: #fff; box-shadow: 0 2px 10px rgba(15,23,42,.15); }
         .empty { color: #9ca3af; font-size: 14px; }
         @media (max-width: 780px) { .shell { padding-top: 20px; } .tabs { overflow-x: auto; } .tab { white-space: nowrap; padding: 8px 12px; } .tasks { margin-left: 0; } .workspace { grid-template-columns: 1fr; } .controls { border-right: 0; border-bottom: 1px solid #e5e7eb; } .canvas-wrap { min-height: 260px; } }
     </style>
@@ -54,10 +54,12 @@
                 <h2 class="section-title">转换规格</h2>
                 <label for="sizePreset">尺寸规则</label>
                 <select id="sizePreset">
-                    <option value="aplus">A+：1536 × 608 → 1464 × 600</option>
+                    <option value="aplus1536">A+：1536 × 608 → 1464 × 600</option>
+                    <option value="aplus1472">A+：1472 × 608 → 1464 × 600</option>
+                    <option value="wide2560">宽图：2560 × 1024 → 1464 × 600</option>
                 </select>
                 <label class="drop" id="dropZone" for="imageInput">
-                    <span><span class="drop-icon">↑</span>上传 1536 × 608 图片<small>JPG、PNG、WebP，最大 20 MB</small></span>
+                    <span><span class="drop-icon">↑</span><span id="dropText">上传 1536 × 608 图片</span><small>JPG、PNG、WebP，最大 20 MB</small></span>
                 </label>
                 <input id="imageInput" type="file" accept="image/jpeg,image/png,image/webp" hidden>
                 <div class="status" id="status">等待上传图片</div>
@@ -69,6 +71,6 @@
             </section>
         </div>
     </main>
-    <script src="resize.js?v=20260711-aplus"></script>
+    <script src="resize.js?v=20260711-wide-presets"></script>
 </body>
 </html>
