@@ -15,6 +15,12 @@ export async function onRequestPost(context) {
     if (!file || typeof file === 'string') {
         return Response.json({ ok: false, error: 'No file provided' }, { status: 400 });
     }
+    if (!file.type?.startsWith('image/')) {
+        return Response.json({ ok: false, error: 'Only image files are allowed' }, { status: 400 });
+    }
+    if (file.size > 8 * 1024 * 1024) {
+        return Response.json({ ok: false, error: 'Image must not exceed 8MB' }, { status: 413 });
+    }
 
     const ext = (file.name || 'img.png').split('.').pop().toLowerCase();
     const key = `${prefix}/${crypto.randomUUID()}.${ext}`;

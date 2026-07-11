@@ -1329,7 +1329,7 @@ function resetAll() {
 
     async function loadTaskQueue() {
         try {
-            const res = await fetch('/api/submissions');
+            const res = await fetch('/api/queue');
             const json = await res.json();
             if (!json.ok || !json.submissions) {
                 if (queueEmpty) queueEmpty.hidden = false;

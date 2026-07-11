@@ -1,6 +1,3 @@
-﻿const ADMIN_PASSWORD = '222666';
-const AUTH_KEY = 'admin_authed';
-
 const authWall = document.getElementById('authWall');
 const adminMain = document.getElementById('adminMain');
 const authInput = document.getElementById('authInput');
@@ -13,14 +10,18 @@ let etaModal, etaModalClose, etaCancelBtn, etaConfirmBtn, etaInput, etaNote;
 let allData = [];
 let pendingRejectId = null;
 let pendingEtaId = null;
+let adminInitialized = false;
 
-function checkAuth() {
-    if (sessionStorage.getItem(AUTH_KEY) === '1') {
-        showAdmin();
-    }
+async function checkAuth() {
+    try {
+        const res = await fetch('/api/admin-auth', { cache: 'no-store' });
+        if (res.ok) showAdmin();
+    } catch {}
 }
 
 function showAdmin() {
+    if (adminInitialized) return;
+    adminInitialized = true;
     authWall.hidden = true;
     adminMain.hidden = false;
 
@@ -29,6 +30,13 @@ function showAdmin() {
     submissionsList = document.getElementById('submissionsList');
     filterSelect = document.getElementById('filterSelect');
     statsEl = document.getElementById('stats');
+    const adminLogoutBtn = document.getElementById('adminLogoutBtn');
+    if (adminLogoutBtn) {
+        adminLogoutBtn.onclick = async () => {
+            await fetch('/api/admin-auth', { method: 'DELETE' }).catch(() => {});
+            location.reload();
+        };
+    }
 
     rejectModal = document.getElementById('rejectModal');
     rejectModalClose = document.getElementById('rejectModalClose');
@@ -94,15 +102,30 @@ function showAdmin() {
     loadStudioAdmin();
 }
 
-authBtn.addEventListener('click', () => {
-    if (authInput.value === ADMIN_PASSWORD) {
-        sessionStorage.setItem(AUTH_KEY, '1');
+authBtn.addEventListener('click', async () => {
+    const password = authInput.value;
+    if (!password || authBtn.disabled) return;
+    authBtn.disabled = true;
+    const originalText = authBtn.textContent;
+    authBtn.textContent = '验证中...';
+    try {
+        const res = await fetch('/api/admin-auth', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password })
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok || !json.ok) throw new Error(json.error || '登录失败');
         authError.hidden = true;
+        authInput.value = '';
         showAdmin();
-    } else {
+    } catch {
         authError.hidden = false;
         authInput.value = '';
         authInput.focus();
+    } finally {
+        authBtn.disabled = false;
+        authBtn.textContent = originalText;
     }
 });
 

@@ -288,7 +288,7 @@ const FREE_FORM = `
                         <input type="file" id="freeProductInput" accept="image/*" multiple hidden>
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="24" height="24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                         <span>上传</span>
-                        <small>最大 15 MB</small>
+                        <small>单张最大 8 MB</small>
                     </div>
                     <div class="sf-preview-list" id="freePreviewList"></div>
                 </div>
@@ -350,11 +350,11 @@ const PROGRAM_FORM = `
             <div class="sf-section">
                 <div class="sf-label">要模仿的图 <span class="sf-req">*</span> <span class="sf-sub">(1张)</span></div>
                 <div class="sf-upload-row">
-                    <div class="sf-upload-box" id="progRefDrop">
+                    <div class="sf-upload-box" id="progRefDrop" tabindex="-1">
                         <input type="file" id="progRefInput" accept="image/*" hidden>
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="24" height="24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                         <span>上传</span>
-                        <small>要模仿的图</small>
+                        <small>要模仿的图 · 最大 8 MB</small>
                     </div>
                     <div class="sf-preview-list" id="progRefThumbs"></div>
                 </div>
@@ -362,11 +362,11 @@ const PROGRAM_FORM = `
             <div class="sf-section">
                 <div class="sf-label">白底产品图 <span class="sf-req">*</span> <span class="sf-sub">(2张)</span></div>
                 <div class="sf-upload-row">
-                    <div class="sf-upload-box" id="progProductDrop">
+                    <div class="sf-upload-box" id="progProductDrop" tabindex="-1">
                         <input type="file" id="progProductInput" accept="image/*" multiple hidden>
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="24" height="24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                         <span>上传</span>
-                        <small>你的白底图</small>
+                        <small>你的白底图 · 单张最大 8 MB</small>
                     </div>
                     <div class="sf-preview-list" id="progProductThumbs"></div>
                 </div>
@@ -398,6 +398,33 @@ const PROGRAM_FORM = `
     </div>`;
 
 const uploads = { freeImages: [], freeModel: null, freeScene: null, freeProduct: [], freeProduct1: null, freeProduct2: null, progRef: [], progProduct: [] };
+const MAX_STUDIO_FILE_SIZE = 8 * 1024 * 1024;
+
+function validateStudioImage(file) {
+    if (!file?.type?.startsWith('image/')) return '请选择图片文件';
+    if (file.size > MAX_STUDIO_FILE_SIZE) return '图片单张不能超过 8MB：' + file.name;
+    return '';
+}
+
+function showStudioUploadError(message) {
+    const status = document.getElementById(currentMode === 'program' ? 'progStatus' : 'freeStatus');
+    if (status) {
+        status.textContent = message;
+        status.className = 'studio-status err';
+        status.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } else {
+        alert(message);
+    }
+}
+
+function showStudioFieldError(status, message, target) {
+    status.textContent = message;
+    status.className = 'studio-status err';
+    if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (typeof target.focus === 'function') target.focus({ preventScroll: true });
+    }
+}
 
 const PRESET_PROMPTS = {
     white: '将背景替换为纯白色背景，保持主体对象完全不变',
@@ -686,6 +713,8 @@ function wireSingleDrop(dropId, inputId, thumbId, hintId, slot) {
 }
 
 function handleSingleFile(file, thumbId, hintId, slot) {
+    const validationError = validateStudioImage(file);
+    if (validationError) { showStudioUploadError(validationError); return; }
     const reader = new FileReader();
     reader.onload = ev => {
         const base64 = ev.target.result.split(',')[1];
@@ -724,6 +753,8 @@ function wireSingleDrop(dropId, inputId, thumbId, hintId, slot) {
 }
 
 function handleSingleFile(file, thumbId, hintId, slot) {
+    const validationError = validateStudioImage(file);
+    if (validationError) { showStudioUploadError(validationError); return; }
     const reader = new FileReader();
     reader.onload = ev => {
         const base64 = ev.target.result.split(',')[1];
@@ -753,7 +784,8 @@ function handleFiles(files, thumbsId, bucket) {
         return;
     }
     Array.from(files).slice(0, remaining).forEach(file => {
-        if (!file.type.startsWith('image/')) return;
+        const validationError = validateStudioImage(file);
+        if (validationError) { showStudioUploadError(validationError); return; }
         const reader = new FileReader();
         reader.onload = ev => {
             const base64 = ev.target.result.split(',')[1];
@@ -929,13 +961,8 @@ function wirePromptMentions() {
 function addFreeImages(files) {
     files.forEach(file => {
         if (uploads.freeImages.length >= 4) return;
-        if (file.size > 8 * 1024 * 1024) {
-            const status = document.getElementById('freeStatus');
-            const msg = '参考图单张不能超过 8MB：' + file.name;
-            if (status) { status.textContent = msg; status.className = 'studio-status err'; }
-            else alert(msg);
-            return;
-        }
+        const validationError = validateStudioImage(file);
+        if (validationError) { showStudioUploadError(validationError); return; }
         const reader = new FileReader();
         reader.onload = ev => {
             uploads.freeImages.push({ name: file.name, base64: ev.target.result.split(',')[1], mimeType: file.type, dataUrl: ev.target.result });
@@ -1202,7 +1229,7 @@ function submitFree() {
     const imageNameEl = document.getElementById('freeFileName');
     const imageName = imageNameEl ? imageNameEl.value.trim() : '';
     const status = document.getElementById('freeStatus');
-    if (!desc) { status.textContent = '请填写提示词'; status.className = 'studio-status err'; return; }
+    if (!desc) { showStudioFieldError(status, '请填写提示词', document.getElementById('freeDesc')); return; }
     submitTask('free', { desc, want, note: scene ? ('场景：' + scene) : '', scene, size, imageName, refImages: [...(uploads.freeScene ? [uploads.freeScene] : []), ...(uploads.freeImages || [])], modelImages: uploads.freeModel ? [uploads.freeModel] : [], productImages: uploads.freeProduct || [] }, status, document.getElementById('freeSubmit'), showSuccessModal);
 }
 
@@ -1214,10 +1241,10 @@ function submitProgram() {
     const sizeEl = document.getElementById('progSizeSelect');
     const size = sizeEl ? sizeEl.value : '';
     const status = document.getElementById('progStatus');
-    if (!productName) { status.textContent = '请填写产品名称'; status.className = 'studio-status err'; return; }
-    if (!size) { status.textContent = '请选择尺寸'; status.className = 'studio-status err'; return; }
-    if (uploads.progRef.length !== 1) { status.textContent = '请上传1张要模仿的图'; status.className = 'studio-status err'; return; }
-    if (uploads.progProduct.length !== 2) { status.textContent = '请上传2张白底产品图（当前' + uploads.progProduct.length + '张）'; status.className = 'studio-status err'; return; }
+    if (!productName) { showStudioFieldError(status, '请填写产品名称', document.getElementById('progProductName')); return; }
+    if (!size) { showStudioFieldError(status, '请选择尺寸', document.getElementById('progSizeSelect')); return; }
+    if (uploads.progRef.length !== 1) { showStudioFieldError(status, '请上传1张要模仿的图', document.getElementById('progRefDrop')); return; }
+    if (uploads.progProduct.length !== 2) { showStudioFieldError(status, '请上传2张白底产品图（当前' + uploads.progProduct.length + '张）', document.getElementById('progProductDrop')); return; }
     submitTask('program', { productName, title, subtitle, otherText, size, analyzePrompt: ANALYZE_PROMPT, refImages: uploads.progRef, productImages: uploads.progProduct }, status, document.getElementById('progSubmit'));
 }
 
