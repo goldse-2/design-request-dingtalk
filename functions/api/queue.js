@@ -13,7 +13,12 @@ export async function onRequestGet({ env }) {
             const raws = await Promise.all(list.keys.map(key => env.SUBMISSIONS.get(key.name)));
             cache = {
                 time: now,
-                data: raws.map(parseSubmission).filter(Boolean).filter(isRegularSubmission).map(toPublicQueueItem)
+                data: raws
+                    .map(parseSubmission)
+                    .filter(Boolean)
+                    .filter(isRegularSubmission)
+                    .map(toPublicQueueItem)
+                    .filter(isDisplayableQueueItem)
             };
         }
         return Response.json({ ok: true, submissions: cache.data });
@@ -51,6 +56,11 @@ function toPublicQueueItem(sub) {
         },
         data: { basicInfo: { '型号': productName } }
     };
+}
+
+function isDisplayableQueueItem(sub) {
+    const productName = String(sub.data?.basicInfo?.['型号'] || '').trim();
+    return Boolean(productName || String(sub.taskType || '').trim());
 }
 
 function spreadsheetBaseName(value) {

@@ -1340,7 +1340,11 @@ function resetAll() {
                 return;
             }
 
-            const allTasks = json.submissions.filter(t => !t.archived);
+            const allTasks = json.submissions.filter(function(t) {
+                if (!t || t.archived) return false;
+                const productName = t.data && t.data.basicInfo && t.data.basicInfo['\u578b\u53f7'];
+                return Boolean(String(productName || t.taskType || '').trim());
+            });
             const processingTasks = allTasks.filter(t => t.status === 'processing');
             const pendingTasks = allTasks.filter(t => !t.status || t.status === 'pending');
 
