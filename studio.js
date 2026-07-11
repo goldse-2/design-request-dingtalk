@@ -665,13 +665,39 @@ function wireSizeResizeHint(selectId, hintId) {
     const select = document.getElementById(selectId);
     const hint = document.getElementById(hintId);
     if (!select || !hint) return;
-    const update = () => {
+    const update = (showModal = false) => {
         const show = String(select.value || '').replace(/\s/g, '').includes('1472x608');
         hint.hidden = !show;
         hint.style.display = show ? 'block' : 'none';
+        if (show && showModal) showResizeReminderModal();
     };
-    select.addEventListener('change', update);
+    select.addEventListener('change', () => update(true));
     update();
+}
+
+function showResizeReminderModal() {
+    if (document.getElementById('resizeReminderModal')) return;
+    const overlay = document.createElement('div');
+    overlay.id = 'resizeReminderModal';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-label', '尺寸修改提示');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+    overlay.innerHTML = `<div style="width:min(420px,100%);background:#fff;border-radius:14px;padding:28px;box-shadow:0 16px 48px rgba(0,0,0,.2)">
+        <div style="width:48px;height:48px;border-radius:50%;background:#eef2ff;color:#4338ca;display:flex;align-items:center;justify-content:center;margin-bottom:16px">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M8 3v4M16 3v4M8 17h8"/></svg>
+        </div>
+        <div style="font-size:1.08rem;font-weight:700;color:#111827">需要最终尺寸 1464 × 600？</div>
+        <div style="margin-top:10px;color:#6b7280;font-size:.88rem;line-height:1.7">当前生成尺寸为 1472 × 608。图片生成完成后，可以进入「尺寸修改」转换为 1464 × 600。</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:22px">
+            <button type="button" id="resizeReminderClose" style="padding:11px;border:1px solid #d1d5db;border-radius:8px;background:#fff;color:#374151;font-weight:600;cursor:pointer">继续制作</button>
+            <a href="studio.html?mode=resize&width=1464&height=600" style="display:flex;align-items:center;justify-content:center;padding:11px;border-radius:8px;background:#111827;color:#fff;text-decoration:none;font-weight:600">进入尺寸修改</a>
+        </div>
+    </div>`;
+    const close = () => overlay.remove();
+    overlay.querySelector('#resizeReminderClose').addEventListener('click', close);
+    overlay.addEventListener('click', event => { if (event.target === overlay) close(); });
+    document.body.appendChild(overlay);
 }
 
 let studioExamplesCache = null;
