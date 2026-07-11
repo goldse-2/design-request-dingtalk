@@ -22,7 +22,8 @@ function initStudioTypewriter() {
 }
 
 let currentUser = null;
-let currentMode = new URLSearchParams(window.location.search).get('mode') === 'program' ? 'program' : 'free';
+const requestedMode = new URLSearchParams(window.location.search).get('mode');
+let currentMode = ['free', 'program', 'resize'].includes(requestedMode) ? requestedMode : 'free';
 
 const ANALYZE_PROMPT = `# 角色设定
 你是一位拥有十年经验的亚马逊资深视觉拆解专家。你的任务是对用户上传的电商图片进行"逆向工程"，将其拆解为 1:1 像素级复刻的"图层蓝图"，并生成精准包含"人物互动"的素材生图提示词。
@@ -309,12 +310,12 @@ const FREE_FORM = `
                     <option value="A+尺寸 16:9 1472x608">A+ 尺寸 16:9（1472 × 608）</option>
                     <option value="相片比例 2048x1536">相片比例（2048 × 1536）</option>
                 </select>
-                <div class="size-resize-hint" id="freeSizeHint" hidden>生成后可进入 <a href="resize.html?width=1464&height=600" target="_blank">尺寸修改页面</a> 修改成 1464 × 600</div>
+                <div class="size-resize-hint" id="freeSizeHint" hidden>生成后可进入 <a href="studio.html?mode=resize&width=1464&height=600">尺寸修改</a> 修改成 1464 × 600</div>
             </div>
             <button class="sf-submit" id="freeSubmit">生成图片</button>
             <div id="freeStatus" class="studio-status" style="margin-top:10px"></div>
         </div>
-        <div class="studio-preview">
+        <div class="studio-preview studio-gallery-preview">
             <div class="studio-preview-tab">预览</div>
             <div class="studio-preview-body">
                 <div class="studio-gallery-head">
@@ -379,12 +380,12 @@ const PROGRAM_FORM = `
                     <option value="A+尺寸 16:9 1472x608">A+ 尺寸 16:9（1472 × 608）</option>
                     <option value="相片比例 2048x1536">相片比例（2048 × 1536）</option>
                 </select>
-                <div class="size-resize-hint" id="progSizeHint" hidden>生成后可进入 <a href="resize.html?width=1464&height=600" target="_blank">尺寸修改页面</a> 修改成 1464 × 600</div>
+                <div class="size-resize-hint" id="progSizeHint" hidden>生成后可进入 <a href="studio.html?mode=resize&width=1464&height=600">尺寸修改</a> 修改成 1464 × 600</div>
             </div>
             <button class="sf-submit" id="progSubmit">生成图片</button>
             <div id="progStatus" class="studio-status" style="margin-top:10px"></div>
         </div>
-        <div class="studio-preview">
+        <div class="studio-preview studio-gallery-preview">
             <div class="studio-preview-tab">预览</div>
             <div class="studio-preview-body">
                 <div class="studio-gallery-head">
@@ -395,6 +396,43 @@ const PROGRAM_FORM = `
                     <button type="button" class="studio-example-upload-btn" onclick="openExampleUploadModal()">上传案例</button>
                 </div>
                 <div class="studio-gallery-stage" id="studioGalleryStage"></div>
+            </div>
+        </div>
+    </div>`;
+
+const RESIZE_FORM = `
+    <div class="studio-layout resize-layout">
+        <div class="studio-panel">
+            <div class="sf-section">
+                <div class="sf-label">转换规格</div>
+                <select class="sf-select" id="resizePreset">
+                    <option value="aplus1472">A+：1472 × 608 → 1464 × 600</option>
+                    <option value="wide2560">宽图：2560 × 1024 → 1464 × 600</option>
+                </select>
+            </div>
+            <div class="sf-section">
+                <div class="sf-label">原始图片 <span class="sf-req">*</span></div>
+                <label class="sf-upload-box resize-upload-box" id="resizeDropZone" for="resizeImageInput">
+                    <input id="resizeImageInput" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="26" height="26"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    <span id="resizeDropText">上传 1472 × 608 图片</span>
+                    <small>JPG、PNG、WebP，最大 8 MB</small>
+                </label>
+            </div>
+            <div class="resize-status" id="resizeStatus">等待上传图片</div>
+            <button class="sf-submit resize-download" id="resizeDownloadBtn" disabled>下载 1464 × 600 图片</button>
+        </div>
+        <div class="studio-preview resize-preview">
+            <div class="studio-preview-tab">预览</div>
+            <div class="studio-preview-body resize-preview-body">
+                <div class="resize-preview-head">
+                    <div class="resize-preview-title">输出预览</div>
+                    <span class="resize-size-badge">1464 × 600</span>
+                </div>
+                <div class="resize-canvas-wrap">
+                    <div class="resize-empty" id="resizeEmptyPreview">上传图片后显示转换结果</div>
+                    <canvas id="resizeCanvas"></canvas>
+                </div>
             </div>
         </div>
     </div>`;
@@ -486,7 +524,7 @@ function fillPreset(key) {
 
 function renderForm() {
     const area = document.getElementById('studioFormArea');
-    const preservedPreview = area.querySelector('.studio-preview');
+    const preservedPreview = area.querySelector('.studio-gallery-preview');
     uploads.freeImages = []; uploads.freeModel = null; uploads.freeScene = null; uploads.freeProduct = []; uploads.freeProduct1 = null; uploads.freeProduct2 = null; uploads.progRef = []; uploads.progProduct = [];
     if (currentMode === 'free') {
         area.innerHTML = FREE_FORM;
@@ -495,22 +533,132 @@ function renderForm() {
         wirePromptMentions();
         wireSizeResizeHint('freeSizeSelect', 'freeSizeHint');
         document.getElementById('freeSubmit').addEventListener('click', submitFree);
-    } else {
+    } else if (currentMode === 'program') {
         area.innerHTML = PROGRAM_FORM;
         restoreStudioPreview(area, preservedPreview);
         wireDrop('progRefDrop', 'progRefInput', 'progRefThumbs', 'progRef');
         wireDrop('progProductDrop', 'progProductInput', 'progProductThumbs', 'progProduct');
         wireSizeResizeHint('progSizeSelect', 'progSizeHint');
         document.getElementById('progSubmit').addEventListener('click', submitProgram);
+    } else {
+        area.innerHTML = RESIZE_FORM;
+        initResizeTool();
     }
-    if (!preservedPreview) renderStudioGallery();
+    if (currentMode !== 'resize' && !preservedPreview) renderStudioGallery();
     applyAgreementGate();
 }
 
 function restoreStudioPreview(area, preservedPreview) {
     if (!preservedPreview) return;
-    const replacement = area.querySelector('.studio-preview');
+    const replacement = area.querySelector('.studio-gallery-preview');
     if (replacement) replacement.replaceWith(preservedPreview);
+}
+
+function initResizeTool() {
+    const presets = {
+        aplus1472: { sourceWidth: 1472, sourceHeight: 608, width: 1464, height: 600 },
+        wide2560: { sourceWidth: 2560, sourceHeight: 1024, width: 1464, height: 600 }
+    };
+    const input = document.getElementById('resizeImageInput');
+    const presetSelect = document.getElementById('resizePreset');
+    const dropZone = document.getElementById('resizeDropZone');
+    const dropText = document.getElementById('resizeDropText');
+    const status = document.getElementById('resizeStatus');
+    const downloadBtn = document.getElementById('resizeDownloadBtn');
+    const emptyPreview = document.getElementById('resizeEmptyPreview');
+    const canvas = document.getElementById('resizeCanvas');
+    const context = canvas.getContext('2d');
+    let sourceName = 'aplus-image';
+    let outputType = 'image/png';
+
+    const getPreset = () => presets[presetSelect.value] || presets.aplus1472;
+    const reset = (message = '等待上传图片') => {
+        downloadBtn.disabled = true;
+        canvas.style.display = 'none';
+        emptyPreview.hidden = false;
+        status.className = 'resize-status';
+        status.textContent = message;
+    };
+    const showError = message => {
+        reset(message);
+        status.className = 'resize-status error';
+    };
+    const updatePreset = () => {
+        const preset = getPreset();
+        dropText.textContent = `上传 ${preset.sourceWidth} × ${preset.sourceHeight} 图片`;
+        reset();
+    };
+    const loadFile = file => {
+        reset('正在读取图片...');
+        if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+            showError('请选择 JPG、PNG 或 WebP 图片。');
+            return;
+        }
+        if (file.size > MAX_STUDIO_FILE_SIZE) {
+            showError('图片不能超过 8 MB。');
+            return;
+        }
+        const imageUrl = URL.createObjectURL(file);
+        const image = new Image();
+        image.onload = () => {
+            URL.revokeObjectURL(imageUrl);
+            const preset = getPreset();
+            if (image.naturalWidth !== preset.sourceWidth || image.naturalHeight !== preset.sourceHeight) {
+                showError(`当前图片是 ${image.naturalWidth} × ${image.naturalHeight}，请上传 ${preset.sourceWidth} × ${preset.sourceHeight} 图片。`);
+                return;
+            }
+            sourceName = file.name.replace(/\.[^.]+$/, '') || 'aplus-image';
+            outputType = file.type === 'image/jpeg' ? 'image/jpeg' : 'image/png';
+            canvas.width = preset.width;
+            canvas.height = preset.height;
+            context.imageSmoothingEnabled = true;
+            context.imageSmoothingQuality = 'high';
+            context.fillStyle = '#ffffff';
+            context.fillRect(0, 0, preset.width, preset.height);
+            const scaledWidth = image.naturalWidth * (preset.height / image.naturalHeight);
+            context.drawImage(image, (preset.width - scaledWidth) / 2, 0, scaledWidth, preset.height);
+            canvas.style.display = 'block';
+            emptyPreview.hidden = true;
+            downloadBtn.disabled = false;
+            status.className = 'resize-status ready';
+            status.textContent = `转换完成：${preset.sourceWidth} × ${preset.sourceHeight} → ${preset.width} × ${preset.height}`;
+        };
+        image.onerror = () => {
+            URL.revokeObjectURL(imageUrl);
+            showError('图片读取失败，请重新选择。');
+        };
+        image.src = imageUrl;
+    };
+
+    presetSelect.addEventListener('change', updatePreset);
+    input.addEventListener('change', () => {
+        if (input.files[0]) loadFile(input.files[0]);
+        input.value = '';
+    });
+    ['dragenter', 'dragover'].forEach(type => dropZone.addEventListener(type, event => {
+        event.preventDefault();
+        dropZone.classList.add('dragging');
+    }));
+    ['dragleave', 'drop'].forEach(type => dropZone.addEventListener(type, event => {
+        event.preventDefault();
+        dropZone.classList.remove('dragging');
+    }));
+    dropZone.addEventListener('drop', event => {
+        const file = event.dataTransfer.files[0];
+        if (file) loadFile(file);
+    });
+    downloadBtn.addEventListener('click', () => {
+        canvas.toBlob(blob => {
+            if (!blob) return;
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${sourceName}-1464x600.${outputType === 'image/jpeg' ? 'jpg' : 'png'}`;
+            link.click();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }, outputType, 0.95);
+    });
+    updatePreset();
 }
 
 function wireSizeResizeHint(selectId, hintId) {
@@ -1282,6 +1430,10 @@ document.querySelectorAll('.studio-tab').forEach(tab => {
         document.querySelectorAll('.studio-tab').forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
         currentMode = tab.dataset.mode;
+        const url = new URL(window.location.href);
+        if (currentMode === 'free') url.searchParams.delete('mode');
+        else url.searchParams.set('mode', currentMode);
+        window.history.replaceState({}, '', url);
         renderForm();
         if (currentMode === 'program' && !localStorage.getItem('programGuideShown')) {
             showProgramGuide();
