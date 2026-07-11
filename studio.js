@@ -22,7 +22,7 @@ function initStudioTypewriter() {
 }
 
 let currentUser = null;
-let currentMode = 'free';
+let currentMode = new URLSearchParams(window.location.search).get('mode') === 'program' ? 'program' : 'free';
 
 const ANALYZE_PROMPT = `# 角色设定
 你是一位拥有十年经验的亚马逊资深视觉拆解专家。你的任务是对用户上传的电商图片进行"逆向工程"，将其拆解为 1:1 像素级复刻的"图层蓝图"，并生成精准包含"人物互动"的素材生图提示词。
@@ -509,7 +509,11 @@ function wireSizeResizeHint(selectId, hintId) {
     const select = document.getElementById(selectId);
     const hint = document.getElementById(hintId);
     if (!select || !hint) return;
-    const update = () => { hint.hidden = select.value !== 'A+尺寸 16:9 1536x608'; };
+    const update = () => {
+        const show = String(select.value || '').replace(/\s/g, '').includes('1536x608');
+        hint.hidden = !show;
+        hint.style.display = show ? 'block' : 'none';
+    };
     select.addEventListener('change', update);
     update();
 }
@@ -1262,6 +1266,7 @@ function submitProgram() {
 }
 
 document.querySelectorAll('.studio-tab').forEach(tab => {
+    tab.classList.toggle('active', tab.dataset.mode === currentMode);
     tab.addEventListener('click', () => {
         document.querySelectorAll('.studio-tab').forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
