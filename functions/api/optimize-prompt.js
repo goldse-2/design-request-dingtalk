@@ -1,5 +1,5 @@
 const DEFAULT_API_BASE = 'https://jojocode.com';
-const DEFAULT_MODEL = 'claude-3-5-haiku-20241022';
+const DEFAULT_MODEL = 'claude-opus-4-8';
 
 export async function onRequestPost({ request, env }) {
     if (!env.AI_API_KEY) {
