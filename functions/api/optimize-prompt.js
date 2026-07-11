@@ -1,5 +1,5 @@
 const DEFAULT_API_BASE = 'https://jojocode.com';
-const DEFAULT_MODEL = 'claude-opus-4-8';
+const DEFAULT_MODEL = 'claude-opus-4-7';
 const ACTION_LIMITS = { optimize: 30, translate: 60 };
 
 export async function onRequestGet({ request, env }) {
