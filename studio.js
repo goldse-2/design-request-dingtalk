@@ -280,6 +280,7 @@ const FREE_FORM = `
                         <span>AI 美化提示词</span>
                     </button>
                     <span class="prompt-optimize-status" id="optimizePromptStatus"></span>
+                    <span class="prompt-quota" id="promptQuota">今日剩余 --/30</span>
                 </div>
                 <div class="prompt-mention-hint">提示：上传图片后，可在提示词中输入 <strong>@</strong> 引用图片，例如 <strong>@参考图1</strong></div>
                 <div class="sf-preset-row">
@@ -542,6 +543,7 @@ function renderForm() {
         wireFreeUpload('freeProductDrop', 'freeProductInput');
         wirePromptMentions();
         wirePromptOptimizer();
+        loadPromptQuota();
         wireSizeResizeHint('freeSizeSelect', 'freeSizeHint');
         document.getElementById('freeSubmit').addEventListener('click', submitFree);
     } else if (currentMode === 'program') {
@@ -757,10 +759,12 @@ function wirePromptOptimizer() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     prompt,
-                    size: document.getElementById('freeSizeSelect')?.value || ''
+                    size: document.getElementById('freeSizeSelect')?.value || '',
+                    userId: currentUser?.unionId || ''
                 })
             });
             const data = await response.json().catch(() => ({}));
+            updatePromptQuota(data.remaining);
             if (!response.ok || !data.ok || !data.optimized) {
                 throw new Error(data.error || 'AI 美化失败，请稍后重试');
             }
@@ -779,6 +783,31 @@ function wirePromptOptimizer() {
         }
     });
 }
+
+async function loadPromptQuota() {
+    if (!currentUser?.unionId) {
+        updatePromptQuota(null);
+        return;
+    }
+    try {
+        const response = await fetch('/api/optimize-prompt?userId=' + encodeURIComponent(currentUser.unionId));
+        const data = await response.json();
+        if (response.ok && data.ok) updatePromptQuota(data.remaining);
+    } catch {}
+}
+
+function updatePromptQuota(remaining) {
+    const quota = document.getElementById('promptQuota');
+    if (!quota) return;
+    const hasRemaining = Number.isFinite(Number(remaining));
+    quota.textContent = hasRemaining ? `今日剩余 ${remaining}/30` : '今日最多 30 次';
+    const button = document.getElementById('optimizePromptBtn');
+    if (button && hasRemaining && Number(remaining) <= 0) {
+        button.disabled = true;
+        button.title = '今日 AI 使用次数已用完，请明天再试';
+    }
+}
+
 
 let studioExamplesCache = null;
 let studioGalleryShown = 0;

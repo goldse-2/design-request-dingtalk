@@ -1,16 +1,31 @@
 const DEFAULT_API_BASE = 'https://jojocode.com';
 const DEFAULT_MODEL = 'claude-opus-4-8';
+const DAILY_LIMIT = 30;
+
+export async function onRequestGet({ request, env }) {
+    const sameOriginError = validateOrigin(request);
+    if (sameOriginError) return sameOriginError;
+    if (!env.SUBMISSIONS) {
+        return Response.json({ ok: false, error: 'AI 次数统计尚未配置' }, { status: 503 });
+    }
+
+    const userId = new URL(request.url).searchParams.get('userId');
+    if (!userId) {
+        return Response.json({ ok: false, error: '请先登录后使用 AI 功能' }, { status: 401 });
+    }
+    const quota = await readDailyQuota(env.SUBMISSIONS, userId);
+    return Response.json({ ok: true, limit: DAILY_LIMIT, remaining: quota.remaining });
+}
 
 export async function onRequestPost({ request, env }) {
     if (!env.AI_API_KEY) {
         return Response.json({ ok: false, error: 'AI 服务尚未配置' }, { status: 503 });
     }
-
-    const origin = request.headers.get('Origin');
-    const requestUrl = new URL(request.url);
-    if (!origin || (new URL(origin).host !== requestUrl.host && !isLocalOrigin(origin))) {
-        return Response.json({ ok: false, error: '不允许跨站调用' }, { status: 403 });
+    if (!env.SUBMISSIONS) {
+        return Response.json({ ok: false, error: 'AI 次数统计尚未配置' }, { status: 503 });
     }
+    const sameOriginError = validateOrigin(request);
+    if (sameOriginError) return sameOriginError;
 
     let body;
     try {
@@ -20,6 +35,10 @@ export async function onRequestPost({ request, env }) {
     }
 
     const prompt = String(body.prompt || '').trim();
+    const userId = String(body.userId || '').trim();
+    if (!userId) {
+        return Response.json({ ok: false, error: '请先登录后使用 AI 功能' }, { status: 401 });
+    }
     if (prompt.length < 2) {
         return Response.json({ ok: false, error: '请先输入需要美化的提示词' }, { status: 400 });
     }
@@ -32,6 +51,16 @@ export async function onRequestPost({ request, env }) {
     const model = String(env.AI_TEXT_MODEL || DEFAULT_MODEL);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 45000);
+    const quota = await consumeDailyQuota(env.SUBMISSIONS, userId);
+    if (!quota.allowed) {
+        clearTimeout(timeout);
+        return Response.json({
+            ok: false,
+            error: '今日 AI 使用次数已用完，请明天再试',
+            limit: DAILY_LIMIT,
+            remaining: 0
+        }, { status: 429 });
+    }
 
     try {
         const response = await fetch(`${apiBase}/v1/chat/completions`, {
@@ -43,7 +72,7 @@ export async function onRequestPost({ request, env }) {
             body: JSON.stringify({
                 model,
                 temperature: 0.45,
-                max_tokens: 1200,
+                max_tokens: 900,
                 messages: [
                     {
                         role: 'system',
@@ -60,27 +89,81 @@ export async function onRequestPost({ request, env }) {
 
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
+            await restoreDailyQuota(env.SUBMISSIONS, quota);
             const upstreamMessage = data?.error?.message || data?.message || '';
             console.error('Prompt optimizer upstream error', response.status, upstreamMessage);
             const message = response.status >= 500
                 ? 'AI 服务通道暂时不可用，请稍后重试'
                 : 'AI 服务请求失败，请检查接口余额或模型权限';
-            return Response.json({ ok: false, error: message }, { status: 503 });
+            return Response.json({ ok: false, error: message, remaining: quota.previousRemaining }, { status: 503 });
         }
 
         const optimized = extractText(data).trim().slice(0, 3000);
         if (!optimized) {
-            return Response.json({ ok: false, error: 'AI 没有返回有效提示词，请重试' }, { status: 502 });
+            await restoreDailyQuota(env.SUBMISSIONS, quota);
+            return Response.json({ ok: false, error: 'AI 没有返回有效提示词，请重试', remaining: quota.previousRemaining }, { status: 502 });
         }
-        return Response.json({ ok: true, optimized });
+        return Response.json({ ok: true, optimized, limit: DAILY_LIMIT, remaining: quota.remaining });
     } catch (error) {
+        await restoreDailyQuota(env.SUBMISSIONS, quota);
         const message = error?.name === 'AbortError'
             ? 'AI 响应超时，请稍后重试'
             : 'AI 服务连接失败，请稍后重试';
-        return Response.json({ ok: false, error: message }, { status: 503 });
+        return Response.json({ ok: false, error: message, remaining: quota.previousRemaining }, { status: 503 });
     } finally {
         clearTimeout(timeout);
     }
+}
+
+function validateOrigin(request) {
+    const origin = request.headers.get('Origin');
+    const requestUrl = new URL(request.url);
+    if (origin && (new URL(origin).host === requestUrl.host || isLocalOrigin(origin))) return null;
+    const referer = request.headers.get('Referer');
+    if (referer && new URL(referer).host === requestUrl.host) return null;
+    if (request.headers.get('Sec-Fetch-Site') === 'same-origin') return null;
+    return Response.json({ ok: false, error: '不允许跨站调用' }, { status: 403 });
+}
+
+async function readDailyQuota(kv, userId) {
+    const key = await quotaKey(userId);
+    const count = Math.max(0, Number(await kv.get(key)) || 0);
+    return { key, count, remaining: Math.max(0, DAILY_LIMIT - count) };
+}
+
+async function consumeDailyQuota(kv, userId) {
+    const current = await readDailyQuota(kv, userId);
+    if (current.count >= DAILY_LIMIT) return { ...current, allowed: false };
+    const nextCount = current.count + 1;
+    await kv.put(current.key, String(nextCount), { expirationTtl: 172800 });
+    return {
+        ...current,
+        allowed: true,
+        nextCount,
+        previousRemaining: DAILY_LIMIT - current.count,
+        remaining: DAILY_LIMIT - nextCount
+    };
+}
+
+async function restoreDailyQuota(kv, quota) {
+    if (!quota?.allowed) return;
+    if (quota.count === 0) await kv.delete(quota.key);
+    else await kv.put(quota.key, String(quota.count), { expirationTtl: 172800 });
+}
+
+async function quotaKey(userId) {
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(userId.slice(0, 200)));
+    const hash = [...new Uint8Array(digest)].slice(0, 12).map(byte => byte.toString(16).padStart(2, '0')).join('');
+    return `ai-quota:${shanghaiDateKey()}:${hash}`;
+}
+
+function shanghaiDateKey() {
+    return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Shanghai',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    }).format(new Date());
 }
 
 function extractText(data) {
