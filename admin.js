@@ -420,7 +420,7 @@ function renderHistoryCard(sub) {
     return '<div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:14px 16px;margin-bottom:10px">'
         + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
         + '<div style="display:flex;align-items:center;gap:10px">'
-        + '<span style="font-weight:700;color:#111827">' + esc(info['型号'] || '未知产品') + '</span>'
+        + '<span style="font-weight:700;color:#111827">' + esc(getSubmissionProductName(sub)) + '</span>'
         + '<span style="font-size:0.75rem;color:#6b7280">' + esc(sub.taskType || '') + '</span>'
         + '<span style="font-size:0.72rem;background:' + statusText[2] + ';color:' + statusText[1] + ';padding:2px 9px;border-radius:10px">' + statusText[0] + '</span>'
         + '</div>'
@@ -2087,7 +2087,7 @@ async function _loadSortList() {
             .map(function(s) {
                 return {
                     id: s.id,
-                    name: (s.data && s.data.basicInfo && s.data.basicInfo['型号']) || s.taskType || '未命名'
+                    name: getSubmissionProductName(s)
                 };
             });
         _renderSortItems();
