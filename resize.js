@@ -15,6 +15,23 @@ const dropText = document.getElementById('dropText');
 let sourceName = 'aplus-image';
 let outputType = 'image/png';
 
+function initSidebarUser() {
+    try {
+        const stored = sessionStorage.getItem('dt_user') || localStorage.getItem('dt_user');
+        if (!stored) return;
+        const user = JSON.parse(stored);
+        const avatar = document.getElementById('userAvatar');
+        const loginIcon = document.getElementById('loginIcon');
+        const userLink = document.getElementById('resizeUserLink');
+        if (avatar && user.avatar) {
+            avatar.src = user.avatar;
+            avatar.hidden = false;
+            loginIcon.hidden = true;
+        }
+        if (userLink && user.name) userLink.title = `${user.name}（进入图片制作）`;
+    } catch {}
+}
+
 sizePreset.addEventListener('change', () => {
     updatePresetText();
     resetIdle();
@@ -137,3 +154,4 @@ function showError(message) {
 }
 
 updatePresetText();
+initSidebarUser();
