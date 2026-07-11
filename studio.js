@@ -306,7 +306,7 @@ const FREE_FORM = `
                 <div class="sf-label">尺寸 <span class="sf-req">*</span></div>
                 <select class="sf-select" id="freeSizeSelect">
                     <option value="亚马逊主图 1600x1600">亚马逊主图（1600 × 1600）</option>
-                    <option value="A+尺寸 16:9 1536x608">A+ 尺寸 16:9（1536 × 608）</option>
+                    <option value="A+尺寸 16:9 1472x608">A+ 尺寸 16:9（1472 × 608）</option>
                     <option value="相片比例 2048x1536">相片比例（2048 × 1536）</option>
                 </select>
                 <div class="size-resize-hint" id="freeSizeHint" hidden>生成后可进入 <a href="resize.html?width=1464&height=600" target="_blank">尺寸修改页面</a> 修改成 1464 × 600</div>
@@ -376,7 +376,7 @@ const PROGRAM_FORM = `
                 <div class="sf-label">尺寸 <span class="sf-req">*</span></div>
                 <select class="sf-select" id="progSizeSelect">
                     <option value="亚马逊主图 1600x1600">亚马逊主图（1600 × 1600）</option>
-                    <option value="A+尺寸 16:9 1536x608">A+ 尺寸 16:9（1536 × 608）</option>
+                    <option value="A+尺寸 16:9 1472x608">A+ 尺寸 16:9（1472 × 608）</option>
                     <option value="相片比例 2048x1536">相片比例（2048 × 1536）</option>
                 </select>
                 <div class="size-resize-hint" id="progSizeHint" hidden>生成后可进入 <a href="resize.html?width=1464&height=600" target="_blank">尺寸修改页面</a> 修改成 1464 × 600</div>
@@ -510,7 +510,7 @@ function wireSizeResizeHint(selectId, hintId) {
     const hint = document.getElementById(hintId);
     if (!select || !hint) return;
     const update = () => {
-        const show = String(select.value || '').replace(/\s/g, '').includes('1536x608');
+        const show = String(select.value || '').replace(/\s/g, '').includes('1472x608');
         hint.hidden = !show;
         hint.style.display = show ? 'block' : 'none';
     };

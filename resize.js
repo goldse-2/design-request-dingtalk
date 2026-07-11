@@ -1,5 +1,4 @@
 const SIZE_PRESETS = {
-    aplus1536: { sourceWidth: 1536, sourceHeight: 608, width: 1464, height: 600 },
     aplus1472: { sourceWidth: 1472, sourceHeight: 608, width: 1464, height: 600 },
     wide2560: { sourceWidth: 2560, sourceHeight: 1024, width: 1464, height: 600 }
 };
@@ -95,7 +94,7 @@ function loadFile(file) {
 }
 
 function getCurrentPreset() {
-    return SIZE_PRESETS[sizePreset.value] || SIZE_PRESETS.aplus1536;
+    return SIZE_PRESETS[sizePreset.value] || SIZE_PRESETS.aplus1472;
 }
 
 function drawWithoutVerticalCrop(image, preset) {

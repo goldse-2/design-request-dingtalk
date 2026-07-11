@@ -54,12 +54,11 @@
                 <h2 class="section-title">转换规格</h2>
                 <label for="sizePreset">尺寸规则</label>
                 <select id="sizePreset">
-                    <option value="aplus1536">A+：1536 × 608 → 1464 × 600</option>
                     <option value="aplus1472">A+：1472 × 608 → 1464 × 600</option>
                     <option value="wide2560">宽图：2560 × 1024 → 1464 × 600</option>
                 </select>
                 <label class="drop" id="dropZone" for="imageInput">
-                    <span><span class="drop-icon">↑</span><span id="dropText">上传 1536 × 608 图片</span><small>JPG、PNG、WebP，最大 20 MB</small></span>
+                    <span><span class="drop-icon">↑</span><span id="dropText">上传 1472 × 608 图片</span><small>JPG、PNG、WebP，最大 20 MB</small></span>
                 </label>
                 <input id="imageInput" type="file" accept="image/jpeg,image/png,image/webp" hidden>
                 <div class="status" id="status">等待上传图片</div>
@@ -71,6 +70,6 @@
             </section>
         </div>
     </main>
-    <script src="resize.js?v=20260711-wide-presets"></script>
+    <script src="resize.js?v=20260711-1472-only"></script>
 </body>
 </html>

@@ -254,7 +254,7 @@ function normalizeStudioSize(size, desc) {
     const text = String(desc || '');
     const fromDesc = extractDimension(text);
     if (fromDesc) return fromDesc;
-    if (/A\+|16\s*[:：]\s*9/i.test(text)) return '1536x608';
+    if (/A\+|16\s*[:：]\s*9/i.test(text)) return '1472x608';
     return '1600x1600';
 }
 
