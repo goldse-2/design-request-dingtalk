@@ -309,6 +309,7 @@ const FREE_FORM = `
                     <option value="A+尺寸 16:9 1536x608">A+ 尺寸 16:9（1536 × 608）</option>
                     <option value="相片比例 2048x1536">相片比例（2048 × 1536）</option>
                 </select>
+                <div class="size-resize-hint" id="freeSizeHint" hidden>生成后可进入 <a href="resize.html?width=1464&height=600" target="_blank">尺寸修改页面</a> 修改成 1464 × 600</div>
             </div>
             <button class="sf-submit" id="freeSubmit">生成图片</button>
             <div id="freeStatus" class="studio-status" style="margin-top:10px"></div>
@@ -378,6 +379,7 @@ const PROGRAM_FORM = `
                     <option value="A+尺寸 16:9 1536x608">A+ 尺寸 16:9（1536 × 608）</option>
                     <option value="相片比例 2048x1536">相片比例（2048 × 1536）</option>
                 </select>
+                <div class="size-resize-hint" id="progSizeHint" hidden>生成后可进入 <a href="resize.html?width=1464&height=600" target="_blank">尺寸修改页面</a> 修改成 1464 × 600</div>
             </div>
             <button class="sf-submit" id="progSubmit">生成图片</button>
             <div id="progStatus" class="studio-status" style="margin-top:10px"></div>
@@ -489,16 +491,27 @@ function renderForm() {
         area.innerHTML = FREE_FORM;
         wireFreeUpload('freeProductDrop', 'freeProductInput');
         wirePromptMentions();
+        wireSizeResizeHint('freeSizeSelect', 'freeSizeHint');
         document.getElementById('freeSubmit').addEventListener('click', submitFree);
         renderStudioGallery();
     } else {
         area.innerHTML = PROGRAM_FORM;
         wireDrop('progRefDrop', 'progRefInput', 'progRefThumbs', 'progRef');
         wireDrop('progProductDrop', 'progProductInput', 'progProductThumbs', 'progProduct');
+        wireSizeResizeHint('progSizeSelect', 'progSizeHint');
         document.getElementById('progSubmit').addEventListener('click', submitProgram);
         renderStudioGallery();
     }
     applyAgreementGate();
+}
+
+function wireSizeResizeHint(selectId, hintId) {
+    const select = document.getElementById(selectId);
+    const hint = document.getElementById(hintId);
+    if (!select || !hint) return;
+    const update = () => { hint.hidden = select.value !== 'A+尺寸 16:9 1536x608'; };
+    select.addEventListener('change', update);
+    update();
 }
 
 let studioExamplesCache = null;
