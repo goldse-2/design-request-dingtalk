@@ -1249,7 +1249,7 @@ function renderStudioTask(task) {
     } else if (task.status === 'pending' && !task.sentToRpa) {
         const createdAt = typeof task.timestamp === 'number' ? task.timestamp : new Date(task.createdAt || task.timestamp || 0).getTime();
         const elapsed = Date.now() - createdAt;
-        const autoSendThreshold = 80 * 1000;
+        const autoSendThreshold = 2 * 60 * 1000;
         if (!isStudioAutoSendWindow()) {
             html += '<span id="countdown-' + task.id + '" style="font-size:0.72rem;background:#f3f4f6;color:#6b7280;padding:2px 10px;border-radius:10px">非自动发送时段，08:00恢复</span>';
         } else if (elapsed < autoSendThreshold) {
@@ -1338,7 +1338,7 @@ function renderStudioTask(task) {
 function startCountdownTimer(taskId, createdAt) {
     const countdownEl = document.getElementById('countdown-' + taskId);
     if (!countdownEl) return;
-    const autoSendThreshold = 80 * 1000;
+    const autoSendThreshold = 2 * 60 * 1000;
     const interval = setInterval(() => {
         if (!isStudioAutoSendWindow()) {
             countdownEl.textContent = '非自动发送时段，08:00恢复';

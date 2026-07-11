@@ -6,7 +6,7 @@ export async function onRequestGet(context) {
 
     try {
         const now = Date.now();
-        const autoSendThreshold = 80 * 1000;
+        const autoSendThreshold = 2 * 60 * 1000;
         const overdueThreshold = 15 * 60 * 1000;
         const autoSent = [];
         const autoErrors = [];
