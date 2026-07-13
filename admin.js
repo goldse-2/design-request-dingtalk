@@ -1247,7 +1247,7 @@ function renderStudioTask(task) {
         : task.status === 'processing'
             ? ['处理中', '#3b82f6', '#dbeafe']
             : ['待处理', '#f59e0b', '#fef3c7'];
-    const modeText = task.mode === 'free' ? '自由模式' : '程序模式';
+    const modeText = task.mode === 'retouch' ? '精修图片' : task.mode === 'free' ? '自由模式' : '程序模式';
     const time = new Date(task.timestamp).toLocaleString('zh-CN', { timeZone:'Asia/Shanghai', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
 
     const card = document.createElement('div');
@@ -1535,7 +1535,8 @@ async function sendToRpa(taskId, btn, card, knownTask) {
     
     const programWebhook = 'https://api-rpa.bazhuayu.com/api/v1/bots/webhooks/6a3a40ac622e84b667229fde/invoke';
     const freeWebhook = 'https://api-rpa.bazhuayu.com/api/v1/bots/webhooks/6a31134a622e84b6672263ee/invoke';
-    const url = mode === 'program' ? programWebhook : freeWebhook;
+    const retouchWebhook = 'https://api-rpa.bazhuayu.com/api/v1/bots/webhooks/6a543c91645904b3178e096b/invoke';
+    const url = mode === 'program' ? programWebhook : mode === 'retouch' ? retouchWebhook : freeWebhook;
     
     const wasResend = task?.sentToRpa;
     if (wasResend && !confirm('该任务已经发送过RPA了，确认要重新发送吗？')) return;
@@ -1591,11 +1592,12 @@ async function batchSendStudioTasks(btn) {
             btn.textContent = '发送中 ' + (i + 1) + '/' + tasks.length;
             const programWebhook = 'https://api-rpa.bazhuayu.com/api/v1/bots/webhooks/6a3a40ac622e84b667229fde/invoke';
             const freeWebhook = 'https://api-rpa.bazhuayu.com/api/v1/bots/webhooks/6a31134a622e84b6672263ee/invoke';
+            const retouchWebhook = 'https://api-rpa.bazhuayu.com/api/v1/bots/webhooks/6a543c91645904b3178e096b/invoke';
             try {
                 const res = await fetch('/api/studio-webhook', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ taskId: task.id, webhookUrl: task.mode === 'program' ? programWebhook : freeWebhook })
+                    body: JSON.stringify({ taskId: task.id, webhookUrl: task.mode === 'program' ? programWebhook : task.mode === 'retouch' ? retouchWebhook : freeWebhook })
                 });
                 const json = await res.json().catch(() => ({}));
                 if (res.ok && json.ok) sent++;
@@ -1664,7 +1666,14 @@ async function viewRpaCode(task) {
     const modelInfo = modelUrls.length ? modelUrls.map(url => '请参考我上传的人物图片，保留人物的脸型、发型、五官特征和整体气质，不参考原图的姿势、动作、手部位置、身体角度和构图，身体动作真实、稳定、符合日常生活，身体姿势自然。人物链接： ' + url).join(' ') : '';
     const userNeed = cleanUserDesc ? '我需要：' + cleanUserDesc : '';
     const imageNameInfo = task.imageName ? '图片命名为"' + task.imageName + '"' : '';
-    const descText = [referenceInfo, modelInfo, sizeInfo, '请只生成一张图片', userNeed, imageNameInfo].filter(Boolean).join(' ');
+    const descText = task.mode === 'retouch'
+        ? JSON.stringify({
+            params: {
+                "待处理图片链接": refUrls[0] || '',
+                "任务ID": task.id
+            }
+        }, null, 2)
+        : [referenceInfo, modelInfo, sizeInfo, '请只生成一张图片', userNeed, imageNameInfo].filter(Boolean).join(' ');
 
     const modal = document.createElement('div');
     modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;display:flex;align-items:center;justify-content:center';
@@ -1830,7 +1839,7 @@ function renderStudioHistoryCard(task) {
     const card = document.createElement('div');
     card.style.cssText = 'background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:14px 16px;margin-bottom:10px';
     
-    const modeText = task.mode === 'free' ? '自由模式' : '程序模式';
+    const modeText = task.mode === 'retouch' ? '精修图片' : task.mode === 'free' ? '自由模式' : '程序模式';
     const time = new Date(task.timestamp).toLocaleString('zh-CN', { timeZone:'Asia/Shanghai', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
     
     let html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'

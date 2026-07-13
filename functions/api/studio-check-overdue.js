@@ -53,8 +53,14 @@ export async function onRequestGet(context) {
         const tasks = await readStudioTasks(env, overdueKeys);
 
         if (autoSendTasks.length) {
-            const programWebhook = await safeKvGet(env.SUBMISSIONS, 'studio:rpaWebhookUrl:program') || env.RPA_WEBHOOK_URL_PROGRAM || 'https://api-rpa.bazhuayu.com/api/v1/bots/webhooks/6a3a40ac622e84b667229fde/invoke';
-            const freeWebhook = env.RPA_WEBHOOK_URL_FREE || await safeKvGet(env.SUBMISSIONS, 'studio:rpaWebhookUrl:free') || 'https://api-rpa.bazhuayu.com/api/v1/bots/webhooks/6a31134a622e84b6672263ee/invoke';
+            const autoModes = new Set(autoSendTasks.map(task => task.mode));
+            const programWebhook = autoModes.has('program')
+                ? await safeKvGet(env.SUBMISSIONS, 'studio:rpaWebhookUrl:program') || env.RPA_WEBHOOK_URL_PROGRAM || 'https://api-rpa.bazhuayu.com/api/v1/bots/webhooks/6a3a40ac622e84b667229fde/invoke'
+                : '';
+            const freeWebhook = autoModes.has('free')
+                ? env.RPA_WEBHOOK_URL_FREE || await safeKvGet(env.SUBMISSIONS, 'studio:rpaWebhookUrl:free') || 'https://api-rpa.bazhuayu.com/api/v1/bots/webhooks/6a31134a622e84b6672263ee/invoke'
+                : '';
+            const retouchWebhook = env.RPA_WEBHOOK_URL_RETOUCH || 'https://api-rpa.bazhuayu.com/api/v1/bots/webhooks/6a543c91645904b3178e096b/invoke';
             const origin = new URL(request.url).origin;
             for (const task of autoSendTasks) {
                 const createdAt = typeof task.timestamp === 'number'
@@ -62,12 +68,16 @@ export async function onRequestGet(context) {
                     : new Date(task.createdAt || task.timestamp || 0).getTime();
                 if (!createdAt || (now - createdAt) < autoSendThreshold) continue;
 
-                const webhookUrl = task.mode === 'program' ? programWebhook : freeWebhook;
+                const webhookUrl = task.mode === 'program'
+                    ? programWebhook
+                    : task.mode === 'retouch'
+                        ? retouchWebhook
+                        : freeWebhook;
                 if (!webhookUrl) continue;
 
                 try {
                     const { payload, pickedSize } = buildRpaPayload(task, origin);
-                    if (task.mode !== 'program' && taskNeedsRpaTranslation(task)) {
+                    if (task.mode === 'free' && taskNeedsRpaTranslation(task)) {
                         payload.params["描述"] = await translateForRpa(env, payload.params["描述"]);
                     }
                     const res = await fetch(webhookUrl, {
@@ -203,6 +213,20 @@ function buildRpaPayload(task, origin) {
     const allImageUrls = [...productUrls, ...refUrls].map(x => x.url).filter(Boolean);
 
     let pickedSize;
+    if (task.mode === 'retouch') {
+        const sourceImageUrl = refUrls[0]?.url;
+        if (!sourceImageUrl) throw new Error('Retouch image not found');
+        return {
+            pickedSize: '',
+            payload: {
+                params: {
+                    "待处理图片链接": sourceImageUrl,
+                    "任务ID": task.id
+                }
+            }
+        };
+    }
+
     if (task.mode === 'program') {
         pickedSize = normalizeStudioSize(task.size, task.desc || '');
         return {
@@ -268,9 +292,14 @@ function extractDimension(text) {
     return match ? match[0].replace(/[×*]/g, 'x').replace(/\s+/g, '') : '';
 }
 
+function studioModeText(mode) {
+    if (mode === 'retouch') return '精修图片';
+    return mode === 'free' ? '自由模式' : '程序模式';
+}
+
 async function notifyAutoSent(env, task) {
     const token = await getAccessToken(env);
-    const modeText = task.mode === 'free' ? '自由模式' : '程序模式';
+    const modeText = studioModeText(task.mode);
     const submitterName = task.submitter?.name || '匿名';
     const desc = task.desc ? task.desc.slice(0, 50) + (task.desc.length > 50 ? '...' : '') : '-';
     const content = `✅ 图片制作任务已自动发送\n\n任务 ID：${task.id}\n模式：${modeText}\n提交人：${submitterName}\n描述：${desc}\n\n已自动发送到 RPA，请等待出图。`;
@@ -288,7 +317,7 @@ async function notifyAutoSent(env, task) {
 
 async function notifyOverdue(env, task) {
     const token = await getAccessToken(env);
-    const modeText = task.mode === 'free' ? '自由模式' : '程序模式';
+    const modeText = studioModeText(task.mode);
     const content = `⏰ RPA 任务超时提醒\n\n任务 ID：${task.id}\n模式：${modeText}\n提交人：${task.submitter?.name || '匿名'}\n已发送 RPA 超过 15 分钟，但尚未收到成品图。\n\n请检查 RPA 执行情况。`;
     return fetch('https://api.dingtalk.com/v1.0/robot/oToMessages/batchSend', {
         method: 'POST',

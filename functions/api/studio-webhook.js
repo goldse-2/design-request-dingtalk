@@ -18,8 +18,15 @@ export async function onRequestPost(context) {
         const raw = await env.SUBMISSIONS.get(taskId);
         if (!raw) return Response.json({ ok: false, error: 'Task not found' }, { status: 404 });
         const task = JSON.parse(raw);
-        const webhookKey = task.mode === 'program' ? 'studio:rpaWebhookUrl:program' : 'studio:rpaWebhookUrl:free';
-        await env.SUBMISSIONS.put(webhookKey, webhookUrl);
+        const effectiveWebhookUrl = task.mode === 'retouch'
+            ? env.RPA_WEBHOOK_URL_RETOUCH || 'https://api-rpa.bazhuayu.com/api/v1/bots/webhooks/6a543c91645904b3178e096b/invoke'
+            : webhookUrl;
+        const webhookKey = task.mode === 'program'
+            ? 'studio:rpaWebhookUrl:program'
+            : task.mode === 'retouch'
+                ? 'studio:rpaWebhookUrl:retouch'
+                : 'studio:rpaWebhookUrl:free';
+        await env.SUBMISSIONS.put(webhookKey, effectiveWebhookUrl);
 
         const origin = new URL(request.url).origin;
         const toUrls = (keys) => (keys || []).map(k => ({
@@ -35,7 +42,18 @@ export async function onRequestPost(context) {
         let payload;
         let pickedSize;
         
-        if (task.mode === 'program') {
+        if (task.mode === 'retouch') {
+            const sourceImageUrl = refUrls[0]?.url;
+            if (!sourceImageUrl) {
+                return Response.json({ ok: false, error: 'Retouch image not found' }, { status: 400 });
+            }
+            payload = {
+                params: {
+                    "待处理图片链接": sourceImageUrl,
+                    "任务ID": taskId
+                }
+            };
+        } else if (task.mode === 'program') {
             // 图生图模式：使用结构化格式
             pickedSize = normalizeStudioSize(task.size, task.desc || '');
             payload = {
@@ -84,7 +102,7 @@ export async function onRequestPost(context) {
             }
         }
 
-        const res = await fetch(webhookUrl, {
+        const res = await fetch(effectiveWebhookUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)

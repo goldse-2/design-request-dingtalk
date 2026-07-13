@@ -142,7 +142,7 @@ function renderTask(task) {
     const card = document.createElement('div');
     card.style.cssText = 'background:#fff;border-radius:12px;padding:18px 20px;box-shadow:0 1px 4px rgba(0,0,0,0.07)';
 
-    const modeText = task.mode === 'free' ? '自由模式' : '程序模式';
+    const modeText = task.mode === 'retouch' ? '精修图片' : task.mode === 'free' ? '自由模式' : '程序模式';
     const time = new Date(task.timestamp).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
     
     const displayTitle = task.imageName ? task.imageName.replace(/^[^-]+-/, '') : '';

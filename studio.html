@@ -9,6 +9,7 @@
     <style>
         .size-resize-hint { margin-top: 8px; padding: 9px 11px; border-left: 3px solid #4f46e5; background: #f5f5ff; color: #4b5563; font-size: 0.8rem; line-height: 1.5; }
         .size-resize-hint a { color: #4338ca; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
+        .studio-tabs { flex-wrap: wrap; }
         .prompt-optimize-row { display: flex; align-items: center; gap: 10px; min-height: 34px; margin: 6px 0 8px; }
         .prompt-optimize-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 32px; padding: 6px 11px; border: 1px solid #c7d2fe; border-radius: 7px; background: #eef2ff; color: #3730a3; font-size: .78rem; font-weight: 700; cursor: pointer; white-space: nowrap; }
         .prompt-optimize-btn:hover { border-color: #818cf8; background: #e0e7ff; }
@@ -33,11 +34,27 @@
         .resize-canvas-wrap { flex: 1; min-height: 560px; display: grid; place-items: center; overflow: auto; padding: 20px; border-radius: 8px; background-color: #eef0f3; background-image: linear-gradient(45deg,#e3e5e8 25%,transparent 25%),linear-gradient(-45deg,#e3e5e8 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#e3e5e8 75%),linear-gradient(-45deg,transparent 75%,#e3e5e8 75%); background-size: 20px 20px; background-position: 0 0,0 10px,10px -10px,-10px 0; }
         .resize-canvas-wrap canvas { display: none; width: min(100%, 1464px); height: auto; background: #fff; box-shadow: 0 2px 10px rgba(15,23,42,.15); }
         .resize-empty { color: #9ca3af; font-size: .86rem; text-align: center; }
+        .retouch-upload-box { width: 100%; min-height: 150px; }
+        .retouch-last-btn { width: 100%; margin-top: 10px; padding: 9px 12px; border: 1px solid #d1d5db; border-radius: 7px; background: #fff; color: #374151; font-size: .8rem; font-weight: 700; cursor: pointer; }
+        .retouch-last-btn:hover { border-color: #111827; background: #f9fafb; }
+        .retouch-last-btn:disabled { cursor: wait; opacity: .65; }
+        .retouch-selected { display: none; align-items: center; gap: 10px; margin-top: 12px; padding: 9px; border: 1px solid #e5e7eb; border-radius: 7px; background: #f9fafb; }
+        .retouch-selected.visible { display: flex; }
+        .retouch-selected img { width: 58px; height: 58px; object-fit: cover; border-radius: 6px; border: 1px solid #e5e7eb; }
+        .retouch-selected-name { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #374151; font-size: .78rem; }
+        .retouch-selected-remove { width: 28px; height: 28px; border: none; border-radius: 6px; background: #fee2e2; color: #b91c1c; font-size: 1rem; cursor: pointer; }
+        .retouch-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; min-height: 520px; }
+        .retouch-compare-item { display: flex; min-width: 0; flex-direction: column; }
+        .retouch-compare-label { margin-bottom: 8px; color: #374151; font-size: .8rem; font-weight: 700; }
+        .retouch-compare-frame { flex: 1; min-height: 440px; display: grid; place-items: center; overflow: hidden; border: 1px solid #e5e7eb; border-radius: 7px; background: #f3f4f6; color: #9ca3af; font-size: .82rem; text-align: center; }
+        .retouch-compare-frame img { width: 100%; height: 100%; max-height: 620px; object-fit: contain; background: #fff; }
         @media (max-width: 860px) {
             .studio-layout { grid-template-columns: minmax(0, 1fr) !important; gap: 16px !important; }
             .studio-panel, .studio-preview { width: 100% !important; min-width: 0; }
             .resize-preview-body { min-height: 340px; }
             .resize-canvas-wrap { min-height: 280px; }
+            .retouch-compare { grid-template-columns: 1fr; min-height: 0; }
+            .retouch-compare-frame { min-height: 280px; }
         }
     </style>
 </head>
@@ -85,6 +102,7 @@
         <div class="studio-tabs">
             <button class="studio-tab active" data-mode="free">自由模式</button>
             <button class="studio-tab" data-mode="program">图生图模式</button>
+            <button class="studio-tab" data-mode="retouch">精修图片</button>
             <button class="studio-tab" data-mode="resize">尺寸修改</button>
             <a href="studio-tasks.html" class="studio-tab-link">我的任务 →</a>
         </div>
@@ -210,6 +228,6 @@
     帮助中心
 </button>
 
-<script src="studio.js?v=20260713-rpa-auto-translate"></script>
+<script src="studio.js?v=20260713-retouch-mode"></script>
 </body>
 </html>

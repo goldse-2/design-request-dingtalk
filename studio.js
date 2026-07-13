@@ -23,7 +23,7 @@ function initStudioTypewriter() {
 
 let currentUser = null;
 const requestedMode = new URLSearchParams(window.location.search).get('mode');
-let currentMode = ['free', 'program', 'resize'].includes(requestedMode) ? requestedMode : 'free';
+let currentMode = ['free', 'program', 'retouch', 'resize'].includes(requestedMode) ? requestedMode : 'free';
 
 const ANALYZE_PROMPT = `# 角色设定
 你是一位拥有十年经验的亚马逊资深视觉拆解专家。你的任务是对用户上传的电商图片进行"逆向工程"，将其拆解为 1:1 像素级复刻的"图层蓝图"，并生成精准包含"人物互动"的素材生图提示词。
@@ -131,7 +131,7 @@ function onAgreeChange(checked) {
 }
 function applyAgreementGate() {
     const agreed = hasAgreed();
-    document.querySelectorAll('.studio-submit-btn, #freeSubmit, #progSubmit').forEach(btn => {
+    document.querySelectorAll('.studio-submit-btn, #freeSubmit, #progSubmit, #retouchSubmit').forEach(btn => {
         if (!btn) return;
         if (agreed) {
             btn.classList.remove('is-gated');
@@ -445,7 +445,45 @@ const RESIZE_FORM = `
         </div>
     </div>`;
 
-const uploads = { freeImages: [], freeModel: null, freeScene: null, freeProduct: [], freeProduct1: null, freeProduct2: null, progRef: [], progProduct: [] };
+const RETOUCH_FORM = `
+    <div class="studio-layout retouch-layout">
+        <div class="studio-panel">
+            <div class="sf-section">
+                <div class="sf-label">待精修图片 <span class="sf-req">*</span></div>
+                <label class="sf-upload-box retouch-upload-box" id="retouchDropZone" for="retouchImageInput">
+                    <input id="retouchImageInput" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="26" height="26"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    <span>上传图片</span>
+                    <small>JPG、PNG、WebP，最大 8 MB</small>
+                </label>
+                <button type="button" class="retouch-last-btn" id="retouchLastImageBtn">使用上次图片</button>
+                <div class="retouch-selected" id="retouchSelected">
+                    <img id="retouchSelectedImage" alt="待精修图片">
+                    <span class="retouch-selected-name" id="retouchSelectedName"></span>
+                    <button type="button" class="retouch-selected-remove" id="retouchRemoveBtn" title="移除图片">&times;</button>
+                </div>
+            </div>
+            <button class="sf-submit" id="retouchSubmit">开始精修</button>
+            <div id="retouchStatus" class="studio-status" style="margin-top:10px"></div>
+        </div>
+        <div class="studio-preview retouch-preview">
+            <div class="studio-preview-tab">精修图片对比</div>
+            <div class="studio-preview-body">
+                <div class="retouch-compare">
+                    <div class="retouch-compare-item">
+                        <div class="retouch-compare-label">精修前</div>
+                        <div class="retouch-compare-frame" id="retouchBeforeFrame"><span>上传图片后显示</span></div>
+                    </div>
+                    <div class="retouch-compare-item">
+                        <div class="retouch-compare-label">精修后</div>
+                        <div class="retouch-compare-frame" id="retouchAfterFrame"><span>示例图片待补充</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>`;
+
+const uploads = { freeImages: [], freeModel: null, freeScene: null, freeProduct: [], freeProduct1: null, freeProduct2: null, progRef: [], progProduct: [], retouchImage: null, retouchExistingKey: null };
 const MAX_STUDIO_FILE_SIZE = 8 * 1024 * 1024;
 
 function validateStudioImage(file) {
@@ -455,7 +493,8 @@ function validateStudioImage(file) {
 }
 
 function showStudioUploadError(message) {
-    const status = document.getElementById(currentMode === 'program' ? 'progStatus' : 'freeStatus');
+    const statusId = currentMode === 'program' ? 'progStatus' : currentMode === 'retouch' ? 'retouchStatus' : 'freeStatus';
+    const status = document.getElementById(statusId);
     if (status) {
         status.textContent = message;
         status.className = 'studio-status err';
@@ -536,7 +575,7 @@ function renderForm() {
     const area = document.getElementById('studioFormArea');
     const attachedGallery = area.querySelector('.studio-gallery-preview');
     if (attachedGallery) cachedStudioGalleryPreview = attachedGallery;
-    uploads.freeImages = []; uploads.freeModel = null; uploads.freeScene = null; uploads.freeProduct = []; uploads.freeProduct1 = null; uploads.freeProduct2 = null; uploads.progRef = []; uploads.progProduct = [];
+    uploads.freeImages = []; uploads.freeModel = null; uploads.freeScene = null; uploads.freeProduct = []; uploads.freeProduct1 = null; uploads.freeProduct2 = null; uploads.progRef = []; uploads.progProduct = []; uploads.retouchImage = null; uploads.retouchExistingKey = null;
     let galleryWasReady = false;
     if (currentMode === 'free') {
         galleryWasReady = renderGenerationMode(area, FREE_FORM);
@@ -552,12 +591,16 @@ function renderForm() {
         wireDrop('progProductDrop', 'progProductInput', 'progProductThumbs', 'progProduct');
         wireSizeResizeHint('progSizeSelect', 'progSizeHint');
         document.getElementById('progSubmit').addEventListener('click', submitProgram);
+    } else if (currentMode === 'retouch') {
+        if (attachedGallery) attachedGallery.remove();
+        area.innerHTML = RETOUCH_FORM;
+        initRetouchMode();
     } else {
         if (attachedGallery) attachedGallery.remove();
         area.innerHTML = RESIZE_FORM;
         initResizeTool();
     }
-    if (currentMode !== 'resize' && !galleryWasReady) renderStudioGallery();
+    if (currentMode !== 'resize' && currentMode !== 'retouch' && !galleryWasReady) renderStudioGallery();
     applyAgreementGate();
 }
 
@@ -584,6 +627,102 @@ function renderGenerationMode(area, formHtml) {
         cachedStudioGalleryPreview = replacement;
     }
     return hadCachedGallery;
+}
+
+function initRetouchMode() {
+    const input = document.getElementById('retouchImageInput');
+    const dropZone = document.getElementById('retouchDropZone');
+    const lastButton = document.getElementById('retouchLastImageBtn');
+    const removeButton = document.getElementById('retouchRemoveBtn');
+
+    const selectFile = file => {
+        const validationError = validateStudioImage(file);
+        if (validationError) { showStudioUploadError(validationError); return; }
+        const reader = new FileReader();
+        reader.onload = event => {
+            uploads.retouchExistingKey = null;
+            uploads.retouchImage = {
+                name: file.name,
+                base64: event.target.result.split(',')[1],
+                mimeType: file.type,
+                dataUrl: event.target.result
+            };
+            renderRetouchSelection();
+        };
+        reader.readAsDataURL(file);
+    };
+
+    input.addEventListener('change', () => {
+        if (input.files[0]) selectFile(input.files[0]);
+        input.value = '';
+    });
+    ['dragenter', 'dragover'].forEach(type => dropZone.addEventListener(type, event => {
+        event.preventDefault();
+        dropZone.classList.add('dragover');
+    }));
+    ['dragleave', 'drop'].forEach(type => dropZone.addEventListener(type, event => {
+        event.preventDefault();
+        dropZone.classList.remove('dragover');
+    }));
+    dropZone.addEventListener('drop', event => {
+        if (event.dataTransfer.files[0]) selectFile(event.dataTransfer.files[0]);
+    });
+    lastButton.addEventListener('click', () => useLastRetouchImage(lastButton));
+    removeButton.addEventListener('click', clearRetouchSelection);
+    document.getElementById('retouchSubmit').addEventListener('click', submitRetouch);
+}
+
+function renderRetouchSelection() {
+    const selected = document.getElementById('retouchSelected');
+    const image = document.getElementById('retouchSelectedImage');
+    const name = document.getElementById('retouchSelectedName');
+    const beforeFrame = document.getElementById('retouchBeforeFrame');
+    const picked = uploads.retouchImage || uploads.retouchExistingKey;
+    if (!selected || !image || !name || !beforeFrame) return;
+
+    selected.classList.toggle('visible', Boolean(picked));
+    if (!picked) {
+        image.removeAttribute('src');
+        name.textContent = '';
+        beforeFrame.innerHTML = '<span>上传图片后显示</span>';
+        return;
+    }
+    image.src = picked.dataUrl;
+    name.textContent = picked.name || '上次图片';
+    beforeFrame.innerHTML = '<img src="' + picked.dataUrl + '" alt="精修前">';
+}
+
+function clearRetouchSelection() {
+    uploads.retouchImage = null;
+    uploads.retouchExistingKey = null;
+    renderRetouchSelection();
+}
+
+async function useLastRetouchImage(button) {
+    if (!currentUser?.unionId) { showLoginModal(); return; }
+    const originalText = button.textContent;
+    button.disabled = true;
+    button.textContent = '读取中...';
+    try {
+        const response = await fetch('/api/studio-tasks?history=1&unionId=' + encodeURIComponent(currentUser.unionId));
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.error || '读取失败');
+        const lastTask = (data.tasks || []).find(task => Array.isArray(task.resultKeys) && task.resultKeys.length);
+        const lastImage = lastTask?.resultKeys?.[0];
+        if (!lastImage) throw new Error('暂时没有可使用的上次成品图片');
+        uploads.retouchImage = null;
+        uploads.retouchExistingKey = {
+            key: lastImage.key,
+            name: lastImage.name || '上次图片.png',
+            dataUrl: '/api/library-file/' + encodeURIComponent(lastImage.key)
+        };
+        renderRetouchSelection();
+    } catch (error) {
+        showStudioUploadError(error.message || '读取上次图片失败');
+    } finally {
+        button.disabled = false;
+        button.textContent = originalText;
+    }
 }
 
 function initResizeTool() {
@@ -1167,7 +1306,8 @@ async function submitTask(mode, payload, statusEl, btn, onSuccess) {
     try {
         statusEl.textContent = '上传图片中...';
         const productKeys = payload.productImages && payload.productImages.length ? await uploadImages(payload.productImages, 'studio/product') : [];
-        const refKeys = payload.refImages && payload.refImages.length ? await uploadImages(payload.refImages, 'studio/ref') : [];
+        const uploadedRefKeys = payload.refImages && payload.refImages.length ? await uploadImages(payload.refImages, 'studio/ref') : [];
+        const refKeys = [...(payload.preloadedRefKeys || []), ...uploadedRefKeys];
         const modelKeys = payload.modelImages && payload.modelImages.length ? await uploadImages(payload.modelImages, 'studio/model') : [];
 
         statusEl.textContent = '提交中...';
@@ -1568,6 +1708,21 @@ function submitProgram() {
     if (uploads.progRef.length !== 1) { showStudioFieldError(status, '请上传1张要模仿的图', document.getElementById('progRefDrop')); return; }
     if (uploads.progProduct.length !== 2) { showStudioFieldError(status, '请上传2张白底产品图（当前' + uploads.progProduct.length + '张）', document.getElementById('progProductDrop')); return; }
     submitTask('program', { productName, title, subtitle, otherText, size, analyzePrompt: ANALYZE_PROMPT, refImages: uploads.progRef, productImages: uploads.progProduct }, status, document.getElementById('progSubmit'), showSuccessModal);
+}
+
+function submitRetouch() {
+    const status = document.getElementById('retouchStatus');
+    const selected = uploads.retouchImage || uploads.retouchExistingKey;
+    if (!selected) {
+        showStudioFieldError(status, '请上传待精修图片，或选择上次图片', document.getElementById('retouchDropZone'));
+        return;
+    }
+    submitTask('retouch', {
+        refImages: uploads.retouchImage ? [uploads.retouchImage] : [],
+        preloadedRefKeys: uploads.retouchExistingKey
+            ? [{ key: uploads.retouchExistingKey.key, name: uploads.retouchExistingKey.name }]
+            : []
+    }, status, document.getElementById('retouchSubmit'), showSuccessModal);
 }
 
 document.querySelectorAll('.studio-tab').forEach(tab => {

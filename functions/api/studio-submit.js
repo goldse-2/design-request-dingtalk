@@ -9,6 +9,9 @@ export async function onRequestPost(context) {
     if (!mode || !submitter) {
         return Response.json({ ok: false, error: 'Missing required fields' }, { status: 400 });
     }
+    if (mode === 'retouch' && (!Array.isArray(refKeys) || refKeys.length !== 1)) {
+        return Response.json({ ok: false, error: 'Retouch mode requires exactly one image' }, { status: 400 });
+    }
     if (!env.SUBMISSIONS) {
         return Response.json({ ok: false, error: 'Storage not configured' }, { status: 500 });
     }
@@ -59,7 +62,7 @@ export async function onRequestPost(context) {
         const p = (async () => {
             const token = await getAccessToken(env).catch(() => null);
             if (!token) return;
-            const modeText = mode === 'free' ? '自由模式' : '程序模式';
+            const modeText = studioModeText(mode);
             let content = `🎨 新图片制作需求\n\n`;
             content += `提交人：${submitter.name || '匿名'}\n`;
             content += `模式：${modeText}\n`;
@@ -80,7 +83,7 @@ export async function onRequestPost(context) {
             
             const queuePosition = queueCount + 1; // 当前任务的排队位置（前面有queueCount个，所以是第queueCount+1个）
             const estimateTime = queueCount * 6; // 每个任务平均6分钟
-            const modeText = mode === 'free' ? '自由模式' : '程序模式';
+            const modeText = studioModeText(mode);
             const titleText = imageName ? imageName.replace(/^[^-]+-/, '') : '新任务';
             
             let content = `✅ 任务已提交成功\n\n`;
@@ -120,6 +123,11 @@ function studioTaskMetadata(task) {
         dingtalkNotified: Boolean(task.dingtalkNotified),
         r2AutoNotified: Boolean(task.r2AutoNotified)
     };
+}
+
+function studioModeText(mode) {
+    if (mode === 'retouch') return '精修图片';
+    return mode === 'free' ? '自由模式' : '程序模式';
 }
 
 async function getAccessToken(env) {
