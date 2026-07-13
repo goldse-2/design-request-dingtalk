@@ -10,7 +10,7 @@ export async function onRequestPost(context) {
     catch { return Response.json({ ok: false, error: 'Invalid form data' }, { status: 400 }); }
 
     const file = formData.get('file');
-    const prefix = formData.get('prefix') || 'studio/upload';
+    const prefix = String(formData.get('prefix') || 'studio/upload');
 
     if (!file || typeof file === 'string') {
         return Response.json({ ok: false, error: 'No file provided' }, { status: 400 });
@@ -18,8 +18,9 @@ export async function onRequestPost(context) {
     if (!file.type?.startsWith('image/')) {
         return Response.json({ ok: false, error: 'Only image files are allowed' }, { status: 400 });
     }
-    if (file.size > 8 * 1024 * 1024) {
-        return Response.json({ ok: false, error: 'Image must not exceed 8MB' }, { status: 413 });
+    const maxSize = prefix === 'studio/retouch' ? 15 * 1024 * 1024 : 8 * 1024 * 1024;
+    if (file.size > maxSize) {
+        return Response.json({ ok: false, error: `Image must not exceed ${prefix === 'studio/retouch' ? '15MB' : '8MB'}` }, { status: 413 });
     }
 
     const ext = (file.name || 'img.png').split('.').pop().toLowerCase();

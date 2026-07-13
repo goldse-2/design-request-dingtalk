@@ -454,7 +454,7 @@ const RETOUCH_FORM = `
                     <input id="retouchImageInput" type="file" accept="image/jpeg,image/png,image/webp" hidden>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="26" height="26"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                     <span>上传图片</span>
-                    <small>JPG、PNG、WebP，最大 8 MB</small>
+                    <small>JPG、PNG、WebP，最大 15 MB</small>
                 </label>
                 <button type="button" class="retouch-last-btn" id="retouchLastImageBtn">使用上次图片</button>
                 <div class="retouch-selected" id="retouchSelected">
@@ -485,10 +485,13 @@ const RETOUCH_FORM = `
 
 const uploads = { freeImages: [], freeModel: null, freeScene: null, freeProduct: [], freeProduct1: null, freeProduct2: null, progRef: [], progProduct: [], retouchImage: null, retouchExistingKey: null };
 const MAX_STUDIO_FILE_SIZE = 8 * 1024 * 1024;
+const MAX_RETOUCH_FILE_SIZE = 15 * 1024 * 1024;
 
 function validateStudioImage(file) {
     if (!file?.type?.startsWith('image/')) return '请选择图片文件';
-    if (file.size > MAX_STUDIO_FILE_SIZE) return '图片单张不能超过 8MB：' + file.name;
+    const maxSize = currentMode === 'retouch' ? MAX_RETOUCH_FILE_SIZE : MAX_STUDIO_FILE_SIZE;
+    const maxSizeLabel = currentMode === 'retouch' ? '15MB' : '8MB';
+    if (file.size > maxSize) return '图片单张不能超过 ' + maxSizeLabel + '：' + file.name;
     return '';
 }
 
@@ -1306,7 +1309,8 @@ async function submitTask(mode, payload, statusEl, btn, onSuccess) {
     try {
         statusEl.textContent = '上传图片中...';
         const productKeys = payload.productImages && payload.productImages.length ? await uploadImages(payload.productImages, 'studio/product') : [];
-        const uploadedRefKeys = payload.refImages && payload.refImages.length ? await uploadImages(payload.refImages, 'studio/ref') : [];
+        const refPrefix = mode === 'retouch' ? 'studio/retouch' : 'studio/ref';
+        const uploadedRefKeys = payload.refImages && payload.refImages.length ? await uploadImages(payload.refImages, refPrefix) : [];
         const refKeys = [...(payload.preloadedRefKeys || []), ...uploadedRefKeys];
         const modelKeys = payload.modelImages && payload.modelImages.length ? await uploadImages(payload.modelImages, 'studio/model') : [];
 
