@@ -192,7 +192,7 @@ function renderTask(task) {
                         <span style="font-size:0.75rem;color:${step3 ? '#16a34a' : '#9ca3af'};font-weight:${step3 ? '600' : '400'}">已完成</span>
                     </div>
                 </div>
-                ${task.status === 'processing' ? '<div style="font-size:0.72rem;color:#3b82f6;text-align:center;margin-top:6px">⏱ AI 正在生成中，预计还需 4-8 分钟...</div>' : ''}
+                ${task.status === 'processing' ? '<div style="font-size:0.72rem;color:#3b82f6;text-align:center;margin-top:6px">' + (task.mode === 'retouch' ? '⏱ 图片正在精修中，预计约 30 分钟完成...' : '⏱ AI 正在生成中，预计还需 4-8 分钟...') + '</div>' : ''}
                 ${task.status === 'pending' && !task.sentToRpa ? '<div style="font-size:0.72rem;color:#f59e0b;text-align:center;margin-top:6px">📋 任务已提交，等待自动发送到 RPA...</div>' : ''}
             </div>`;
     }

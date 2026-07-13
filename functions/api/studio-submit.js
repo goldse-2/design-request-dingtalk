@@ -90,7 +90,10 @@ export async function onRequestPost(context) {
             content += `📋 ${titleText}\n`;
             content += `模式：${modeText}\n\n`;
             
-            if (queueCount === 0) {
+            if (mode === 'retouch') {
+                content += `🖼️ 精修任务已进入处理队列\n`;
+                content += `⏱ 预计等待：约 30 分钟\n\n`;
+            } else if (queueCount === 0) {
                 content += `🎉 当前无人排队，您的任务将立即处理\n`;
                 content += `⏱ 预计等待：4-8 分钟\n\n`;
             } else {

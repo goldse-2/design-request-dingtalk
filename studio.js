@@ -1613,7 +1613,7 @@ function renderLibPickerImages(categories, cat, prod, body, modal) {
     body.appendChild(grid);
 }
 
-function showSuccessModal(task) {
+function showSuccessModal(task, estimateText = '') {
     const overlay = document.createElement('div');
     overlay.setAttribute('role', 'dialog');
     overlay.setAttribute('aria-modal', 'true');
@@ -1625,6 +1625,7 @@ function showSuccessModal(task) {
         + '<svg viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5" width="28" height="28"><polyline points="20 6 9 17 4 12"/></svg></div>'
         + '<div style="font-size:1.15rem;font-weight:700;color:#111827;margin-bottom:10px">任务提交成功</div>'
         + '<div style="font-size:0.88rem;color:#6b7280;line-height:1.7">网站已收到你的任务并进入处理队列。<br>可在「我的任务」查看进度，完成后会通过钉钉通知。</div>'
+        + (estimateText ? '<div style="margin-top:12px;padding:9px 12px;border-radius:7px;background:#eff6ff;color:#1d4ed8;font-size:.84rem;font-weight:700">' + estimateText + '</div>' : '')
         + (task && task.id ? '<div style="margin-top:12px;color:#9ca3af;font-size:.72rem">任务编号：' + String(task.id).replace(/[<>&]/g, '') + '</div>' : '')
         + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:24px">'
         + '<button type="button" id="successContinueBtn" style="padding:11px;background:#fff;color:#374151;border:1px solid #d1d5db;border-radius:8px;font-size:.92rem;font-weight:600;cursor:pointer">继续制作</button>'
@@ -1691,7 +1692,7 @@ function submitRetouch() {
     }
     submitTask('retouch', {
         refImages: [uploads.retouchImage]
-    }, status, document.getElementById('retouchSubmit'), showSuccessModal);
+    }, status, document.getElementById('retouchSubmit'), task => showSuccessModal(task, '精修图片预计约 30 分钟完成'));
 }
 
 document.querySelectorAll('.studio-tab').forEach(tab => {
