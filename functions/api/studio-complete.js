@@ -62,6 +62,7 @@ export async function onRequestPost(context) {
                 })
                 .catch(e => console.error('Notify failed:', e.message));
             if (waitUntil) waitUntil(p);
+            else await p;
         }
 
         return Response.json({ ok: true, action, taskId });

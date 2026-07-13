@@ -73,6 +73,7 @@ export async function onRequestPost(context) {
                 .then(() => markStudioNotificationSent(env, taskId))
                 .catch(e => console.error('Notify failed:', e.message));
             if (waitUntil) waitUntil(p);
+            else await p;
         }
 
         return Response.json({ ok: true, taskId, resultCount: resultKeys.length });

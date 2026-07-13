@@ -28,7 +28,9 @@ export async function sendStudioResultImages(env, accessToken, staffId, task, or
 
     if (!response.ok) {
         const detail = await response.text().catch(() => '');
-        throw new Error(`DingTalk image message failed: ${response.status} ${detail}`.trim());
+        const error = `DingTalk image message failed: ${response.status} ${detail}`.trim();
+        console.error(error);
+        return { sent: false, count: 0, error };
     }
 
     return { sent: true, count: resultKeys.length };
