@@ -1,5 +1,5 @@
-const DEFAULT_API_BASE = 'https://jojocode.com';
-const DEFAULT_MODEL = 'claude-opus-4-7';
+import { generateAiText } from '../_shared/ai-text.js';
+
 const ACTION_LIMITS = { optimize: 30 };
 
 export async function onRequestGet({ request, env }) {
@@ -63,14 +63,9 @@ export async function onRequestPost({ request, env }) {
         temperature: 0.45,
         maxTokens: 900
     };
-    const apiBase = String(env.AI_API_BASE || DEFAULT_API_BASE).replace(/\/+$/, '');
-    const model = String(env.AI_TEXT_MODEL || DEFAULT_MODEL);
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 45000);
     const actionLimit = ACTION_LIMITS[action];
     const quota = await consumeDailyQuota(env.SUBMISSIONS, userId, action);
     if (!quota.allowed) {
-        clearTimeout(timeout);
         return Response.json({
             ok: false,
             error: '今日 AI 使用次数已用完，请明天再试',
@@ -81,42 +76,7 @@ export async function onRequestPost({ request, env }) {
     }
 
     try {
-        const response = await fetch(`${apiBase}/v1/chat/completions`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${env.AI_API_KEY}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                model,
-                temperature: requestContent.temperature,
-                max_tokens: requestContent.maxTokens,
-                messages: [
-                    {
-                        role: 'system',
-                        content: requestContent.system
-                    },
-                    {
-                        role: 'user',
-                        content: requestContent.user
-                    }
-                ]
-            }),
-            signal: controller.signal
-        });
-
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) {
-            await restoreDailyQuota(env.SUBMISSIONS, quota);
-            const upstreamMessage = data?.error?.message || data?.message || '';
-            console.error('Prompt optimizer upstream error', response.status, upstreamMessage);
-            const message = response.status >= 500
-                ? 'AI 服务通道暂时不可用，请稍后重试'
-                : 'AI 服务请求失败，请检查接口余额或模型权限';
-            return Response.json({ ok: false, error: message, remaining: quota.previousRemaining }, { status: 503 });
-        }
-
-        const optimized = extractText(data).trim().slice(0, 3000);
+        const optimized = (await generateAiText(env, requestContent)).slice(0, 3000);
         if (!optimized) {
             await restoreDailyQuota(env.SUBMISSIONS, quota);
             return Response.json({ ok: false, error: 'AI 没有返回有效提示词，请重试', remaining: quota.previousRemaining }, { status: 502 });
@@ -124,12 +84,15 @@ export async function onRequestPost({ request, env }) {
         return Response.json({ ok: true, optimized, action, limit: actionLimit, remaining: quota.remaining });
     } catch (error) {
         await restoreDailyQuota(env.SUBMISSIONS, quota);
+        console.error('Prompt optimizer upstream error', error?.status || '', error?.message || '');
         const message = error?.name === 'AbortError'
             ? 'AI 响应超时，请稍后重试'
-            : 'AI 服务连接失败，请稍后重试';
+            : error?.status >= 500
+                ? 'AI 服务通道暂时不可用，请稍后重试'
+                : error?.status
+                    ? 'AI 服务请求失败，请检查接口余额或模型权限'
+                    : 'AI 服务连接失败，请稍后重试';
         return Response.json({ ok: false, error: message, remaining: quota.previousRemaining }, { status: 503 });
-    } finally {
-        clearTimeout(timeout);
     }
 }
 
@@ -183,15 +146,6 @@ function shanghaiDateKey() {
         month: '2-digit',
         day: '2-digit'
     }).format(new Date());
-}
-
-function extractText(data) {
-    const content = data?.choices?.[0]?.message?.content;
-    if (typeof content === 'string') return content;
-    if (Array.isArray(content)) {
-        return content.map(item => item?.text || '').join('\n');
-    }
-    return '';
 }
 
 function isLocalOrigin(origin) {
