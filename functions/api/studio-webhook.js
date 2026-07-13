@@ -1,4 +1,4 @@
-import { translateForRpa } from '../_shared/ai-translate.js';
+import { taskNeedsRpaTranslation, translateForRpa } from '../_shared/ai-translate.js';
 
 export async function onRequestPost(context) {
     const { request, env } = context;
@@ -79,7 +79,9 @@ export async function onRequestPost(context) {
                 }
             };
 
-            payload.params["描述"] = await translateForRpa(env, payload.params["描述"]);
+            if (taskNeedsRpaTranslation(task)) {
+                payload.params["描述"] = await translateForRpa(env, payload.params["描述"]);
+            }
         }
 
         const res = await fetch(webhookUrl, {

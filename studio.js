@@ -279,13 +279,8 @@ const FREE_FORM = `
                         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.5 3.5L7 8l3.5 1.5L12 13l1.5-3.5L17 8l-3.5-1.5L12 3Z"/><path d="m5 14-.8 1.8L2.5 16.5l1.7.7L5 19l.8-1.8 1.7-.7-1.7-.7L5 14Z"/><path d="m18 14-1.2 2.8L14 18l2.8 1.2L18 22l1.2-2.8L22 18l-2.8-1.2L18 14Z"/></svg>
                         <span>AI 美化提示词</span>
                     </button>
-                    <button type="button" class="prompt-translate-btn" id="translatePromptBtn">
-                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h7M7.5 3v2M5 9c1.4 2.2 3.2 4 5.5 5.3M10 8c-1.1 3.1-3.2 5.5-6 7"/><path d="m13 19 4-10 4 10M14.5 15h5"/></svg>
-                        <span>翻译成英文</span>
-                    </button>
                     <span class="prompt-optimize-status" id="optimizePromptStatus"></span>
                     <span class="prompt-quota" id="optimizeQuota">美化 --/30</span>
-                    <span class="prompt-quota" id="translateQuota">翻译 --/60</span>
                 </div>
                 <div class="prompt-mention-hint">提示：上传图片后，可在提示词中输入 <strong>@</strong> 引用图片，例如 <strong>@参考图1</strong></div>
                 <div class="sf-preset-row">
@@ -737,16 +732,15 @@ function showResizeReminderModal() {
     document.body.appendChild(overlay);
 }
 
-const promptQuotaRemaining = { optimize: null, translate: null };
+const promptQuotaRemaining = { optimize: null };
 
 function wirePromptOptimizer() {
     const optimizeButton = document.getElementById('optimizePromptBtn');
-    const translateButton = document.getElementById('translatePromptBtn');
     const textarea = document.getElementById('freeDesc');
     const status = document.getElementById('optimizePromptStatus');
-    if (!optimizeButton || !translateButton || !textarea || !status) return;
+    if (!optimizeButton || !textarea || !status) return;
 
-    const run = async (action, button) => {
+    const run = async () => {
         const prompt = textarea.value.trim();
         if (!prompt) {
             status.textContent = '请先输入提示词';
@@ -755,11 +749,10 @@ function wirePromptOptimizer() {
             return;
         }
 
-        const originalLabel = button.querySelector('span').textContent;
+        const originalLabel = optimizeButton.querySelector('span').textContent;
         optimizeButton.disabled = true;
-        translateButton.disabled = true;
-        button.classList.add('loading');
-        button.querySelector('span').textContent = action === 'translate' ? '正在翻译...' : '正在美化...';
+        optimizeButton.classList.add('loading');
+        optimizeButton.querySelector('span').textContent = '正在美化...';
         status.textContent = '';
         status.className = 'prompt-optimize-status';
         try {
@@ -770,64 +763,59 @@ function wirePromptOptimizer() {
                     prompt,
                     size: document.getElementById('freeSizeSelect')?.value || '',
                     userId: currentUser?.unionId || '',
-                    action
+                    action: 'optimize'
                 })
             });
             const data = await response.json().catch(() => ({}));
-            updatePromptQuota(action, data.remaining);
+            updatePromptQuota(data.remaining);
             if (!response.ok || !data.ok || !data.optimized) {
                 throw new Error(data.error || 'AI 美化失败，请稍后重试');
             }
             textarea.value = data.optimized;
             updateCharCount(textarea, 'freeDescCount', 8000);
             textarea.focus();
-            status.textContent = action === 'translate' ? '英文翻译已完成' : '已完成，可继续修改';
+            status.textContent = '已完成，可继续修改';
             status.className = 'prompt-optimize-status success';
         } catch (error) {
-            status.textContent = error.message || (action === 'translate' ? '翻译失败，请稍后重试' : 'AI 美化失败，请稍后重试');
+            status.textContent = error.message || 'AI 美化失败，请稍后重试';
             status.className = 'prompt-optimize-status error';
         } finally {
             optimizeButton.disabled = promptQuotaRemaining.optimize === 0;
-            translateButton.disabled = promptQuotaRemaining.translate === 0;
-            button.classList.remove('loading');
-            button.querySelector('span').textContent = originalLabel;
+            optimizeButton.classList.remove('loading');
+            optimizeButton.querySelector('span').textContent = originalLabel;
         }
     };
 
-    optimizeButton.addEventListener('click', () => run('optimize', optimizeButton));
-    translateButton.addEventListener('click', () => run('translate', translateButton));
+    optimizeButton.addEventListener('click', run);
 }
 
 async function loadPromptQuota() {
     if (!currentUser?.unionId) {
-        updatePromptQuota('optimize', null);
-        updatePromptQuota('translate', null);
+        updatePromptQuota(null);
         return;
     }
     try {
         const response = await fetch('/api/optimize-prompt?userId=' + encodeURIComponent(currentUser.unionId));
         const data = await response.json();
         if (response.ok && data.ok) {
-            updatePromptQuota('optimize', data.quotas?.optimize?.remaining);
-            updatePromptQuota('translate', data.quotas?.translate?.remaining);
+            updatePromptQuota(data.quotas?.optimize?.remaining);
         }
     } catch {}
 }
 
-function updatePromptQuota(action, remaining) {
-    const isTranslate = action === 'translate';
-    const limit = isTranslate ? 60 : 30;
-    const quota = document.getElementById(isTranslate ? 'translateQuota' : 'optimizeQuota');
+function updatePromptQuota(remaining) {
+    const limit = 30;
+    const quota = document.getElementById('optimizeQuota');
     if (!quota) return;
     const hasRemaining = remaining !== null && remaining !== undefined && remaining !== '' && Number.isFinite(Number(remaining));
-    promptQuotaRemaining[action] = hasRemaining ? Number(remaining) : null;
+    promptQuotaRemaining.optimize = hasRemaining ? Number(remaining) : null;
     quota.textContent = hasRemaining
-        ? `${isTranslate ? '翻译' : '美化'} ${remaining}/${limit}`
-        : `${isTranslate ? '翻译' : '美化'} --/${limit}`;
-    const button = document.getElementById(isTranslate ? 'translatePromptBtn' : 'optimizePromptBtn');
+        ? `美化 ${remaining}/${limit}`
+        : `美化 --/${limit}`;
+    const button = document.getElementById('optimizePromptBtn');
     if (hasRemaining && Number(remaining) <= 0) {
         button.disabled = true;
-        button.title = `今日${isTranslate ? '翻译' : '美化'}次数已用完，请明天再试`;
+        button.title = '今日美化次数已用完，请明天再试';
     }
 }
 

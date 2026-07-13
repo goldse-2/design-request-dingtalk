@@ -1,4 +1,4 @@
-import { translateForRpa } from '../_shared/ai-translate.js';
+import { taskNeedsRpaTranslation, translateForRpa } from '../_shared/ai-translate.js';
 
 export async function onRequestGet(context) {
     const { env, request, waitUntil } = context;
@@ -67,7 +67,7 @@ export async function onRequestGet(context) {
 
                 try {
                     const { payload, pickedSize } = buildRpaPayload(task, origin);
-                    if (task.mode !== 'program') {
+                    if (task.mode !== 'program' && taskNeedsRpaTranslation(task)) {
                         payload.params["描述"] = await translateForRpa(env, payload.params["描述"]);
                     }
                     const res = await fetch(webhookUrl, {

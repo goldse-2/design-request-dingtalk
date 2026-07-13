@@ -54,6 +54,13 @@ export async function translateForRpa(env, text) {
     }
 }
 
+export function taskNeedsRpaTranslation(task) {
+    const userText = [task?.desc, task?.want, task?.note, task?.scene]
+        .filter(Boolean)
+        .join(' ');
+    return /\p{Script=Han}/u.test(userText);
+}
+
 function protectExactValues(text) {
     const values = [];
     const protectedText = text.replace(

@@ -1,6 +1,6 @@
 const DEFAULT_API_BASE = 'https://jojocode.com';
 const DEFAULT_MODEL = 'claude-opus-4-7';
-const ACTION_LIMITS = { optimize: 30, translate: 60 };
+const ACTION_LIMITS = { optimize: 30 };
 
 export async function onRequestGet({ request, env }) {
     const sameOriginError = validateOrigin(request);
@@ -13,15 +13,11 @@ export async function onRequestGet({ request, env }) {
     if (!userId) {
         return Response.json({ ok: false, error: '请先登录后使用 AI 功能' }, { status: 401 });
     }
-    const [optimizeQuota, translateQuota] = await Promise.all([
-        readDailyQuota(env.SUBMISSIONS, userId, 'optimize'),
-        readDailyQuota(env.SUBMISSIONS, userId, 'translate')
-    ]);
+    const optimizeQuota = await readDailyQuota(env.SUBMISSIONS, userId, 'optimize');
     return Response.json({
         ok: true,
         quotas: {
-            optimize: { limit: ACTION_LIMITS.optimize, remaining: optimizeQuota.remaining },
-            translate: { limit: ACTION_LIMITS.translate, remaining: translateQuota.remaining }
+            optimize: { limit: ACTION_LIMITS.optimize, remaining: optimizeQuota.remaining }
         }
     });
 }
@@ -45,32 +41,28 @@ export async function onRequestPost({ request, env }) {
 
     const prompt = String(body.prompt || '').trim();
     const userId = String(body.userId || '').trim();
-    const action = body.action === 'translate' ? 'translate' : 'optimize';
+    if (body.action === 'translate') {
+        return Response.json({ ok: false, error: '英文翻译已改为提交 RPA 时自动处理' }, { status: 410 });
+    }
+    const action = 'optimize';
     if (!userId) {
         return Response.json({ ok: false, error: '请先登录后使用 AI 功能' }, { status: 401 });
     }
     if (prompt.length < 2) {
         return Response.json({ ok: false, error: '请先输入需要美化的提示词' }, { status: 400 });
     }
-    const inputLimit = action === 'translate' ? 8000 : 3000;
+    const inputLimit = 3000;
     if (prompt.length > inputLimit) {
-        return Response.json({ ok: false, error: `${action === 'translate' ? '翻译内容' : '提示词'}不能超过 ${inputLimit} 字` }, { status: 400 });
+        return Response.json({ ok: false, error: `提示词不能超过 ${inputLimit} 字` }, { status: 400 });
     }
 
     const size = String(body.size || '').slice(0, 80);
-    const requestContent = action === 'translate'
-        ? {
-            system: '你是专业的中英翻译。把用户输入忠实翻译成自然、准确、可直接使用的英文。保留产品名称、品牌、数字、单位、尺寸、专有名词和原有格式，不扩写、不美化、不解释。只输出英文译文，不要标题、引号或 Markdown。',
-            user: prompt,
-            temperature: 0.1,
-            maxTokens: 10000
-        }
-        : {
-            system: '你是专业电商视觉提示词编辑。把用户的原始描述优化为适合 GPT Image 2.0 的中文生图提示词。保留用户的产品、数量、文字内容、品牌要求和核心意图，不得擅自改变；补充清晰的主体、构图、场景、材质、光线、镜头、色彩、空间关系和电商画面质量要求。避免空泛形容词，避免解释、标题、Markdown、引号和负面提示词列表。只输出可直接用于生图的一段提示词，控制在 800 个中文字符内。',
-            user: `目标尺寸：${size || '未指定'}\n原始提示词：${prompt}`,
-            temperature: 0.45,
-            maxTokens: 900
-        };
+    const requestContent = {
+        system: '你是专业电商视觉提示词编辑。把用户的原始描述优化为适合 GPT Image 2.0 的中文生图提示词。保留用户的产品、数量、文字内容、品牌要求和核心意图，不得擅自改变；补充清晰的主体、构图、场景、材质、光线、镜头、色彩、空间关系和电商画面质量要求。避免空泛形容词，避免解释、标题、Markdown、引号和负面提示词列表。只输出可直接用于生图的一段提示词，控制在 800 个中文字符内。',
+        user: `目标尺寸：${size || '未指定'}\n原始提示词：${prompt}`,
+        temperature: 0.45,
+        maxTokens: 900
+    };
     const apiBase = String(env.AI_API_BASE || DEFAULT_API_BASE).replace(/\/+$/, '');
     const model = String(env.AI_TEXT_MODEL || DEFAULT_MODEL);
     const controller = new AbortController();
@@ -124,7 +116,7 @@ export async function onRequestPost({ request, env }) {
             return Response.json({ ok: false, error: message, remaining: quota.previousRemaining }, { status: 503 });
         }
 
-        const optimized = extractText(data).trim().slice(0, action === 'translate' ? 8000 : 3000);
+        const optimized = extractText(data).trim().slice(0, 3000);
         if (!optimized) {
             await restoreDailyQuota(env.SUBMISSIONS, quota);
             return Response.json({ ok: false, error: 'AI 没有返回有效提示词，请重试', remaining: quota.previousRemaining }, { status: 502 });
@@ -181,8 +173,7 @@ async function restoreDailyQuota(kv, quota) {
 async function quotaKey(userId, action) {
     const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(userId.slice(0, 200)));
     const hash = [...new Uint8Array(digest)].slice(0, 12).map(byte => byte.toString(16).padStart(2, '0')).join('');
-    const prefix = action === 'translate' ? 'ai-quota-translate' : 'ai-quota';
-    return `${prefix}:${shanghaiDateKey()}:${hash}`;
+    return `ai-quota:${shanghaiDateKey()}:${hash}`;
 }
 
 function shanghaiDateKey() {
