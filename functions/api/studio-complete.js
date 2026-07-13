@@ -1,4 +1,4 @@
-import { sendStudioResultImages } from '../_shared/studio-dingtalk.js';
+import { markStudioNotificationSent, sendStudioResultImages } from '../_shared/studio-dingtalk.js';
 
 export async function onRequestPost(context) {
     const { request, env, waitUntil } = context;
@@ -57,11 +57,7 @@ export async function onRequestPost(context) {
             const p = notifyUser(env, task, action, message, origin)
                 .then(() => {
                     if (action === 'complete') {
-                        task.dingtalkNotified = true;
-                        task.dingtalkNotifiedAt = new Date().toISOString();
-                        return env.SUBMISSIONS.put(taskId, JSON.stringify(task), {
-                            metadata: studioTaskMetadata(task)
-                        });
+                        return markStudioNotificationSent(env, taskId);
                     }
                 })
                 .catch(e => console.error('Notify failed:', e.message));

@@ -34,9 +34,40 @@ export async function sendStudioResultImages(env, accessToken, staffId, task, or
     return { sent: true, count: resultKeys.length };
 }
 
+export async function markStudioNotificationSent(env, taskId, field = 'dingtalkNotified') {
+    const raw = await env.SUBMISSIONS.get(taskId);
+    if (!raw) throw new Error('Studio task not found while marking notification');
+
+    const latestTask = JSON.parse(raw);
+    const notifiedAt = new Date().toISOString();
+    latestTask[field] = true;
+    latestTask[field === 'r2AutoNotified' ? 'r2AutoNotifiedAt' : 'dingtalkNotifiedAt'] = notifiedAt;
+
+    await env.SUBMISSIONS.put(taskId, JSON.stringify(latestTask), {
+        metadata: studioTaskMetadata(latestTask)
+    });
+    return latestTask;
+}
+
 function encodeKeyToken(key) {
     const bytes = new TextEncoder().encode(String(key || ''));
     let binary = '';
     bytes.forEach(byte => { binary += String.fromCharCode(byte); });
     return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+function studioTaskMetadata(task) {
+    return {
+        kind: 'studio',
+        mode: task.mode,
+        status: task.status,
+        timestamp: task.timestamp,
+        unionId: task.submitter?.unionId || '',
+        sentToRpa: Boolean(task.sentToRpa),
+        sentToRpaAt: task.sentToRpaAt || '',
+        pausedAuto: Boolean(task.pausedAuto),
+        overdueNotified: Boolean(task.overdueNotified),
+        dingtalkNotified: Boolean(task.dingtalkNotified),
+        r2AutoNotified: Boolean(task.r2AutoNotified)
+    };
 }

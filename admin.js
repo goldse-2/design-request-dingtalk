@@ -1165,6 +1165,8 @@ checkAuth();
 
 // ── Studio task management (admin) ───────────────────────
 let studioAdminTasks = [];
+let studioNotifyRefreshTimer = null;
+let studioNotifyRefreshAttempts = 0;
 
 async function loadStudioAdmin() {
     const container = document.getElementById('studioAdminContent');
@@ -1182,6 +1184,7 @@ async function loadStudioAdmin() {
         });
         studioAdminTasks = tasks;
         bindStudioBatchActions();
+        scheduleStudioNotificationRefresh(tasks);
         
         // 统计分类
         const stats = { '图片': 0, '视频': 0, '设计': 0 };
@@ -1612,6 +1615,30 @@ async function batchSendStudioTasks(btn) {
         btn.disabled = false;
         btn.textContent = originalText;
     }
+}
+
+function scheduleStudioNotificationRefresh(tasks) {
+    if (studioNotifyRefreshTimer) {
+        clearTimeout(studioNotifyRefreshTimer);
+        studioNotifyRefreshTimer = null;
+    }
+
+    const hasPendingNotification = tasks.some(task =>
+        task.status === 'done' && !task.dingtalkNotified && !task.r2AutoNotified
+    );
+    if (!hasPendingNotification) {
+        studioNotifyRefreshAttempts = 0;
+        return;
+    }
+    if (studioNotifyRefreshAttempts >= 3) return;
+
+    const delays = [5000, 15000, 30000];
+    const delay = delays[studioNotifyRefreshAttempts];
+    studioNotifyRefreshAttempts += 1;
+    studioNotifyRefreshTimer = setTimeout(() => {
+        studioNotifyRefreshTimer = null;
+        loadStudioAdmin();
+    }, delay);
 }
 
 async function batchPauseStudioTasks(btn) {

@@ -1,4 +1,4 @@
-import { sendStudioResultImages } from '../_shared/studio-dingtalk.js';
+import { markStudioNotificationSent, sendStudioResultImages } from '../_shared/studio-dingtalk.js';
 
 export async function onRequestPatch(context) {
     const { request, env } = context;
@@ -138,11 +138,13 @@ async function syncR2StudioResults(env, request, listedKeys) {
         });
 
         if (!task.r2AutoNotified && task.submitter?.unionId && env.DINGTALK_APPKEY && env.DINGTALK_APPSECRET) {
-            await notifyUserDone(env, task, new URL(request.url).origin).catch(e => console.error('Auto notify failed:', e.message));
-            task.r2AutoNotified = true;
-            await env.SUBMISSIONS.put(task.id, JSON.stringify(task), {
-                metadata: studioTaskMetadata(task)
-            });
+            try {
+                await notifyUserDone(env, task, new URL(request.url).origin);
+                const latestTask = await markStudioNotificationSent(env, task.id, 'r2AutoNotified');
+                taskMap.set(task.id, latestTask);
+            } catch (e) {
+                console.error('Auto notify failed:', e.message);
+            }
         }
     }
     return taskMap;
