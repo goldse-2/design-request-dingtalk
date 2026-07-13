@@ -66,14 +66,14 @@ export async function onRequestPost(context) {
                     "白底参考图链接一": productUrls[0]?.url || '-',
                     "白底参考图链接二": productUrls[1]?.url || '-',
                     "任务ID": taskId,
-                    "尺寸要求": (pickedSize || '1600x1600') + 'px'
+                    "尺寸要求": formatSizeRequirement(pickedSize)
                 }
             };
         } else {
             // 自由模式：使用描述格式
             const userDesc = [task.desc, task.want, task.note].filter(Boolean).join('；');
             pickedSize = normalizeStudioSize(task.size, userDesc);
-            const sizeInfo = pickedSize ? '尺寸我要' + pickedSize + 'px' : '';
+            const sizeInfo = pickedSize ? '尺寸我要' + formatSizeRequirement(pickedSize) : '';
             const cleanUserDesc = userDesc.replace(/@参考图(\d+)/g, '参考图片$1').replace(/@图片(\d+)/g, '参考图片$1');
             const referenceInfo = allImageUrls.length ? allImageUrls.map((url, i) => '图' + (i + 1) + '链接 ' + url).join(' ') : '';
             const modelInfo = modelUrls.length ? modelUrls.map((x, i) => '请参考我上传的人物图片，保留人物的脸型、发型、五官特征和整体气质，不参考原图的姿势、动作、手部位置、身体角度和构图，身体动作真实、稳定、符合日常生活，身体姿势自然。人物链接： ' + x.url).join(' ') : '';
@@ -94,7 +94,7 @@ export async function onRequestPost(context) {
                 params: {
                     "描述": descText,
                     "任务ID": taskId,
-                    "尺寸要求": (pickedSize || '1600x1600') + 'px'
+                    "尺寸要求": formatSizeRequirement(pickedSize)
                 }
             };
 
@@ -151,14 +151,21 @@ function encodeKeyToken(key) {
 function normalizeStudioSize(size, desc) {
     const fromSize = extractDimension(size);
     if (fromSize) return fromSize;
+    const rawSize = String(size || '');
+    if (/2\s*K|自动识别/i.test(rawSize)) return '2K 自动识别';
     const text = String(desc || '');
     const fromDesc = extractDimension(text);
     if (fromDesc) return fromDesc;
     if (/A\+|16\s*[:：]\s*9/i.test(text)) return '1472x608';
-    return '1600x1600';
+    return '2K 自动识别';
 }
 
 function extractDimension(text) {
     const match = String(text || '').match(/\b\d{3,5}\s*[x×*]\s*\d{3,5}\b/);
     return match ? match[0].replace(/[×*]/g, 'x').replace(/\s+/g, '') : '';
+}
+
+function formatSizeRequirement(size) {
+    const value = size || '2K 自动识别';
+    return /\d{3,5}x\d{3,5}/.test(value) ? value + 'px' : value;
 }

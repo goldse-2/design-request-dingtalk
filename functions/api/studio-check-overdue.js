@@ -1,4 +1,6 @@
 import { taskNeedsRpaTranslation, translateForRpa } from '../_shared/ai-translate.js';
+import { markStudioNotificationSent, sendStudioResultImages } from '../_shared/studio-dingtalk.js';
+import { recolorImage } from '../_shared/variant-recolor-core.js';
 
 export async function onRequestGet(context) {
     const { env, request, waitUntil } = context;
@@ -39,7 +41,11 @@ export async function onRequestGet(context) {
             if (meta.kind !== 'studio') continue;
 
             const createdAt = Number(meta.timestamp || 0);
-            if (meta.status === 'pending' && !meta.sentToRpa && !meta.pausedAuto) {
+            if (meta.mode === 'variant') {
+                if ((meta.status === 'pending' || meta.status === 'processing' || meta.status === 'done') && !meta.dingtalkNotified && !meta.pausedAuto) {
+                    if (createdAt && (now - createdAt) >= autoSendThreshold) autoSendKeys.push(key.name);
+                }
+            } else if (meta.status === 'pending' && !meta.sentToRpa && !meta.pausedAuto) {
                 if (createdAt && (now - createdAt) >= autoSendThreshold) autoSendKeys.push(key.name);
             }
 
@@ -67,6 +73,28 @@ export async function onRequestGet(context) {
                     ? task.timestamp
                     : new Date(task.createdAt || task.timestamp || 0).getTime();
                 if (!createdAt || (now - createdAt) < autoSendThreshold) continue;
+
+                if (task.mode === 'variant') {
+                    try {
+                        const result = await processVariantTaskStep(env, task, origin);
+                        autoSent.push(task.id);
+                        if (result.done && task.submitter?.unionId && env.DINGTALK_APPKEY && env.DINGTALK_APPSECRET) {
+                            await notifyUserDone(env, task, origin)
+                                .then(() => markStudioNotificationSent(env, task.id))
+                                .catch(e => console.error('Notify variant done failed:', e.message));
+                        }
+                    } catch (e) {
+                        const errMsg = String(e.message || e).slice(0, 300);
+                        autoErrors.push({ id: task.id, error: errMsg });
+                        task.variantLastError = errMsg;
+                        task.variantLastAttemptAt = new Date().toISOString();
+                        await env.SUBMISSIONS.put(task.id, JSON.stringify(task), {
+                            metadata: studioTaskMetadata(task)
+                        });
+                        console.error('Variant recolor failed:', task.id, e.message);
+                    }
+                    continue;
+                }
 
                 const webhookUrl = task.mode === 'program'
                     ? programWebhook
@@ -185,6 +213,131 @@ async function readStudioTasks(env, keys) {
     return tasks;
 }
 
+async function processVariantTaskStep(env, task, origin) {
+    if (!env.SUBMISSION_FILES) throw new Error('R2 storage not configured');
+    const refKeys = Array.isArray(task.refKeys) ? task.refKeys : [];
+    if (!refKeys.length) throw new Error('Variant images not found');
+
+    const index = Math.max(0, Number(task.variantNextIndex || 0));
+    if (index >= refKeys.length) {
+        task.status = 'done';
+        task.completedAt = task.completedAt || new Date().toISOString();
+        await env.SUBMISSIONS.put(task.id, JSON.stringify(task), { metadata: studioTaskMetadata(task) });
+        return { done: true };
+    }
+
+    const source = refKeys[index];
+    const sourceObject = await env.SUBMISSION_FILES.get(source.key);
+    if (!sourceObject) throw new Error('Variant source image missing');
+
+    const mimeType = sourceObject.httpMetadata?.contentType || guessContentType(source.name || source.key);
+    const base64 = arrayBufferToBase64(await sourceObject.arrayBuffer());
+    const result = await recolorImage({
+        env,
+        scope: task.variantScope,
+        colorName: task.colorName,
+        colorHex: task.colorHex,
+        mimeType,
+        base64
+    });
+    const stored = await storeVariantResult(env, task, result, source.name || `source-${index + 1}.png`, index);
+
+    const nextIndex = index + 1;
+    task.resultKeys = [
+        ...(Array.isArray(task.resultKeys) ? task.resultKeys.filter(item => item?.key !== stored.key) : []),
+        stored
+    ];
+    task.status = nextIndex >= refKeys.length ? 'done' : 'processing';
+    task.variantNextIndex = nextIndex;
+    task.variantLastAttemptAt = new Date().toISOString();
+    task.variantLastError = '';
+    if (task.status === 'done') {
+        task.completedAt = new Date().toISOString();
+        task.completeNote = '变体改色完成';
+    }
+
+    await env.SUBMISSIONS.put(task.id, JSON.stringify(task), { metadata: studioTaskMetadata(task) });
+    return { done: task.status === 'done', stored };
+}
+
+async function storeVariantResult(env, task, result, sourceName, index) {
+    const fetched = await resultToBytes(result);
+    const ext = extensionFromMime(fetched.mimeType);
+    const safeName = sanitizeName(String(sourceName || `variant-${index + 1}.png`).replace(/\.[^.]+$/, ''));
+    const key = `studio-results/${task.id}/variant-${index + 1}-${safeName}.${ext}`;
+    await env.SUBMISSION_FILES.put(key, fetched.bytes, {
+        httpMetadata: { contentType: fetched.mimeType }
+    });
+    return { key, name: `${safeName}-变体改色-${index + 1}.${ext}` };
+}
+
+async function resultToBytes(result) {
+    if (result?.dataUrl) {
+        const match = String(result.dataUrl).match(/^data:([^;]+);base64,(.+)$/);
+        if (!match) throw new Error('Invalid variant data URL');
+        return { mimeType: match[1], bytes: base64ToBytes(match[2]) };
+    }
+    if (result?.url) {
+        const response = await fetch(result.url);
+        if (!response.ok) throw new Error('Variant result image download failed');
+        return {
+            mimeType: response.headers.get('content-type') || result.mimeType || 'image/png',
+            bytes: await response.arrayBuffer()
+        };
+    }
+    throw new Error('Variant result image missing');
+}
+
+async function notifyUserDone(env, task, origin) {
+    const token = await getAccessToken(env);
+    const staffId = await getStaffId(token, task.submitter.unionId);
+    if (!staffId) throw new Error('No staff id');
+    const content = `图片制作完成 ✅\n\n变体改色已完成，共 ${Array.isArray(task.resultKeys) ? task.resultKeys.length : 0} 张。\n请到网站查看下载：${origin}/studio-tasks.html`;
+    const response = await fetch('https://api.dingtalk.com/v1.0/robot/oToMessages/batchSend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-acs-dingtalk-access-token': token },
+        body: JSON.stringify({
+            robotCode: env.DINGTALK_APPKEY,
+            userIds: [staffId],
+            msgKey: 'sampleText',
+            msgParam: JSON.stringify({ content })
+        })
+    });
+    if (!response.ok) throw new Error(`DingTalk text message failed: ${response.status}`);
+    await sendStudioResultImages(env, token, staffId, task, origin);
+    return response;
+}
+
+function arrayBufferToBase64(buffer) {
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    }
+    return btoa(binary);
+}
+
+function base64ToBytes(base64) {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+}
+
+function sanitizeName(name) {
+    return name.replace(/[\\/:*?"<>|#%{}^~[\]`]/g, '_').slice(0, 80) || 'variant';
+}
+
+function guessContentType(name) {
+    const ext = String(name || '').split('.').pop().toLowerCase();
+    const map = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp' };
+    return map[ext] || 'image/png';
+}
+
+function extensionFromMime(mimeType) {
+    return String(mimeType || '').includes('jpeg') ? 'jpg' : String(mimeType || '').includes('webp') ? 'webp' : 'png';
+}
+
 function studioTaskMetadata(task) {
     return {
         kind: 'studio',
@@ -241,7 +394,7 @@ function buildRpaPayload(task, origin) {
                     "白底参考图链接一": productUrls[0]?.url || '-',
                     "白底参考图链接二": productUrls[1]?.url || '-',
                     "任务ID": task.id,
-                    "尺寸要求": (pickedSize || '1600x1600') + 'px'
+                    "尺寸要求": formatSizeRequirement(pickedSize)
                 }
             }
         };
@@ -249,7 +402,7 @@ function buildRpaPayload(task, origin) {
 
     const userDesc = [task.desc, task.want, task.note].filter(Boolean).join('；');
     pickedSize = normalizeStudioSize(task.size, userDesc);
-    const sizeInfo = pickedSize ? '尺寸我要' + pickedSize + 'px' : '';
+    const sizeInfo = pickedSize ? '尺寸我要' + formatSizeRequirement(pickedSize) : '';
     const cleanUserDesc = userDesc.replace(/@参考图(\d+)/g, '参考图片$1').replace(/@图片(\d+)/g, '参考图片$1');
     const referenceInfo = allImageUrls.length ? allImageUrls.map((url, i) => '图' + (i + 1) + '链接 ' + url).join(' ') : '';
     const modelInfo = modelUrls.length ? modelUrls.map(x => '请参考我上传的人物图片，保留人物的脸型、发型、五官特征和整体气质，不参考原图的姿势、动作、手部位置、身体角度和构图，身体动作真实、稳定、符合日常生活，身体姿势自然。人物链接： ' + x.url).join(' ') : '';
@@ -265,7 +418,7 @@ function buildRpaPayload(task, origin) {
             params: {
                 "描述": descText,
                 "任务ID": task.id,
-                "尺寸要求": (pickedSize || '1600x1600') + 'px'
+                "尺寸要求": formatSizeRequirement(pickedSize)
             }
         }
     };
@@ -281,11 +434,13 @@ function encodeKeyToken(key) {
 function normalizeStudioSize(size, desc) {
     const fromSize = extractDimension(size);
     if (fromSize) return fromSize;
+    const rawSize = String(size || '');
+    if (/2\s*K|自动识别/i.test(rawSize)) return '2K 自动识别';
     const text = String(desc || '');
     const fromDesc = extractDimension(text);
     if (fromDesc) return fromDesc;
     if (/A\+|16\s*[:：]\s*9/i.test(text)) return '1472x608';
-    return '1600x1600';
+    return '2K 自动识别';
 }
 
 function extractDimension(text) {
@@ -293,8 +448,14 @@ function extractDimension(text) {
     return match ? match[0].replace(/[×*]/g, 'x').replace(/\s+/g, '') : '';
 }
 
+function formatSizeRequirement(size) {
+    const value = size || '2K 自动识别';
+    return /\d{3,5}x\d{3,5}/.test(value) ? value + 'px' : value;
+}
+
 function studioModeText(mode) {
     if (mode === 'retouch') return '精修图片';
+    if (mode === 'variant') return '变体改色';
     return mode === 'free' ? '自由模式' : '程序模式';
 }
 
@@ -341,4 +502,15 @@ async function getAccessToken(env) {
     const data = await res.json();
     if (!data.accessToken) throw new Error('Token failed');
     return data.accessToken;
+}
+
+async function getStaffId(accessToken, unionId) {
+    const res = await fetch(`https://oapi.dingtalk.com/topapi/user/getbyunionid?access_token=${accessToken}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ unionid: unionId })
+    });
+    const data = await res.json();
+    if (data.errcode !== 0) throw new Error('getStaffId failed: ' + data.errmsg);
+    return data.result?.userid;
 }

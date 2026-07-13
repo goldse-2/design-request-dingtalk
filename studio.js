@@ -233,6 +233,34 @@ initAuth();
 applyAgreementGate();
 
 // ── Form rendering ───────────────────────────────────────
+function renderSizePicker(inputId) {
+    return `
+                <div class="size-visual-picker" id="${inputId}Picker">
+                    <input type="hidden" id="${inputId}" value="2K 自动识别">
+                    <div class="size-picker-title">分辨率</div>
+                    <div class="size-resolution-row">
+                        <button type="button" class="active" data-size-value="2K 自动识别">2K 默认</button>
+                        <button type="button" data-size-value="亚马逊主图 1600x1600">1600</button>
+                        <button type="button" data-size-value="A+尺寸 16:9 1472x608">A+</button>
+                        <button type="button" data-size-custom="1">自定义</button>
+                    </div>
+                    <div class="size-picker-title">Size</div>
+                    <div class="size-card-grid">
+                        <button type="button" class="size-card" data-size-value="亚马逊主图 1600x1600"><span class="size-card-icon square"></span><strong>1:1</strong><small>1600 × 1600</small></button>
+                        <button type="button" class="size-card" data-size-value="A+尺寸 16:9 1472x608"><span class="size-card-icon"></span><strong>16:9</strong><small>1472 × 608</small></button>
+                        <button type="button" class="size-card" data-size-value="相片比例 2048x1536"><span class="size-card-icon"></span><strong>4:3</strong><small>2048 × 1536</small></button>
+                        <button type="button" class="size-card" data-size-value="常用图 800x600"><span class="size-card-icon"></span><strong>4:3</strong><small>800 × 600</small></button>
+                        <button type="button" class="size-card" data-size-value="横版图 970x600"><span class="size-card-icon"></span><strong>97:60</strong><small>970 × 600</small></button>
+                        <button type="button" class="size-card" data-size-custom="1"><span class="size-card-icon portrait"></span><strong>自定义</strong><small>自己输入</small></button>
+                    </div>
+                    <div class="size-custom-row" hidden>
+                        <input type="number" min="100" max="9999" step="1" data-size-width placeholder="宽度 px">
+                        <span>×</span>
+                        <input type="number" min="100" max="9999" step="1" data-size-height placeholder="高度 px">
+                    </div>
+                </div>`;
+}
+
 const FREE_FORM = `
     <div class="studio-layout">
         <div class="studio-panel">
@@ -313,11 +341,7 @@ const FREE_FORM = `
             </div>
             <div class="sf-section">
                 <div class="sf-label">尺寸 <span class="sf-req">*</span></div>
-                <select class="sf-select" id="freeSizeSelect">
-                    <option value="亚马逊主图 1600x1600">亚马逊主图（1600 × 1600）</option>
-                    <option value="A+尺寸 16:9 1472x608">A+ 尺寸 16:9（1472 × 608）</option>
-                    <option value="相片比例 2048x1536">相片比例（2048 × 1536）</option>
-                </select>
+${renderSizePicker('freeSizeSelect')}
                 <div class="size-resize-hint" id="freeSizeHint" hidden>生成后可进入 <a href="studio.html?mode=resize&width=1464&height=600">尺寸修改</a> 修改成 1464 × 600</div>
             </div>
             <button class="sf-submit" id="freeSubmit">生成图片</button>
@@ -383,11 +407,7 @@ const PROGRAM_FORM = `
             </div>
             <div class="sf-section">
                 <div class="sf-label">尺寸 <span class="sf-req">*</span></div>
-                <select class="sf-select" id="progSizeSelect">
-                    <option value="亚马逊主图 1600x1600">亚马逊主图（1600 × 1600）</option>
-                    <option value="A+尺寸 16:9 1472x608">A+ 尺寸 16:9（1472 × 608）</option>
-                    <option value="相片比例 2048x1536">相片比例（2048 × 1536）</option>
-                </select>
+${renderSizePicker('progSizeSelect')}
                 <div class="size-resize-hint" id="progSizeHint" hidden>生成后可进入 <a href="studio.html?mode=resize&width=1464&height=600">尺寸修改</a> 修改成 1464 × 600</div>
             </div>
             <button class="sf-submit" id="progSubmit">生成图片</button>
@@ -523,7 +543,7 @@ const VARIANT_FORM = `
             </div>
             <div class="sf-section">
                 <div class="sf-label">固定输出</div>
-                <div class="size-resize-hint" style="display:block">使用 GPT Image 2，默认 2K 输出，用户端不可修改尺寸。</div>
+                <div class="size-resize-hint" style="display:block">使用 GPT Image 2，默认 2K 输出。提交后无需停留在页面，完成后会通过钉钉通知。</div>
             </div>
             <button class="sf-submit" id="variantSubmit">开始改色</button>
             <div id="variantStatus" class="studio-status" style="margin-top:10px"></div>
@@ -532,7 +552,7 @@ const VARIANT_FORM = `
             <div class="studio-preview-tab">改色结果</div>
             <div class="studio-preview-body">
                 <div class="variant-results" id="variantResults">
-                    <div class="resize-empty">生成后会在这里显示结果</div>
+                    <div class="resize-empty">提交后进入后台处理，完成后可在「我的任务」查看下载</div>
                 </div>
             </div>
         </div>
@@ -643,13 +663,13 @@ function renderForm() {
         wirePromptMentions();
         wirePromptOptimizer();
         loadPromptQuota();
-        wireSizeResizeHint('freeSizeSelect', 'freeSizeHint');
+        initSizePicker('freeSizeSelect', 'freeSizeHint');
         document.getElementById('freeSubmit').addEventListener('click', submitFree);
     } else if (currentMode === 'program') {
         galleryWasReady = renderGenerationMode(area, PROGRAM_FORM);
         wireDrop('progRefDrop', 'progRefInput', 'progRefThumbs', 'progRef');
         wireDrop('progProductDrop', 'progProductInput', 'progProductThumbs', 'progProduct');
-        wireSizeResizeHint('progSizeSelect', 'progSizeHint');
+        initSizePicker('progSizeSelect', 'progSizeHint');
         document.getElementById('progSubmit').addEventListener('click', submitProgram);
     } else if (currentMode === 'retouch') {
         if (attachedGallery) attachedGallery.remove();
@@ -956,6 +976,45 @@ function initResizeTool() {
         }, outputType, 0.95);
     });
     updatePreset();
+}
+
+function initSizePicker(inputId, hintId) {
+    const input = document.getElementById(inputId);
+    const picker = document.getElementById(inputId + 'Picker');
+    if (!input || !picker) return;
+
+    const buttons = Array.from(picker.querySelectorAll('[data-size-value], [data-size-custom]'));
+    const customRow = picker.querySelector('.size-custom-row');
+    const widthInput = picker.querySelector('[data-size-width]');
+    const heightInput = picker.querySelector('[data-size-height]');
+
+    const emitChange = () => input.dispatchEvent(new Event('change', { bubbles: true }));
+    const setActive = (button) => {
+        buttons.forEach(item => item.classList.toggle('active', item === button));
+    };
+    const updateCustomValue = () => {
+        const w = String(widthInput?.value || '').trim();
+        const h = String(heightInput?.value || '').trim();
+        input.value = w && h ? `自定义尺寸 ${w}x${h}` : '';
+        emitChange();
+    };
+
+    buttons.forEach(button => {
+        button.addEventListener('click', () => {
+            setActive(button);
+            const isCustom = button.dataset.sizeCustom === '1';
+            if (customRow) customRow.hidden = !isCustom;
+            if (isCustom) {
+                updateCustomValue();
+                setTimeout(() => widthInput?.focus(), 0);
+            } else {
+                input.value = button.dataset.sizeValue || '';
+                emitChange();
+            }
+        });
+    });
+    [widthInput, heightInput].forEach(el => el?.addEventListener('input', updateCustomValue));
+    wireSizeResizeHint(inputId, hintId);
 }
 
 function wireSizeResizeHint(selectId, hintId) {
@@ -1432,7 +1491,7 @@ async function submitTask(mode, payload, statusEl, btn, onSuccess) {
     try {
         statusEl.textContent = '上传图片中...';
         const productKeys = payload.productImages && payload.productImages.length ? await uploadImages(payload.productImages, 'studio/product') : [];
-        const refPrefix = mode === 'retouch' ? 'studio/retouch' : 'studio/ref';
+        const refPrefix = mode === 'retouch' ? 'studio/retouch' : mode === 'variant' ? 'studio/variant' : 'studio/ref';
         const uploadedRefKeys = payload.refImages && payload.refImages.length ? await uploadImages(payload.refImages, refPrefix) : [];
         const refKeys = uploadedRefKeys;
         const modelKeys = payload.modelImages && payload.modelImages.length ? await uploadImages(payload.modelImages, 'studio/model') : [];
@@ -1449,6 +1508,9 @@ async function submitTask(mode, payload, statusEl, btn, onSuccess) {
         if (payload.size) submitPayload.size = payload.size;
         if (payload.imageName) submitPayload.imageName = payload.imageName;
         if (payload.analyzePrompt) submitPayload.analyzePrompt = payload.analyzePrompt;
+        if (payload.variantScope) submitPayload.variantScope = payload.variantScope;
+        if (payload.colorName) submitPayload.colorName = payload.colorName;
+        if (payload.colorHex) submitPayload.colorHex = payload.colorHex;
 
         const res = await fetch('/api/studio-submit', {
             method: 'POST',
@@ -1820,6 +1882,7 @@ function submitFree() {
     const imageName = imageNameEl ? imageNameEl.value.trim() : '';
     const status = document.getElementById('freeStatus');
     if (!desc) { showStudioFieldError(status, '请填写提示词', document.getElementById('freeDesc')); return; }
+    if (!size) { showStudioFieldError(status, '请选择或填写尺寸', document.getElementById('freeSizeSelectPicker')); return; }
     submitTask('free', { desc, want, note: scene ? ('场景：' + scene) : '', scene, size, imageName, refImages: [...(uploads.freeScene ? [uploads.freeScene] : []), ...(uploads.freeImages || [])], modelImages: uploads.freeModel ? [uploads.freeModel] : [], productImages: uploads.freeProduct || [] }, status, document.getElementById('freeSubmit'), showSuccessModal);
 }
 
@@ -1832,7 +1895,7 @@ function submitProgram() {
     const size = sizeEl ? sizeEl.value : '';
     const status = document.getElementById('progStatus');
     if (!productName) { showStudioFieldError(status, '请填写产品名称', document.getElementById('progProductName')); return; }
-    if (!size) { showStudioFieldError(status, '请选择尺寸', document.getElementById('progSizeSelect')); return; }
+    if (!size) { showStudioFieldError(status, '请选择或填写尺寸', document.getElementById('progSizeSelectPicker')); return; }
     if (uploads.progRef.length !== 1) { showStudioFieldError(status, '请上传1张要模仿的图', document.getElementById('progRefDrop')); return; }
     if (uploads.progProduct.length !== 2) { showStudioFieldError(status, '请上传2张白底产品图（当前' + uploads.progProduct.length + '张）', document.getElementById('progProductDrop')); return; }
     submitTask('program', { productName, title, subtitle, otherText, size, analyzePrompt: ANALYZE_PROMPT, refImages: uploads.progRef, productImages: uploads.progProduct }, status, document.getElementById('progSubmit'), showSuccessModal);
@@ -1852,60 +1915,23 @@ function submitRetouch() {
 async function submitVariant() {
     const status = document.getElementById('variantStatus');
     const btn = document.getElementById('variantSubmit');
-    const results = document.getElementById('variantResults');
-    if (!currentUser) { showLoginModal(); return; }
-    if (!hasAgreed()) { openGuide(); guideShowPage(2); return; }
     if (!uploads.variantImages.length) {
         showStudioFieldError(status, '请先上传需要改色的图片', document.getElementById('variantDrop'));
         return;
     }
-    if (btn.dataset.loading === '1') return;
 
     const scope = document.querySelector('#variantScope button.active')?.dataset.scope || 'product';
     const colorHex = document.getElementById('variantCustomColor')?.value || '#f8f5ef';
     const colorName = (document.getElementById('variantColorName')?.value || colorHex).trim();
-    btn.dataset.loading = '1';
-    btn.disabled = true;
-    btn.classList.add('is-loading');
-    const originalText = btn.textContent;
-    btn.textContent = '改色中...';
-    status.className = 'studio-status';
-    results.innerHTML = '';
-
-    try {
-        for (let i = 0; i < uploads.variantImages.length; i++) {
-            const image = uploads.variantImages[i];
-            status.textContent = `正在生成第 ${i + 1} / ${uploads.variantImages.length} 张...`;
-            const res = await fetch('/api/variant-recolor', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    scope,
-                    colorName,
-                    colorHex,
-                    userId: currentUser.unionId || currentUser.userId || currentUser.name || '',
-                    image: {
-                        name: image.name,
-                        mimeType: image.mimeType,
-                        base64: image.base64
-                    }
-                })
-            });
-            const json = await res.json();
-            if (!res.ok || !json.ok) throw new Error(json.error || '改色失败');
-            appendVariantResult(json.result, image.name, i);
-        }
-        status.className = 'studio-status ok';
-        status.textContent = `改色完成，共 ${uploads.variantImages.length} 张`;
-    } catch (error) {
-        status.className = 'studio-status err';
-        status.textContent = '改色失败：' + error.message;
-    } finally {
-        btn.dataset.loading = '';
-        btn.disabled = false;
-        btn.classList.remove('is-loading');
-        btn.textContent = originalText;
-    }
+    const desc = `${scope === 'background' ? '修改背景' : '修改产品'}为 ${colorName || colorHex}`;
+    submitTask('variant', {
+        desc,
+        size: '2K 自动识别',
+        variantScope: scope,
+        colorName,
+        colorHex,
+        refImages: uploads.variantImages
+    }, status, btn, task => showSuccessModal(task, '改色任务已提交，完成后会通过钉钉通知'));
 }
 
 function appendVariantResult(result, sourceName, index) {
