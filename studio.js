@@ -23,7 +23,7 @@ function initStudioTypewriter() {
 
 let currentUser = null;
 const requestedMode = new URLSearchParams(window.location.search).get('mode');
-let currentMode = ['free', 'program', 'retouch', 'resize'].includes(requestedMode) ? requestedMode : 'free';
+let currentMode = ['free', 'program', 'retouch', 'variant', 'resize'].includes(requestedMode) ? requestedMode : 'free';
 
 const ANALYZE_PROMPT = `# 角色设定
 你是一位拥有十年经验的亚马逊资深视觉拆解专家。你的任务是对用户上传的电商图片进行"逆向工程"，将其拆解为 1:1 像素级复刻的"图层蓝图"，并生成精准包含"人物互动"的素材生图提示词。
@@ -131,7 +131,7 @@ function onAgreeChange(checked) {
 }
 function applyAgreementGate() {
     const agreed = hasAgreed();
-    document.querySelectorAll('.studio-submit-btn, #freeSubmit, #progSubmit, #retouchSubmit').forEach(btn => {
+    document.querySelectorAll('.studio-submit-btn, #freeSubmit, #progSubmit, #retouchSubmit, #variantSubmit').forEach(btn => {
         if (!btn) return;
         if (agreed) {
             btn.classList.remove('is-gated');
@@ -416,6 +416,7 @@ const RESIZE_FORM = `
                 <select class="sf-select" id="resizePreset">
                     <option value="aplus1472">A+：1472 × 608 → 1464 × 600</option>
                     <option value="wide2560">宽图：2560 × 1024 → 1464 × 600</option>
+                    <option value="square2k">2K：2048 × 2048 → 1600 × 1600</option>
                 </select>
             </div>
             <div class="sf-section">
@@ -424,7 +425,7 @@ const RESIZE_FORM = `
                     <input id="resizeImageInput" type="file" accept="image/jpeg,image/png,image/webp" hidden>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="26" height="26"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                     <span id="resizeDropText">上传 1472 × 608 图片</span>
-                    <small>JPG、PNG、WebP，最大 8 MB</small>
+                    <small>JPG、PNG、WebP，最大 20 MB</small>
                 </label>
             </div>
             <div class="resize-status" id="resizeStatus">等待上传图片</div>
@@ -435,7 +436,7 @@ const RESIZE_FORM = `
             <div class="studio-preview-body resize-preview-body">
                 <div class="resize-preview-head">
                     <div class="resize-preview-title">输出预览</div>
-                    <span class="resize-size-badge">1464 × 600</span>
+                    <span class="resize-size-badge" id="resizeOutputBadge">1464 × 600</span>
                 </div>
                 <div class="resize-canvas-wrap">
                     <div class="resize-empty" id="resizeEmptyPreview">上传图片后显示转换结果</div>
@@ -483,20 +484,76 @@ const RETOUCH_FORM = `
         </div>
     </div>`;
 
-const uploads = { freeImages: [], freeModel: null, freeScene: null, freeProduct: [], freeProduct1: null, freeProduct2: null, progRef: [], progProduct: [], retouchImage: null };
+const VARIANT_FORM = `
+    <div class="studio-layout variant-layout">
+        <div class="studio-panel">
+            <div class="sf-section">
+                <div class="sf-label">改色类型 <span class="sf-req">*</span></div>
+                <div class="variant-scope" id="variantScope">
+                    <button type="button" class="active" data-scope="product">修改产品</button>
+                    <button type="button" data-scope="background">修改背景（不改产品）</button>
+                </div>
+            </div>
+            <div class="sf-section">
+                <div class="sf-label">选择颜色 <span class="sf-req">*</span></div>
+                <div class="variant-palette" id="variantPalette">
+                    <button type="button" class="variant-swatch active" data-color-name="暖白色" data-color="#f8f5ef" style="background:#f8f5ef"></button>
+                    <button type="button" class="variant-swatch" data-color-name="奶油黄" data-color="#f4d35e" style="background:#f4d35e"></button>
+                    <button type="button" class="variant-swatch" data-color-name="雾霾蓝" data-color="#7aa7c7" style="background:#7aa7c7"></button>
+                    <button type="button" class="variant-swatch" data-color-name="鼠尾草绿" data-color="#8aa399" style="background:#8aa399"></button>
+                    <button type="button" class="variant-swatch" data-color-name="玫瑰粉" data-color="#e7a4b1" style="background:#e7a4b1"></button>
+                    <button type="button" class="variant-swatch" data-color-name="哑光黑" data-color="#1f2933" style="background:#1f2933"></button>
+                </div>
+                <div class="variant-custom-row">
+                    <input type="color" id="variantCustomColor" value="#f8f5ef" aria-label="自定义颜色">
+                    <input class="sf-input" id="variantColorName" type="text" maxlength="30" value="暖白色" placeholder="颜色名称，例如：香槟金">
+                </div>
+            </div>
+            <div class="sf-section">
+                <div class="sf-label">图片 <span class="sf-req">*</span> <span class="sf-sub" id="variantImgCount">(0/5)</span></div>
+                <div class="sf-upload-row">
+                    <div class="sf-upload-box variant-upload-box" id="variantDrop">
+                        <input type="file" id="variantInput" accept="image/*" multiple hidden>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="24" height="24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        <span>上传图片</span>
+                        <small>默认最多 5 张，单张最大 15 MB</small>
+                    </div>
+                    <div class="sf-preview-list" id="variantPreviewList"></div>
+                </div>
+            </div>
+            <div class="sf-section">
+                <div class="sf-label">固定输出</div>
+                <div class="size-resize-hint" style="display:block">使用 GPT Image 2，默认 2K 输出，用户端不可修改尺寸。</div>
+            </div>
+            <button class="sf-submit" id="variantSubmit">开始改色</button>
+            <div id="variantStatus" class="studio-status" style="margin-top:10px"></div>
+        </div>
+        <div class="studio-preview variant-preview">
+            <div class="studio-preview-tab">改色结果</div>
+            <div class="studio-preview-body">
+                <div class="variant-results" id="variantResults">
+                    <div class="resize-empty">生成后会在这里显示结果</div>
+                </div>
+            </div>
+        </div>
+    </div>`;
+
+const uploads = { freeImages: [], freeModel: null, freeScene: null, freeProduct: [], freeProduct1: null, freeProduct2: null, progRef: [], progProduct: [], retouchImage: null, variantImages: [] };
 const MAX_STUDIO_FILE_SIZE = 8 * 1024 * 1024;
 const MAX_RETOUCH_FILE_SIZE = 15 * 1024 * 1024;
+const MAX_VARIANT_FILE_SIZE = 15 * 1024 * 1024;
 
 function validateStudioImage(file) {
     if (!file?.type?.startsWith('image/')) return '请选择图片文件';
-    const maxSize = currentMode === 'retouch' ? MAX_RETOUCH_FILE_SIZE : MAX_STUDIO_FILE_SIZE;
-    const maxSizeLabel = currentMode === 'retouch' ? '15MB' : '8MB';
+    const isLargeImageMode = currentMode === 'retouch' || currentMode === 'variant';
+    const maxSize = currentMode === 'variant' ? MAX_VARIANT_FILE_SIZE : currentMode === 'retouch' ? MAX_RETOUCH_FILE_SIZE : MAX_STUDIO_FILE_SIZE;
+    const maxSizeLabel = isLargeImageMode ? '15MB' : '8MB';
     if (file.size > maxSize) return '图片单张不能超过 ' + maxSizeLabel + '：' + file.name;
     return '';
 }
 
 function showStudioUploadError(message) {
-    const statusId = currentMode === 'program' ? 'progStatus' : currentMode === 'retouch' ? 'retouchStatus' : 'freeStatus';
+    const statusId = currentMode === 'program' ? 'progStatus' : currentMode === 'retouch' ? 'retouchStatus' : currentMode === 'variant' ? 'variantStatus' : 'freeStatus';
     const status = document.getElementById(statusId);
     if (status) {
         status.textContent = message;
@@ -578,7 +635,7 @@ function renderForm() {
     const area = document.getElementById('studioFormArea');
     const attachedGallery = area.querySelector('.studio-gallery-preview');
     if (attachedGallery) cachedStudioGalleryPreview = attachedGallery;
-    uploads.freeImages = []; uploads.freeModel = null; uploads.freeScene = null; uploads.freeProduct = []; uploads.freeProduct1 = null; uploads.freeProduct2 = null; uploads.progRef = []; uploads.progProduct = []; uploads.retouchImage = null;
+    uploads.freeImages = []; uploads.freeModel = null; uploads.freeScene = null; uploads.freeProduct = []; uploads.freeProduct1 = null; uploads.freeProduct2 = null; uploads.progRef = []; uploads.progProduct = []; uploads.retouchImage = null; uploads.variantImages = [];
     let galleryWasReady = false;
     if (currentMode === 'free') {
         galleryWasReady = renderGenerationMode(area, FREE_FORM);
@@ -598,12 +655,16 @@ function renderForm() {
         if (attachedGallery) attachedGallery.remove();
         area.innerHTML = RETOUCH_FORM;
         initRetouchMode();
+    } else if (currentMode === 'variant') {
+        if (attachedGallery) attachedGallery.remove();
+        area.innerHTML = VARIANT_FORM;
+        initVariantMode();
     } else {
         if (attachedGallery) attachedGallery.remove();
         area.innerHTML = RESIZE_FORM;
         initResizeTool();
     }
-    if (currentMode !== 'resize' && currentMode !== 'retouch' && !galleryWasReady) renderStudioGallery();
+    if (currentMode !== 'resize' && currentMode !== 'retouch' && currentMode !== 'variant' && !galleryWasReady) renderStudioGallery();
     applyAgreementGate();
 }
 
@@ -697,10 +758,99 @@ function clearRetouchSelection() {
     renderRetouchSelection();
 }
 
+function initVariantMode() {
+    const input = document.getElementById('variantInput');
+    const drop = document.getElementById('variantDrop');
+    const scope = document.getElementById('variantScope');
+    const palette = document.getElementById('variantPalette');
+    const customColor = document.getElementById('variantCustomColor');
+    const colorName = document.getElementById('variantColorName');
+
+    const addFiles = files => {
+        const remaining = 5 - uploads.variantImages.length;
+        if (remaining <= 0) {
+            showStudioUploadError('变体改色最多上传 5 张图片');
+            return;
+        }
+        Array.from(files).slice(0, remaining).forEach(file => {
+            const validationError = validateStudioImage(file);
+            if (validationError) { showStudioUploadError(validationError); return; }
+            const reader = new FileReader();
+            reader.onload = event => {
+                uploads.variantImages.push({
+                    name: file.name,
+                    base64: event.target.result.split(',')[1],
+                    mimeType: file.type,
+                    dataUrl: event.target.result
+                });
+                renderVariantPreview();
+            };
+            reader.readAsDataURL(file);
+        });
+        if (files.length > remaining) showStudioUploadError('最多上传 5 张，已自动限制');
+    };
+
+    drop.addEventListener('click', () => input.click());
+    drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('dragover'); });
+    drop.addEventListener('dragleave', () => drop.classList.remove('dragover'));
+    drop.addEventListener('drop', e => {
+        e.preventDefault();
+        drop.classList.remove('dragover');
+        addFiles(e.dataTransfer.files);
+    });
+    input.addEventListener('change', e => {
+        addFiles(e.target.files);
+        e.target.value = '';
+    });
+    scope.querySelectorAll('button').forEach(btn => {
+        btn.addEventListener('click', () => {
+            scope.querySelectorAll('button').forEach(item => item.classList.remove('active'));
+            btn.classList.add('active');
+        });
+    });
+    palette.querySelectorAll('.variant-swatch').forEach(btn => {
+        btn.addEventListener('click', () => {
+            palette.querySelectorAll('.variant-swatch').forEach(item => item.classList.remove('active'));
+            btn.classList.add('active');
+            customColor.value = btn.dataset.color || '#ffffff';
+            colorName.value = btn.dataset.colorName || btn.dataset.color || '';
+        });
+    });
+    customColor.addEventListener('input', () => {
+        palette.querySelectorAll('.variant-swatch').forEach(item => item.classList.remove('active'));
+        colorName.value = customColor.value;
+    });
+    document.getElementById('variantSubmit').addEventListener('click', submitVariant);
+    renderVariantPreview();
+}
+
+function renderVariantPreview() {
+    const list = document.getElementById('variantPreviewList');
+    const count = document.getElementById('variantImgCount');
+    const drop = document.getElementById('variantDrop');
+    if (!list) return;
+    const n = uploads.variantImages.length;
+    if (count) count.textContent = '(' + n + '/5)';
+    if (drop) drop.style.display = n >= 5 ? 'none' : '';
+    list.innerHTML = '';
+    uploads.variantImages.forEach((f, i) => {
+        const item = document.createElement('div');
+        item.className = 'sf-preview-item';
+        item.innerHTML = '<img src="' + f.dataUrl + '" style="width:100%;height:100%;object-fit:cover;display:block">'
+            + '<button type="button" data-index="' + i + '">\u00d7</button>';
+        item.querySelector('button').addEventListener('click', () => {
+            uploads.variantImages.splice(i, 1);
+            renderVariantPreview();
+        });
+        list.appendChild(item);
+    });
+}
+
 function initResizeTool() {
     const presets = {
         aplus1472: { sourceWidth: 1472, sourceHeight: 608, width: 1464, height: 600 },
-        wide2560: { sourceWidth: 2560, sourceHeight: 1024, width: 1464, height: 600 }
+        wide2560: { sourceWidth: 2560, sourceHeight: 1024, width: 1464, height: 600 },
+        square2k: { sourceWidth: 2048, sourceHeight: 2048, width: 1600, height: 1600 }
     };
     const input = document.getElementById('resizeImageInput');
     const presetSelect = document.getElementById('resizePreset');
@@ -708,6 +858,7 @@ function initResizeTool() {
     const dropText = document.getElementById('resizeDropText');
     const status = document.getElementById('resizeStatus');
     const downloadBtn = document.getElementById('resizeDownloadBtn');
+    const outputBadge = document.getElementById('resizeOutputBadge');
     const emptyPreview = document.getElementById('resizeEmptyPreview');
     const canvas = document.getElementById('resizeCanvas');
     const context = canvas.getContext('2d');
@@ -729,6 +880,8 @@ function initResizeTool() {
     const updatePreset = () => {
         const preset = getPreset();
         dropText.textContent = `上传 ${preset.sourceWidth} × ${preset.sourceHeight} 图片`;
+        downloadBtn.textContent = `下载 ${preset.width} × ${preset.height} 图片`;
+        if (outputBadge) outputBadge.textContent = `${preset.width} × ${preset.height}`;
         reset();
     };
     const loadFile = file => {
@@ -737,8 +890,8 @@ function initResizeTool() {
             showError('请选择 JPG、PNG 或 WebP 图片。');
             return;
         }
-        if (file.size > MAX_STUDIO_FILE_SIZE) {
-            showError('图片不能超过 8 MB。');
+        if (file.size > 20 * 1024 * 1024) {
+            showError('图片不能超过 20 MB。');
             return;
         }
         const imageUrl = URL.createObjectURL(file);
@@ -796,7 +949,8 @@ function initResizeTool() {
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
-            link.download = `${sourceName}-1464x600.${outputType === 'image/jpeg' ? 'jpg' : 'png'}`;
+            const preset = getPreset();
+            link.download = `${sourceName}-${preset.width}x${preset.height}.${outputType === 'image/jpeg' ? 'jpg' : 'png'}`;
             link.click();
             setTimeout(() => URL.revokeObjectURL(url), 1000);
         }, outputType, 0.95);
@@ -1693,6 +1847,79 @@ function submitRetouch() {
     submitTask('retouch', {
         refImages: [uploads.retouchImage]
     }, status, document.getElementById('retouchSubmit'), task => showSuccessModal(task, '精修图片预计约 30 分钟完成'));
+}
+
+async function submitVariant() {
+    const status = document.getElementById('variantStatus');
+    const btn = document.getElementById('variantSubmit');
+    const results = document.getElementById('variantResults');
+    if (!currentUser) { showLoginModal(); return; }
+    if (!hasAgreed()) { openGuide(); guideShowPage(2); return; }
+    if (!uploads.variantImages.length) {
+        showStudioFieldError(status, '请先上传需要改色的图片', document.getElementById('variantDrop'));
+        return;
+    }
+    if (btn.dataset.loading === '1') return;
+
+    const scope = document.querySelector('#variantScope button.active')?.dataset.scope || 'product';
+    const colorHex = document.getElementById('variantCustomColor')?.value || '#f8f5ef';
+    const colorName = (document.getElementById('variantColorName')?.value || colorHex).trim();
+    btn.dataset.loading = '1';
+    btn.disabled = true;
+    btn.classList.add('is-loading');
+    const originalText = btn.textContent;
+    btn.textContent = '改色中...';
+    status.className = 'studio-status';
+    results.innerHTML = '';
+
+    try {
+        for (let i = 0; i < uploads.variantImages.length; i++) {
+            const image = uploads.variantImages[i];
+            status.textContent = `正在生成第 ${i + 1} / ${uploads.variantImages.length} 张...`;
+            const res = await fetch('/api/variant-recolor', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    scope,
+                    colorName,
+                    colorHex,
+                    userId: currentUser.unionId || currentUser.userId || currentUser.name || '',
+                    image: {
+                        name: image.name,
+                        mimeType: image.mimeType,
+                        base64: image.base64
+                    }
+                })
+            });
+            const json = await res.json();
+            if (!res.ok || !json.ok) throw new Error(json.error || '改色失败');
+            appendVariantResult(json.result, image.name, i);
+        }
+        status.className = 'studio-status ok';
+        status.textContent = `改色完成，共 ${uploads.variantImages.length} 张`;
+    } catch (error) {
+        status.className = 'studio-status err';
+        status.textContent = '改色失败：' + error.message;
+    } finally {
+        btn.dataset.loading = '';
+        btn.disabled = false;
+        btn.classList.remove('is-loading');
+        btn.textContent = originalText;
+    }
+}
+
+function appendVariantResult(result, sourceName, index) {
+    const results = document.getElementById('variantResults');
+    if (!results) return;
+    const url = result?.dataUrl || result?.url;
+    if (!url) return;
+    const ext = (result.mimeType || 'image/png').includes('jpeg') ? 'jpg' : 'png';
+    const baseName = String(sourceName || 'variant').replace(/\.[^.]+$/, '').replace(/[\\/:*?"<>|#%{}^~[\]`]/g, '_');
+    const card = document.createElement('div');
+    card.className = 'variant-result-card';
+    card.innerHTML = '<img src="' + url + '" alt="改色结果">'
+        + '<a href="' + url + '" download="' + baseName + '-变体改色-' + (index + 1) + '.' + ext + '">下载结果</a>';
+    results.appendChild(card);
 }
 
 document.querySelectorAll('.studio-tab').forEach(tab => {

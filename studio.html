@@ -47,6 +47,19 @@
         .retouch-compare-label { margin-bottom: 8px; color: #374151; font-size: .8rem; font-weight: 700; }
         .retouch-compare-frame { flex: 1; min-height: 440px; display: grid; place-items: center; overflow: hidden; border: 1px solid #e5e7eb; border-radius: 7px; background: #f3f4f6; color: #9ca3af; font-size: .82rem; text-align: center; }
         .retouch-compare-frame img { width: 100%; height: 100%; max-height: 620px; object-fit: contain; background: #fff; }
+        .variant-upload-box { width: 100%; min-height: 150px; }
+        .variant-scope { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .variant-scope button { min-height: 42px; border: 1px solid #d1d5db; border-radius: 7px; background: #fff; color: #374151; font-size: .86rem; font-weight: 700; cursor: pointer; }
+        .variant-scope button.active { border-color: #111827; background: #111827; color: #fff; }
+        .variant-palette { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+        .variant-swatch { height: 34px; border: 2px solid #fff; border-radius: 7px; box-shadow: 0 0 0 1px #d1d5db; cursor: pointer; }
+        .variant-swatch.active { box-shadow: 0 0 0 2px #111827; }
+        .variant-custom-row { display: grid; grid-template-columns: 46px 1fr; gap: 8px; margin-top: 10px; align-items: center; }
+        .variant-custom-row input[type="color"] { width: 46px; height: 38px; padding: 0; border: 1px solid #d1d5db; border-radius: 7px; background: #fff; cursor: pointer; }
+        .variant-results { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; width: 100%; align-self: stretch; }
+        .variant-result-card { border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; background: #fff; }
+        .variant-result-card img { width: 100%; aspect-ratio: 1; object-fit: contain; display: block; background: #f9fafb; }
+        .variant-result-card a { display: block; padding: 8px; border-top: 1px solid #e5e7eb; color: #4338ca; font-size: .78rem; font-weight: 700; text-align: center; text-decoration: none; }
         @media (max-width: 860px) {
             .studio-layout { grid-template-columns: minmax(0, 1fr) !important; gap: 16px !important; }
             .studio-panel, .studio-preview { width: 100% !important; min-width: 0; }
@@ -54,6 +67,7 @@
             .resize-canvas-wrap { min-height: 280px; }
             .retouch-compare { grid-template-columns: 1fr; min-height: 0; }
             .retouch-compare-frame { min-height: 280px; }
+            .variant-palette { grid-template-columns: repeat(4, minmax(0, 1fr)); }
         }
     </style>
 </head>
@@ -102,6 +116,7 @@
             <button class="studio-tab active" data-mode="free">自由模式</button>
             <button class="studio-tab" data-mode="program">图生图模式</button>
             <button class="studio-tab" data-mode="retouch">精修图片</button>
+            <button class="studio-tab" data-mode="variant">变体改色</button>
             <button class="studio-tab" data-mode="resize">尺寸修改</button>
             <a href="studio-tasks.html" class="studio-tab-link">我的任务 →</a>
         </div>
@@ -227,6 +242,6 @@
     帮助中心
 </button>
 
-<script src="studio.js?v=20260713-retouch-30min"></script>
+<script src="studio.js?v=20260713-variant-recolor"></script>
 </body>
 </html>

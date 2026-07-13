@@ -1,6 +1,7 @@
 const SIZE_PRESETS = {
     aplus1472: { sourceWidth: 1472, sourceHeight: 608, width: 1464, height: 600 },
-    wide2560: { sourceWidth: 2560, sourceHeight: 1024, width: 1464, height: 600 }
+    wide2560: { sourceWidth: 2560, sourceHeight: 1024, width: 1464, height: 600 },
+    square2k: { sourceWidth: 2048, sourceHeight: 2048, width: 1600, height: 1600 }
 };
 
 const imageInput = document.getElementById('imageInput');
@@ -12,6 +13,7 @@ const emptyPreview = document.getElementById('emptyPreview');
 const canvas = document.getElementById('canvas');
 const context = canvas.getContext('2d');
 const dropText = document.getElementById('dropText');
+const outputBadge = document.getElementById('outputBadge');
 let sourceName = 'aplus-image';
 let outputType = 'image/png';
 
@@ -60,10 +62,11 @@ dropZone.addEventListener('drop', event => {
 downloadBtn.addEventListener('click', () => {
     canvas.toBlob(blob => {
         if (!blob) return;
+        const preset = getCurrentPreset();
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `${sourceName}-1464x600.${outputType === 'image/jpeg' ? 'jpg' : 'png'}`;
+        link.download = `${sourceName}-${preset.width}x${preset.height}.${outputType === 'image/jpeg' ? 'jpg' : 'png'}`;
         link.click();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
     }, outputType, 0.95);
@@ -130,6 +133,8 @@ function drawWithoutVerticalCrop(image, preset) {
 function updatePresetText() {
     const preset = getCurrentPreset();
     dropText.textContent = `上传 ${preset.sourceWidth} × ${preset.sourceHeight} 图片`;
+    downloadBtn.textContent = `下载 ${preset.width} × ${preset.height} 图片`;
+    if (outputBadge) outputBadge.textContent = `${preset.width} × ${preset.height}`;
 }
 
 function resetOutput() {
