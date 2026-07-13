@@ -279,6 +279,14 @@ function closeShootModal() {
     m.classList.remove('modal--visible'); m.hidden = true;
 }
 
+function openShootModalFromUrl() {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('shoot') !== '1') return;
+    openShootModal();
+    url.searchParams.delete('shoot');
+    window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+}
+
 function addShootImages(files) {
     Array.from(files).forEach(file => {
         if (shootImages.length >= 3) { alert('最多上传 3 张图片'); return; }
@@ -373,6 +381,7 @@ async function submitShoot() {
 }
 
 loadLibrary();
+openShootModalFromUrl();
 
 let _libActiveTab = 'all';
 // Tab map: which KV category names belong to each tab

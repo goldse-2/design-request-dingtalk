@@ -456,7 +456,6 @@ const RETOUCH_FORM = `
                     <span>上传图片</span>
                     <small>JPG、PNG、WebP，最大 15 MB</small>
                 </label>
-                <button type="button" class="retouch-last-btn" id="retouchLastImageBtn">使用上次图片</button>
                 <div class="retouch-selected" id="retouchSelected">
                     <img id="retouchSelectedImage" alt="待精修图片">
                     <span class="retouch-selected-name" id="retouchSelectedName"></span>
@@ -464,6 +463,7 @@ const RETOUCH_FORM = `
                 </div>
             </div>
             <button class="sf-submit" id="retouchSubmit">开始精修</button>
+            <div class="retouch-shoot-hint">需要拍摄可以在这里提交<a href="library.html?shoot=1">拍摄需求</a></div>
             <div id="retouchStatus" class="studio-status" style="margin-top:10px"></div>
         </div>
         <div class="studio-preview retouch-preview">
@@ -483,7 +483,7 @@ const RETOUCH_FORM = `
         </div>
     </div>`;
 
-const uploads = { freeImages: [], freeModel: null, freeScene: null, freeProduct: [], freeProduct1: null, freeProduct2: null, progRef: [], progProduct: [], retouchImage: null, retouchExistingKey: null };
+const uploads = { freeImages: [], freeModel: null, freeScene: null, freeProduct: [], freeProduct1: null, freeProduct2: null, progRef: [], progProduct: [], retouchImage: null };
 const MAX_STUDIO_FILE_SIZE = 8 * 1024 * 1024;
 const MAX_RETOUCH_FILE_SIZE = 15 * 1024 * 1024;
 
@@ -578,7 +578,7 @@ function renderForm() {
     const area = document.getElementById('studioFormArea');
     const attachedGallery = area.querySelector('.studio-gallery-preview');
     if (attachedGallery) cachedStudioGalleryPreview = attachedGallery;
-    uploads.freeImages = []; uploads.freeModel = null; uploads.freeScene = null; uploads.freeProduct = []; uploads.freeProduct1 = null; uploads.freeProduct2 = null; uploads.progRef = []; uploads.progProduct = []; uploads.retouchImage = null; uploads.retouchExistingKey = null;
+    uploads.freeImages = []; uploads.freeModel = null; uploads.freeScene = null; uploads.freeProduct = []; uploads.freeProduct1 = null; uploads.freeProduct2 = null; uploads.progRef = []; uploads.progProduct = []; uploads.retouchImage = null;
     let galleryWasReady = false;
     if (currentMode === 'free') {
         galleryWasReady = renderGenerationMode(area, FREE_FORM);
@@ -635,7 +635,6 @@ function renderGenerationMode(area, formHtml) {
 function initRetouchMode() {
     const input = document.getElementById('retouchImageInput');
     const dropZone = document.getElementById('retouchDropZone');
-    const lastButton = document.getElementById('retouchLastImageBtn');
     const removeButton = document.getElementById('retouchRemoveBtn');
 
     const selectFile = file => {
@@ -643,7 +642,6 @@ function initRetouchMode() {
         if (validationError) { showStudioUploadError(validationError); return; }
         const reader = new FileReader();
         reader.onload = event => {
-            uploads.retouchExistingKey = null;
             uploads.retouchImage = {
                 name: file.name,
                 base64: event.target.result.split(',')[1],
@@ -670,7 +668,6 @@ function initRetouchMode() {
     dropZone.addEventListener('drop', event => {
         if (event.dataTransfer.files[0]) selectFile(event.dataTransfer.files[0]);
     });
-    lastButton.addEventListener('click', () => useLastRetouchImage(lastButton));
     removeButton.addEventListener('click', clearRetouchSelection);
     document.getElementById('retouchSubmit').addEventListener('click', submitRetouch);
 }
@@ -680,7 +677,7 @@ function renderRetouchSelection() {
     const image = document.getElementById('retouchSelectedImage');
     const name = document.getElementById('retouchSelectedName');
     const beforeFrame = document.getElementById('retouchBeforeFrame');
-    const picked = uploads.retouchImage || uploads.retouchExistingKey;
+    const picked = uploads.retouchImage;
     if (!selected || !image || !name || !beforeFrame) return;
 
     selected.classList.toggle('visible', Boolean(picked));
@@ -697,35 +694,7 @@ function renderRetouchSelection() {
 
 function clearRetouchSelection() {
     uploads.retouchImage = null;
-    uploads.retouchExistingKey = null;
     renderRetouchSelection();
-}
-
-async function useLastRetouchImage(button) {
-    if (!currentUser?.unionId) { showLoginModal(); return; }
-    const originalText = button.textContent;
-    button.disabled = true;
-    button.textContent = '读取中...';
-    try {
-        const response = await fetch('/api/studio-tasks?history=1&unionId=' + encodeURIComponent(currentUser.unionId));
-        const data = await response.json();
-        if (!response.ok || !data.ok) throw new Error(data.error || '读取失败');
-        const lastTask = (data.tasks || []).find(task => Array.isArray(task.resultKeys) && task.resultKeys.length);
-        const lastImage = lastTask?.resultKeys?.[0];
-        if (!lastImage) throw new Error('暂时没有可使用的上次成品图片');
-        uploads.retouchImage = null;
-        uploads.retouchExistingKey = {
-            key: lastImage.key,
-            name: lastImage.name || '上次图片.png',
-            dataUrl: '/api/library-file/' + encodeURIComponent(lastImage.key)
-        };
-        renderRetouchSelection();
-    } catch (error) {
-        showStudioUploadError(error.message || '读取上次图片失败');
-    } finally {
-        button.disabled = false;
-        button.textContent = originalText;
-    }
 }
 
 function initResizeTool() {
@@ -1311,7 +1280,7 @@ async function submitTask(mode, payload, statusEl, btn, onSuccess) {
         const productKeys = payload.productImages && payload.productImages.length ? await uploadImages(payload.productImages, 'studio/product') : [];
         const refPrefix = mode === 'retouch' ? 'studio/retouch' : 'studio/ref';
         const uploadedRefKeys = payload.refImages && payload.refImages.length ? await uploadImages(payload.refImages, refPrefix) : [];
-        const refKeys = [...(payload.preloadedRefKeys || []), ...uploadedRefKeys];
+        const refKeys = uploadedRefKeys;
         const modelKeys = payload.modelImages && payload.modelImages.length ? await uploadImages(payload.modelImages, 'studio/model') : [];
 
         statusEl.textContent = '提交中...';
@@ -1716,16 +1685,12 @@ function submitProgram() {
 
 function submitRetouch() {
     const status = document.getElementById('retouchStatus');
-    const selected = uploads.retouchImage || uploads.retouchExistingKey;
-    if (!selected) {
-        showStudioFieldError(status, '请上传待精修图片，或选择上次图片', document.getElementById('retouchDropZone'));
+    if (!uploads.retouchImage) {
+        showStudioFieldError(status, '请上传待精修图片', document.getElementById('retouchDropZone'));
         return;
     }
     submitTask('retouch', {
-        refImages: uploads.retouchImage ? [uploads.retouchImage] : [],
-        preloadedRefKeys: uploads.retouchExistingKey
-            ? [{ key: uploads.retouchExistingKey.key, name: uploads.retouchExistingKey.name }]
-            : []
+        refImages: [uploads.retouchImage]
     }, status, document.getElementById('retouchSubmit'), showSuccessModal);
 }
 
