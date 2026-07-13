@@ -93,7 +93,8 @@ export async function onRequestPost(context) {
             payload = {
                 params: {
                     "描述": descText,
-                    "任务ID": taskId
+                    "任务ID": taskId,
+                    "尺寸要求": (pickedSize || '1600x1600') + 'px'
                 }
             };
 

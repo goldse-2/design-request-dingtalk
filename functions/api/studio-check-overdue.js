@@ -264,7 +264,8 @@ function buildRpaPayload(task, origin) {
         payload: {
             params: {
                 "描述": descText,
-                "任务ID": task.id
+                "任务ID": task.id,
+                "尺寸要求": (pickedSize || '1600x1600') + 'px'
             }
         }
     };
