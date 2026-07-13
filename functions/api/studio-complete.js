@@ -1,3 +1,5 @@
+import { sendStudioResultImages } from '../_shared/studio-dingtalk.js';
+
 export async function onRequestPost(context) {
     const { request, env, waitUntil } = context;
     let body;
@@ -102,7 +104,7 @@ async function notifyUser(env, task, action, message, origin) {
         if (message) content += `\n\n${message}`;
     }
 
-    return fetch('https://api.dingtalk.com/v1.0/robot/oToMessages/batchSend', {
+    const response = await fetch('https://api.dingtalk.com/v1.0/robot/oToMessages/batchSend', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-acs-dingtalk-access-token': token },
         body: JSON.stringify({
@@ -112,6 +114,11 @@ async function notifyUser(env, task, action, message, origin) {
             msgParam: JSON.stringify({ content })
         })
     });
+    if (!response.ok) throw new Error(`DingTalk text message failed: ${response.status}`);
+    if (action === 'complete') {
+        await sendStudioResultImages(env, token, staffId, task, origin);
+    }
+    return response;
 }
 
 async function getAccessToken(env) {
