@@ -60,6 +60,7 @@ export async function onRequestPost(context) {
         await env.SUBMISSIONS.put(taskId, JSON.stringify(task), {
             metadata: studioTaskMetadata(task)
         });
+        await appendQueue(env.SUBMISSIONS, 'studio:autoQueue:v1', taskId);
     } catch (err) {
         return Response.json({ ok: false, error: 'Storage failed' }, { status: 500 });
     }
@@ -151,6 +152,17 @@ function studioModeText(mode) {
     if (mode === 'variant') return '变体改色';
     if (mode === 'resize_ai') return '尺寸修改';
     return mode === 'free' ? '自由模式' : '程序模式';
+}
+
+async function appendQueue(kv, key, taskId) {
+    const raw = await kv.get(key).catch(() => null);
+    let ids = [];
+    if (raw) {
+        try { ids = JSON.parse(raw); } catch { ids = []; }
+    }
+    if (!Array.isArray(ids)) ids = [];
+    if (!ids.includes(taskId)) ids.push(taskId);
+    await kv.put(key, JSON.stringify(ids.slice(-300)));
 }
 
 async function getAccessToken(env) {

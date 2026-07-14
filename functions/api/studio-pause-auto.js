@@ -26,6 +26,9 @@ export async function onRequestPost(context) {
         await env.SUBMISSIONS.put(taskId, JSON.stringify(task), {
             metadata: studioTaskMetadata(task)
         });
+        if (!task.pausedAuto && task.kind === 'studio' && task.status === 'pending' && !task.sentToRpa) {
+            await appendQueue(env.SUBMISSIONS, 'studio:autoQueue:v1', taskId);
+        }
 
         return Response.json({ ok: true });
     } catch (err) {
@@ -47,4 +50,15 @@ function studioTaskMetadata(task) {
         dingtalkNotified: Boolean(task.dingtalkNotified),
         r2AutoNotified: Boolean(task.r2AutoNotified)
     };
+}
+
+async function appendQueue(kv, key, taskId) {
+    const raw = await kv.get(key).catch(() => null);
+    let ids = [];
+    if (raw) {
+        try { ids = JSON.parse(raw); } catch { ids = []; }
+    }
+    if (!Array.isArray(ids)) ids = [];
+    if (!ids.includes(taskId)) ids.push(taskId);
+    await kv.put(key, JSON.stringify(ids.slice(-500)));
 }

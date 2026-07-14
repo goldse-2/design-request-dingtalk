@@ -16,6 +16,8 @@ export async function onRequestGet(context) {
         const autoSent = [];
         const autoErrors = [];
         const notified = [];
+        const AUTO_QUEUE_KEY = 'studio:autoQueue:v1';
+        const PROCESSING_QUEUE_KEY = 'studio:processingQueue:v1';
 
         // Outside business hours, skip KV entirely so paused overnight checks cost no operations.
         if (!isAutoSendWindow(now)) {
@@ -33,31 +35,18 @@ export async function onRequestGet(context) {
             });
         }
 
-        const list = await env.SUBMISSIONS.list({ prefix: 'studio-', limit: 1000 });
-        const autoSendKeys = [];
-        const overdueKeys = [];
-
-        for (const key of list.keys) {
-            const meta = key.metadata || {};
-            if (meta.kind !== 'studio') continue;
-
-            const createdAt = Number(meta.timestamp || 0);
-            if (meta.mode === 'variant' || meta.mode === 'resize_ai') {
-                if ((meta.status === 'pending' || meta.status === 'processing' || meta.status === 'done') && !meta.dingtalkNotified && !meta.pausedAuto) {
-                    if (createdAt && (now - createdAt) >= autoSendThreshold) autoSendKeys.push(key.name);
-                }
-            } else if (meta.status === 'pending' && !meta.sentToRpa && !meta.pausedAuto) {
-                if (createdAt && (now - createdAt) >= autoSendThreshold) autoSendKeys.push(key.name);
-            }
-
-            const sentAt = meta.sentToRpaAt ? new Date(meta.sentToRpaAt).getTime() : 0;
-            if (meta.status === 'processing' && meta.sentToRpa && !meta.overdueNotified) {
-                if (sentAt && (now - sentAt) >= overdueThreshold) overdueKeys.push(key.name);
-            }
+        let autoQueueIds = await readQueue(env.SUBMISSIONS, AUTO_QUEUE_KEY);
+        let processingQueueIds = await readQueue(env.SUBMISSIONS, PROCESSING_QUEUE_KEY);
+        if (autoQueueIds === null || processingQueueIds === null) {
+            const migrated = await migrateQueues(env, now, autoSendThreshold, overdueThreshold);
+            autoQueueIds = migrated.autoQueueIds;
+            processingQueueIds = migrated.processingQueueIds;
         }
 
-        const autoSendTasks = await readStudioTasks(env, autoSendKeys);
-        const tasks = await readStudioTasks(env, overdueKeys);
+        const autoSendTasks = await readStudioTasks(env, autoQueueIds);
+        const tasks = await readStudioTasks(env, processingQueueIds);
+        const nextAutoQueue = [];
+        const nextProcessingQueue = [];
 
         if (autoSendTasks.length) {
             const autoModes = new Set(autoSendTasks.map(task => task.mode));
@@ -73,7 +62,11 @@ export async function onRequestGet(context) {
                 const createdAt = typeof task.timestamp === 'number'
                     ? task.timestamp
                     : new Date(task.createdAt || task.timestamp || 0).getTime();
-                if (!createdAt || (now - createdAt) < autoSendThreshold) continue;
+                if (!createdAt || (now - createdAt) < autoSendThreshold) {
+                    nextAutoQueue.push(task.id);
+                    continue;
+                }
+                if (task.pausedAuto) continue;
 
                 if (task.mode === 'variant' || task.mode === 'resize_ai') {
                     try {
@@ -81,11 +74,18 @@ export async function onRequestGet(context) {
                             ? await processResizeAiTask(env, task)
                             : await processVariantTaskStep(env, task, origin);
                         autoSent.push(task.id);
-                        if (result.done && task.submitter?.unionId && env.DINGTALK_APPKEY && env.DINGTALK_APPSECRET) {
-                            await notifyUserDone(env, task, origin)
-                                .then(() => markStudioNotificationSent(env, task.id))
-                                .catch(e => console.error('Notify background image task done failed:', e.message));
+                        const needsNotify = result.done && task.submitter?.unionId && !task.dingtalkNotified && !task.r2AutoNotified;
+                        let notifyOk = !needsNotify;
+                        if (needsNotify && env.DINGTALK_APPKEY && env.DINGTALK_APPSECRET) {
+                            try {
+                                await notifyUserDone(env, task, origin);
+                                await markStudioNotificationSent(env, task.id);
+                                notifyOk = true;
+                            } catch (e) {
+                                console.error('Notify background image task done failed:', e.message);
+                            }
                         }
+                        if (!result.done || !notifyOk) nextAutoQueue.push(task.id);
                     } catch (e) {
                         const errMsg = String(e.message || e).slice(0, 300);
                         autoErrors.push({ id: task.id, error: errMsg });
@@ -95,9 +95,12 @@ export async function onRequestGet(context) {
                             metadata: studioTaskMetadata(task)
                         });
                         console.error('Background image task failed:', task.id, e.message);
+                        nextAutoQueue.push(task.id);
                     }
                     continue;
                 }
+
+                if (task.status !== 'pending' || task.sentToRpa || task.pausedAuto) continue;
 
                 const webhookUrl = task.mode === 'program'
                     ? programWebhook
@@ -131,6 +134,7 @@ export async function onRequestGet(context) {
                     });
 
                     autoSent.push(task.id);
+                    nextProcessingQueue.push(task.id);
                     if (env.DINGTALK_APPKEY && env.DINGTALK_APPSECRET && env.ADMIN_USER_ID) {
                         await notifyAutoSent(env, task).catch(e => console.error('Notify auto-sent failed:', e.message));
                     }
@@ -143,14 +147,19 @@ export async function onRequestGet(context) {
                         metadata: studioTaskMetadata(task)
                     });
                     console.error('Auto send RPA failed:', task.id, e.message);
+                    nextAutoQueue.push(task.id);
                 }
             }
         }
 
         for (const task of tasks) {
+            if (!task || task.status !== 'processing' || !task.sentToRpa) continue;
             if (task.overdueNotified) continue;
             const sentAt = task.sentToRpaAt ? new Date(task.sentToRpaAt).getTime() : 0;
-            if (!sentAt || (now - sentAt) < overdueThreshold) continue;
+            if (!sentAt || (now - sentAt) < overdueThreshold) {
+                nextProcessingQueue.push(task.id);
+                continue;
+            }
 
             if (env.DINGTALK_APPKEY && env.DINGTALK_APPSECRET && env.ADMIN_USER_ID) {
                 const p = notifyOverdue(env, task).then(() => {
@@ -164,6 +173,9 @@ export async function onRequestGet(context) {
                 notified.push(task.id);
             }
         }
+
+        await writeQueue(env.SUBMISSIONS, AUTO_QUEUE_KEY, nextAutoQueue);
+        await writeQueue(env.SUBMISSIONS, PROCESSING_QUEUE_KEY, unique(nextProcessingQueue));
 
         return Response.json({
             ok: true,
@@ -199,6 +211,79 @@ async function safeKvGet(kv, key) {
         console.error('KV get failed:', key, err.message);
         return null;
     }
+}
+
+async function readQueue(kv, key) {
+    const raw = await safeKvGet(kv, key);
+    if (raw === null || raw === undefined) return null;
+    try {
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return [];
+        return unique(parsed.filter(id => typeof id === 'string' && id.startsWith('studio-')));
+    } catch (err) {
+        console.error('Read studio queue failed:', key, err.message);
+        return [];
+    }
+}
+
+async function writeQueue(kv, key, ids) {
+    const cleanIds = unique((Array.isArray(ids) ? ids : [])
+        .filter(id => typeof id === 'string' && id.startsWith('studio-')))
+        .slice(-500);
+    await kv.put(key, JSON.stringify(cleanIds));
+}
+
+function unique(ids) {
+    return [...new Set(Array.isArray(ids) ? ids : [])];
+}
+
+async function migrateQueues(env, now, autoSendThreshold, overdueThreshold) {
+    const autoQueueIds = [];
+    const processingQueueIds = [];
+    let cursor;
+    let pages = 0;
+
+    do {
+        const listOptions = { prefix: 'studio-', limit: 1000 };
+        if (cursor) listOptions.cursor = cursor;
+        const listed = await env.SUBMISSIONS.list(listOptions);
+        pages += 1;
+
+        for (const key of listed.keys || []) {
+            const meta = key.metadata || {};
+            const mode = meta.mode || '';
+            const status = meta.status || '';
+            const timestamp = typeof meta.timestamp === 'number' ? meta.timestamp : Number(meta.timestamp || 0);
+            const isBackgroundTask = mode === 'variant' || mode === 'resize_ai';
+
+            if (isBackgroundTask) {
+                if (['pending', 'processing', 'done'].includes(status) && !meta.pausedAuto && !meta.dingtalkNotified && !meta.r2AutoNotified) {
+                    autoQueueIds.push(key.name);
+                }
+                continue;
+            }
+
+            if (['free', 'program', 'retouch'].includes(mode)
+                && status === 'pending'
+                && !meta.sentToRpa
+                && !meta.pausedAuto) {
+                autoQueueIds.push(key.name);
+            }
+
+            if (status === 'processing'
+                && meta.sentToRpa
+                && !meta.overdueNotified) {
+                processingQueueIds.push(key.name);
+            }
+        }
+
+        cursor = listed.list_complete ? undefined : listed.cursor;
+    } while (cursor && pages < 5);
+
+    return {
+        autoQueueIds: unique(autoQueueIds),
+        processingQueueIds: unique(processingQueueIds)
+    };
 }
 
 async function readStudioTasks(env, keys) {
