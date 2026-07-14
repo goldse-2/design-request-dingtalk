@@ -5,7 +5,7 @@ export async function onRequestPost(context) {
     try { body = await request.json(); }
     catch { return Response.json({ ok: false, error: 'Invalid JSON' }, { status: 400 }); }
 
-    const { mode, submitter, desc, want, note, scene, analyzePrompt, size, imageName, productName, title, subtitle, otherText, productKeys, refKeys, modelKeys, category, variantScope, colorName, colorHex, resizeTarget } = body;
+    const { mode, submitter, desc, want, note, scene, analyzePrompt, size, imageName, productName, title, subtitle, otherText, productKeys, refKeys, modelKeys, category, variantScope, colorName, colorHex, resizeTarget, resizeReflow } = body;
     if (!mode || !submitter) {
         return Response.json({ ok: false, error: 'Missing required fields' }, { status: 400 });
     }
@@ -49,6 +49,7 @@ export async function onRequestPost(context) {
         colorName: colorName || '',
         colorHex: colorHex || '',
         resizeTarget: resizeTarget || '',
+        resizeReflow: resizeReflow === true,
         variantNextIndex: 0,
         productKeys: productKeys || [],
         refKeys: refKeys || [],

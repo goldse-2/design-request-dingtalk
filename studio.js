@@ -447,6 +447,10 @@ const RESIZE_FORM = `
                     <label>高度（px）<input id="resizeCustomHeight" type="number" min="100" max="5000" step="1" inputmode="numeric" placeholder="例如 900"></label>
                     <div class="resize-custom-hint">宽度和高度可填写 100–5000 px</div>
                 </div>
+                <label class="resize-reflow-option" for="resizeReflow">
+                    <input id="resizeReflow" type="checkbox">
+                    <span class="resize-reflow-copy">接受图片重新排版<small>AI 自适应调整主体位置、大小和画面布局</small></span>
+                </label>
             </div>
             <div class="sf-section">
                 <div class="sf-label">原始图片 <span class="sf-req">*</span></div>
@@ -1013,6 +1017,7 @@ function initResizeTool() {
     const customSize = document.getElementById('resizeCustomSize');
     const customWidth = document.getElementById('resizeCustomWidth');
     const customHeight = document.getElementById('resizeCustomHeight');
+    const reflowInput = document.getElementById('resizeReflow');
     const context = canvas.getContext('2d');
     let sourceName = 'aplus-image';
     let outputType = 'image/png';
@@ -1096,7 +1101,7 @@ function initResizeTool() {
             showError('请输入 100–5000 px 的自定义宽度和高度。');
             return;
         }
-        if (canResizeLocally(image, target)) {
+        if (!reflowInput.checked && canResizeLocally(image, target)) {
             renderLocalResize(image, target);
             localReady = true;
             downloadBtn.disabled = false;
@@ -1111,7 +1116,9 @@ function initResizeTool() {
         downloadBtn.disabled = false;
         downloadBtn.textContent = `提交后台 AI 修改成 ${target.width} × ${target.height}`;
         status.className = 'resize-status ai';
-        status.textContent = `当前图片 ${image.naturalWidth} × ${image.naturalHeight}，将提交后台 AI 处理；完成后会钉钉通知你。`;
+        status.textContent = reflowInput.checked
+            ? `当前图片 ${image.naturalWidth} × ${image.naturalHeight}，AI 将按目标比例重新排版；完成后会钉钉通知你。`
+            : `当前图片 ${image.naturalWidth} × ${image.naturalHeight}，将提交后台 AI 处理；完成后会钉钉通知你。`;
     };
     const canResizeLocally = (image, target) => {
         if (image.naturalWidth === target.width && image.naturalHeight === target.height) return true;
@@ -1152,6 +1159,7 @@ function initResizeTool() {
         });
     });
     [customWidth, customHeight].forEach(field => field?.addEventListener('input', updateTarget));
+    reflowInput.addEventListener('change', updateTarget);
     input.addEventListener('change', () => {
         if (input.files[0]) loadFile(input.files[0]);
         input.value = '';
@@ -1176,7 +1184,7 @@ function initResizeTool() {
             return;
         }
         if (!localReady) {
-            submitResizeAiTask(currentFile, target, status, downloadBtn);
+            submitResizeAiTask(currentFile, target, reflowInput.checked, status, downloadBtn);
             return;
         }
         canvas.toBlob(blob => {
@@ -1206,14 +1214,15 @@ function fileToStudioUpload(file) {
     });
 }
 
-async function submitResizeAiTask(file, target, status, btn) {
+async function submitResizeAiTask(file, target, resizeReflow, status, btn) {
     try {
         const upload = await fileToStudioUpload(file);
         const size = `${target.width}x${target.height}`;
         await submitTask('resize_ai', {
-            desc: `AI 尺寸修改为 ${size}`,
+            desc: `AI 尺寸修改为 ${size}${resizeReflow ? '，允许重新排版' : ''}`,
             size,
             resizeTarget: size,
+            resizeReflow,
             imageName: file.name.replace(/\.[^.]+$/, ''),
             refImages: [upload]
         }, status, btn, task => showSuccessModal(task, `尺寸修改任务已提交，目标 ${target.width} × ${target.height}，完成后会通过钉钉通知`));

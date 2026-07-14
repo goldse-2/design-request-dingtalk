@@ -399,12 +399,7 @@ async function processResizeAiTask(env, task) {
 
     const mimeType = sourceObject.httpMetadata?.contentType || guessContentType(source.name || source.key);
     const base64 = arrayBufferToBase64(await sourceObject.arrayBuffer());
-    const prompt = [
-        `Resize and adapt the uploaded image to exactly ${target.width}x${target.height}px.`,
-        'Keep the original product, subject, colors, text, logo, material details, lighting style, and composition intent as much as possible.',
-        'Use a clean ecommerce-quality result. Do not add watermarks, frames, captions, extra text, or unrelated objects.',
-        'Return only one final image in JPEG format with an opaque background.'
-    ].join('\n');
+    const prompt = buildResizePrompt(target, task.resizeReflow === true);
     const result = await editImageWithPrompt({
         env,
         prompt,
@@ -423,6 +418,21 @@ async function processResizeAiTask(env, task) {
 
     await env.SUBMISSIONS.put(task.id, JSON.stringify(task), { metadata: studioTaskMetadata(task) });
     return { done: true, stored };
+}
+
+export function buildResizePrompt(target, allowReflow) {
+    return [
+        `Resize and adapt the uploaded image to exactly ${target.width}x${target.height}px.`,
+        allowReflow
+            ? 'Intelligently recompose the image for the target aspect ratio. Adapt the subject scale and position, spacing, background extension, and visual hierarchy so the layout feels balanced and intentional.'
+            : 'Keep the original composition intent as much as possible and only make the changes necessary for the target size.',
+        'Preserve every original product detail, subject, color, material, text, logo, and lighting style exactly.',
+        allowReflow
+            ? 'Avoid stretching, hard cropping, awkward empty areas, duplicated elements, or unrelated additions.'
+            : 'Avoid stretching, unnecessary cropping, duplicated elements, or unrelated additions.',
+        'Use a clean ecommerce-quality result. Do not add watermarks, frames, captions, extra text, or unrelated objects.',
+        'Return only one final image in JPEG format with an opaque background.'
+    ].join('\n');
 }
 
 async function storeResizeAiResult(env, task, result, sourceName, target) {
