@@ -524,9 +524,18 @@ const VARIANT_FORM = `
                     <button type="button" class="variant-swatch" data-color-name="玫瑰粉" data-color="#e7a4b1" style="background:#e7a4b1"></button>
                     <button type="button" class="variant-swatch" data-color-name="哑光黑" data-color="#1f2933" style="background:#1f2933"></button>
                 </div>
+                <div class="variant-color-picker" id="variantColorPicker">
+                    <div class="variant-color-area" id="variantColorArea">
+                        <span class="variant-color-cursor" id="variantColorCursor"></span>
+                    </div>
+                    <div class="variant-hue-bar" id="variantHueBar">
+                        <span class="variant-hue-cursor" id="variantHueCursor"></span>
+                    </div>
+                </div>
                 <div class="variant-custom-row">
-                    <input type="color" id="variantCustomColor" value="#f8f5ef" aria-label="自定义颜色">
+                    <div class="variant-color-chip" id="variantColorChip"></div>
                     <input class="sf-input" id="variantColorName" type="text" maxlength="30" value="暖白色" placeholder="颜色名称，例如：香槟金">
+                    <input class="sf-input variant-hex-input" id="variantCustomColor" type="text" maxlength="7" value="#f8f5ef" aria-label="自定义颜色 HEX">
                 </div>
             </div>
             <div class="sf-section">
@@ -783,8 +792,8 @@ function initVariantMode() {
     const drop = document.getElementById('variantDrop');
     const scope = document.getElementById('variantScope');
     const palette = document.getElementById('variantPalette');
-    const customColor = document.getElementById('variantCustomColor');
     const colorName = document.getElementById('variantColorName');
+    const colorPicker = initVariantColorPicker();
 
     const addFiles = files => {
         const remaining = 5 - uploads.variantImages.length;
@@ -832,16 +841,132 @@ function initVariantMode() {
         btn.addEventListener('click', () => {
             palette.querySelectorAll('.variant-swatch').forEach(item => item.classList.remove('active'));
             btn.classList.add('active');
-            customColor.value = btn.dataset.color || '#ffffff';
+            colorPicker.setHex(btn.dataset.color || '#ffffff');
             colorName.value = btn.dataset.colorName || btn.dataset.color || '';
         });
     });
-    customColor.addEventListener('input', () => {
-        palette.querySelectorAll('.variant-swatch').forEach(item => item.classList.remove('active'));
-        colorName.value = customColor.value;
-    });
     document.getElementById('variantSubmit').addEventListener('click', submitVariant);
     renderVariantPreview();
+}
+
+function initVariantColorPicker() {
+    const area = document.getElementById('variantColorArea');
+    const hueBar = document.getElementById('variantHueBar');
+    const colorCursor = document.getElementById('variantColorCursor');
+    const hueCursor = document.getElementById('variantHueCursor');
+    const hexInput = document.getElementById('variantCustomColor');
+    const chip = document.getElementById('variantColorChip');
+    const palette = document.getElementById('variantPalette');
+    const colorName = document.getElementById('variantColorName');
+    let hsv = hexToHsv(hexInput?.value || '#f8f5ef');
+
+    const apply = (syncName = false) => {
+        const base = hsvToHex(hsv.h, 100, 100);
+        const hex = hsvToHex(hsv.h, hsv.s, hsv.v);
+        if (area) area.style.background = `linear-gradient(to top,#000,transparent),linear-gradient(to right,#fff,transparent),${base}`;
+        if (colorCursor) {
+            colorCursor.style.left = hsv.s + '%';
+            colorCursor.style.top = (100 - hsv.v) + '%';
+        }
+        if (hueCursor) hueCursor.style.top = (hsv.h / 360 * 100) + '%';
+        if (hexInput) hexInput.value = hex;
+        if (chip) chip.style.background = hex;
+        if (syncName && colorName) colorName.value = hex;
+    };
+
+    const setFromArea = event => {
+        const rect = area.getBoundingClientRect();
+        hsv.s = clamp((event.clientX - rect.left) / rect.width * 100, 0, 100);
+        hsv.v = clamp(100 - (event.clientY - rect.top) / rect.height * 100, 0, 100);
+        palette?.querySelectorAll('.variant-swatch').forEach(item => item.classList.remove('active'));
+        apply(true);
+    };
+    const setFromHue = event => {
+        const rect = hueBar.getBoundingClientRect();
+        hsv.h = clamp((event.clientY - rect.top) / rect.height * 360, 0, 360);
+        palette?.querySelectorAll('.variant-swatch').forEach(item => item.classList.remove('active'));
+        apply(true);
+    };
+    const drag = (event, handler) => {
+        event.preventDefault();
+        handler(event);
+        const move = e => handler(e);
+        const up = () => {
+            window.removeEventListener('pointermove', move);
+            window.removeEventListener('pointerup', up);
+        };
+        window.addEventListener('pointermove', move);
+        window.addEventListener('pointerup', up);
+    };
+
+    area?.addEventListener('pointerdown', event => drag(event, setFromArea));
+    hueBar?.addEventListener('pointerdown', event => drag(event, setFromHue));
+    hexInput?.addEventListener('input', () => {
+        const normalized = normalizeHex(hexInput.value);
+        if (!normalized) return;
+        hsv = hexToHsv(normalized);
+        palette?.querySelectorAll('.variant-swatch').forEach(item => item.classList.remove('active'));
+        apply(true);
+    });
+
+    apply(false);
+    return {
+        setHex(hex) {
+            const normalized = normalizeHex(hex) || '#ffffff';
+            hsv = hexToHsv(normalized);
+            apply(false);
+        }
+    };
+}
+
+function clamp(value, min, max) {
+    return Math.min(max, Math.max(min, value));
+}
+
+function normalizeHex(value) {
+    const raw = String(value || '').trim();
+    if (/^#[0-9a-f]{6}$/i.test(raw)) return raw.toLowerCase();
+    if (/^[0-9a-f]{6}$/i.test(raw)) return ('#' + raw).toLowerCase();
+    if (/^#[0-9a-f]{3}$/i.test(raw)) {
+        return '#' + raw.slice(1).split('').map(ch => ch + ch).join('').toLowerCase();
+    }
+    return '';
+}
+
+function hexToHsv(hex) {
+    const normalized = normalizeHex(hex) || '#ffffff';
+    const r = parseInt(normalized.slice(1, 3), 16) / 255;
+    const g = parseInt(normalized.slice(3, 5), 16) / 255;
+    const b = parseInt(normalized.slice(5, 7), 16) / 255;
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const d = max - min;
+    let h = 0;
+    if (d !== 0) {
+        if (max === r) h = ((g - b) / d) % 6;
+        else if (max === g) h = (b - r) / d + 2;
+        else h = (r - g) / d + 4;
+        h *= 60;
+        if (h < 0) h += 360;
+    }
+    return { h, s: max === 0 ? 0 : d / max * 100, v: max * 100 };
+}
+
+function hsvToHex(h, s, v) {
+    const sat = clamp(s, 0, 100) / 100;
+    const val = clamp(v, 0, 100) / 100;
+    const c = val * sat;
+    const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+    const m = val - c;
+    let r = 0, g = 0, b = 0;
+    if (h < 60) [r, g, b] = [c, x, 0];
+    else if (h < 120) [r, g, b] = [x, c, 0];
+    else if (h < 180) [r, g, b] = [0, c, x];
+    else if (h < 240) [r, g, b] = [0, x, c];
+    else if (h < 300) [r, g, b] = [x, 0, c];
+    else [r, g, b] = [c, 0, x];
+    const toHex = n => Math.round((n + m) * 255).toString(16).padStart(2, '0');
+    return '#' + toHex(r) + toHex(g) + toHex(b);
 }
 
 function renderVariantPreview() {

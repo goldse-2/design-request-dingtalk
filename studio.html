@@ -69,8 +69,15 @@
         .variant-palette { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
         .variant-swatch { height: 34px; border: 2px solid #fff; border-radius: 7px; box-shadow: 0 0 0 1px #d1d5db; cursor: pointer; }
         .variant-swatch.active { box-shadow: 0 0 0 2px #111827; }
-        .variant-custom-row { display: grid; grid-template-columns: 46px 1fr; gap: 8px; margin-top: 10px; align-items: center; }
-        .variant-custom-row input[type="color"] { width: 46px; height: 38px; padding: 0; border: 1px solid #d1d5db; border-radius: 7px; background: #fff; cursor: pointer; }
+        .variant-color-picker { display: grid; grid-template-columns: 1fr 20px; gap: 10px; margin-top: 10px; padding: 8px; border: 1px solid #e5e7eb; border-radius: 10px; background: #fff; }
+        .variant-color-area { position: relative; height: 112px; border-radius: 7px; overflow: hidden; cursor: crosshair; background: linear-gradient(to top,#000,transparent),linear-gradient(to right,#fff,transparent),#7aa7c7; }
+        .variant-hue-bar { position: relative; height: 112px; border-radius: 7px; cursor: ns-resize; background: linear-gradient(to bottom,#f00 0%,#ff0 16.66%,#0f0 33.33%,#0ff 50%,#00f 66.66%,#f0f 83.33%,#f00 100%); }
+        .variant-color-cursor, .variant-hue-cursor { position: absolute; pointer-events: none; box-sizing: border-box; }
+        .variant-color-cursor { width: 12px; height: 12px; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 0 1px rgba(0,0,0,.55); transform: translate(-6px,-6px); left: 80%; top: 35%; }
+        .variant-hue-cursor { left: -3px; right: -3px; height: 6px; border: 2px solid #fff; border-radius: 999px; box-shadow: 0 0 0 1px rgba(0,0,0,.35); transform: translateY(-3px); top: 56%; }
+        .variant-custom-row { display: grid; grid-template-columns: 42px 1fr 96px; gap: 8px; margin-top: 10px; align-items: center; }
+        .variant-color-chip { width: 42px; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background: #f8f5ef; }
+        .variant-hex-input { text-transform: uppercase; font-family: Consolas, monospace; }
         .variant-results { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; width: 100%; align-self: stretch; }
         .variant-result-card { border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; background: #fff; }
         .variant-result-card img { width: 100%; aspect-ratio: 1; object-fit: contain; display: block; background: #f9fafb; }
@@ -257,6 +264,6 @@
     帮助中心
 </button>
 
-<script src="studio.js?v=20260714-aplus-1464x600"></script>
+<script src="studio.js?v=20260714-variant-visual-color"></script>
 </body>
 </html>
