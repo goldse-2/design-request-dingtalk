@@ -45,6 +45,41 @@ function escapeHtml(s) {
     return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+async function normalizeUploadFile(file) {
+    if (file.type !== 'image/png' && !/\.png$/i.test(file.name || '')) return file;
+    const dataUrl = await readFileAsDataUrl(file);
+    const image = await loadImage(dataUrl);
+    const canvas = document.createElement('canvas');
+    canvas.width = image.naturalWidth || image.width;
+    canvas.height = image.naturalHeight || image.height;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(image, 0, 0);
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92));
+    if (!blob) throw new Error('PNG 转 JPG 失败：' + file.name);
+    const jpgName = String(file.name || 'result.png').replace(/\.png$/i, '') + '.jpg';
+    return new File([blob], jpgName, { type: 'image/jpeg', lastModified: Date.now() });
+}
+
+function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error('读取图片失败：' + file.name));
+        reader.readAsDataURL(file);
+    });
+}
+
+function loadImage(src) {
+    return new Promise((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = () => reject(new Error('解析图片失败'));
+        image.src = src;
+    });
+}
+
 drop.addEventListener('click', () => fileInput.click());
 drop.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') fileInput.click(); });
 drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('is-dragover'); });
@@ -62,30 +97,35 @@ fileInput.addEventListener('change', e => {
 uploadBtn.addEventListener('click', async () => {
     const password = passwordEl.value.trim();
     const taskId = taskIdEl.value.trim();
-    if (!password) { setStatus('请输入上传密码', false); passwordEl.focus(); return; }
-    if (!taskId) { setStatus('请输入任务 ID', false); taskIdEl.focus(); return; }
-    if (!pendingFiles.length) { setStatus('请先选择成品图', false); return; }
-
-    const form = new FormData();
-    form.append('password', password);
-    form.append('taskId', taskId);
-    pendingFiles.forEach(file => form.append('files', file, file.name));
+    if (!password) { setStatus('???????', false); passwordEl.focus(); return; }
+    if (!taskId) { setStatus('????? ID', false); taskIdEl.focus(); return; }
+    if (!pendingFiles.length) { setStatus('???????', false); return; }
 
     uploadBtn.disabled = true;
-    uploadBtn.textContent = '上传中...';
-    setStatus('正在上传到 R2，并通知用户...', null);
+    uploadBtn.textContent = '???...';
+    setStatus('???????PNG ????? JPG...', null);
 
     try {
+        const form = new FormData();
+        form.append('password', password);
+        form.append('taskId', taskId);
+        const uploadFiles = [];
+        for (const file of pendingFiles) {
+            uploadFiles.push(await normalizeUploadFile(file));
+        }
+        uploadFiles.forEach(file => form.append('files', file, file.name));
+
+        setStatus('????? R2??????...', null);
         const res = await fetch('/api/studio-result-upload', { method: 'POST', body: form });
         const json = await res.json();
         if (!res.ok || !json.ok) throw new Error(json.error || res.status);
-        setStatus(`上传成功，已通知用户。共上传 ${json.uploaded.length} 张成品图。`, true);
+        setStatus('?????????????? ' + json.uploaded.length + ' ?????', true);
         pendingFiles = [];
         renderPreview();
     } catch (err) {
-        setStatus('上传失败：' + err.message, false);
+        setStatus('?????' + err.message, false);
     } finally {
         uploadBtn.disabled = false;
-        uploadBtn.textContent = '上传并通知用户';
+        uploadBtn.textContent = '???????';
     }
 });
