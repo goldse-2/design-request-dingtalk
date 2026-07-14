@@ -97,13 +97,13 @@ fileInput.addEventListener('change', e => {
 uploadBtn.addEventListener('click', async () => {
     const password = passwordEl.value.trim();
     const taskId = taskIdEl.value.trim();
-    if (!password) { setStatus('???????', false); passwordEl.focus(); return; }
-    if (!taskId) { setStatus('????? ID', false); taskIdEl.focus(); return; }
-    if (!pendingFiles.length) { setStatus('???????', false); return; }
+    if (!password) { setStatus('请输入上传密码', false); passwordEl.focus(); return; }
+    if (!taskId) { setStatus('请输入任务 ID', false); taskIdEl.focus(); return; }
+    if (!pendingFiles.length) { setStatus('请选择成品图片', false); return; }
 
     uploadBtn.disabled = true;
-    uploadBtn.textContent = '???...';
-    setStatus('???????PNG ????? JPG...', null);
+    uploadBtn.textContent = '上传中...';
+    setStatus('正在处理图片，PNG 将自动转换为 JPG...', null);
 
     try {
         const form = new FormData();
@@ -115,17 +115,17 @@ uploadBtn.addEventListener('click', async () => {
         }
         uploadFiles.forEach(file => form.append('files', file, file.name));
 
-        setStatus('????? R2??????...', null);
+        setStatus('正在上传并通知用户...', null);
         const res = await fetch('/api/studio-result-upload', { method: 'POST', body: form });
         const json = await res.json();
         if (!res.ok || !json.ok) throw new Error(json.error || res.status);
-        setStatus('?????????????? ' + json.uploaded.length + ' ?????', true);
+        setStatus('上传成功，已通知用户，共 ' + json.uploaded.length + ' 张图片', true);
         pendingFiles = [];
         renderPreview();
     } catch (err) {
-        setStatus('?????' + err.message, false);
+        setStatus('上传失败：' + err.message, false);
     } finally {
         uploadBtn.disabled = false;
-        uploadBtn.textContent = '???????';
+        uploadBtn.textContent = '上传并通知用户';
     }
 });

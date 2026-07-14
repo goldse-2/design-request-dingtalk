@@ -5,8 +5,10 @@ export async function sendStudioResultImages(env, accessToken, staffId, task, or
     if (!resultKeys.length) return { sent: false, count: 0 };
 
     const imageMarkdown = resultKeys.map((item, index) => {
-        const url = `${origin}/api/public-image/${encodeKeyToken(item.key)}`;
-        return `![成品图${index + 1}](${url})`;
+        const fileName = safeDisplayName(item.name || `成品图-${index + 1}.jpg`);
+        const imageUrl = `${origin}/api/public-image/${encodeKeyToken(item.key)}`;
+        const downloadUrl = `${imageUrl}?download=1&name=${encodeURIComponent(fileName)}`;
+        return `**${fileName}**\n\n![${fileName}](${imageUrl})\n\n[按原文件名下载](${downloadUrl})`;
     }).join('\n\n');
 
     const response = await fetch('https://api.dingtalk.com/v1.0/robot/oToMessages/batchSend', {
@@ -34,6 +36,10 @@ export async function sendStudioResultImages(env, accessToken, staffId, task, or
     }
 
     return { sent: true, count: resultKeys.length };
+}
+
+function safeDisplayName(name) {
+    return String(name || '成品图.jpg').replace(/[\[\]()`\r\n]/g, '_').slice(0, 120);
 }
 
 export async function markStudioNotificationSent(env, taskId, field = 'dingtalkNotified') {

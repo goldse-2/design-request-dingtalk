@@ -1,5 +1,5 @@
 export async function onRequestGet(context) {
-    const { params, env } = context;
+    const { params, env, request } = context;
     if (!env.SUBMISSION_FILES) return new Response('Not configured', { status: 500 });
 
     const token = String(params.token || '');
@@ -13,7 +13,11 @@ export async function onRequestGet(context) {
     const obj = await env.SUBMISSION_FILES.get(key);
     if (!obj) return new Response('Not found', { status: 404 });
 
-    const fileName = key.split('/').pop() || 'image.jpg';
+    const url = new URL(request.url);
+    const storedName = key.split('/').pop() || 'image.jpg';
+    const requestedName = url.searchParams.get('name');
+    const fileName = sanitizeFileName(requestedName || storedName);
+    const dispositionType = url.searchParams.get('download') === '1' ? 'attachment' : 'inline';
     const ext = fileName.split('.').pop().toLowerCase();
     const mimeMap = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif' };
     const contentType = obj.httpMetadata?.contentType || mimeMap[ext] || 'image/jpeg';
@@ -23,9 +27,18 @@ export async function onRequestGet(context) {
             'Content-Type': contentType,
             'Cache-Control': 'public, max-age=86400',
             'Access-Control-Allow-Origin': '*',
-            'Content-Disposition': `inline; filename="${fileName.replace(/"/g, '_')}"`
+            'Content-Disposition': contentDisposition(dispositionType, fileName)
         }
     });
+}
+
+function sanitizeFileName(name) {
+    return String(name || 'image.jpg').replace(/[\\/:*?"<>|\r\n]/g, '_').slice(0, 160) || 'image.jpg';
+}
+
+function contentDisposition(type, fileName) {
+    const asciiName = fileName.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
+    return `${type}; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`;
 }
 
 function decodeKeyToken(token) {

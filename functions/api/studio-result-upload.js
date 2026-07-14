@@ -31,9 +31,12 @@ export async function onRequestPost(context) {
     if (!files.length) return Response.json({ ok: false, error: '请上传成品图' }, { status: 400 });
 
     const uploaded = [];
+    const baseName = resultBaseName(task);
     for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        const name = sanitizeName(file.name || `result-${i + 1}.png`);
+        const ext = resultExtension(file);
+        const suffix = files.length > 1 ? `-${i + 1}` : '';
+        const name = `${baseName}${suffix}.${ext}`;
         const key = `studio-results/${taskId}/${Date.now()}-${i + 1}-${name}`;
         await env.SUBMISSION_FILES.put(key, await file.arrayBuffer(), {
             httpMetadata: { contentType: file.type || guessContentType(name) }
@@ -63,6 +66,23 @@ export async function onRequestPost(context) {
 
 function sanitizeName(name) {
     return name.replace(/[\\/:*?"<>|#%{}^~[\]`]/g, '_').slice(0, 120);
+}
+
+function resultBaseName(task) {
+    const sourceName = task.imageName
+        || task.productName
+        || task.refKeys?.[0]?.name
+        || '成品图';
+    const withoutExtension = String(sourceName).replace(/\.[^.]+$/, '').trim();
+    return sanitizeName(withoutExtension).slice(0, 80) || '成品图';
+}
+
+function resultExtension(file) {
+    const fromName = String(file?.name || '').match(/\.([a-z0-9]{2,5})$/i)?.[1]?.toLowerCase();
+    if (fromName === 'jpeg') return 'jpg';
+    if (['jpg', 'png', 'webp', 'gif'].includes(fromName)) return fromName;
+    const mimeMap = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' };
+    return mimeMap[file?.type] || 'jpg';
 }
 
 function guessContentType(name) {
