@@ -156,7 +156,7 @@ function normalizeStudioSize(size, desc) {
     const text = String(desc || '');
     const fromDesc = extractDimension(text);
     if (fromDesc) return fromDesc;
-    if (/A\+|16\s*[:：]\s*9/i.test(text)) return '1472x608';
+    if (/A\+|16\s*[:：]\s*9/i.test(text)) return '1464x600';
     return '2K 自动识别';
 }
 

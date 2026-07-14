@@ -241,13 +241,13 @@ function renderSizePicker(inputId) {
                     <div class="size-resolution-row">
                         <button type="button" class="active" data-size-value="2K 自动识别">2K 默认</button>
                         <button type="button" data-size-value="亚马逊主图 1600x1600">1600</button>
-                        <button type="button" data-size-value="A+尺寸 16:9 1472x608">A+</button>
+                        <button type="button" data-size-value="A+尺寸 1464x600">A+</button>
                         <button type="button" data-size-custom="1">自定义</button>
                     </div>
                     <div class="size-picker-title">Size</div>
                     <div class="size-card-grid">
                         <button type="button" class="size-card" data-size-value="亚马逊主图 1600x1600"><span class="size-card-icon square"></span><strong>1:1</strong><small>1600 × 1600</small></button>
-                        <button type="button" class="size-card" data-size-value="A+尺寸 16:9 1472x608"><span class="size-card-icon"></span><strong>16:9</strong><small>1472 × 608</small></button>
+                        <button type="button" class="size-card" data-size-value="A+尺寸 1464x600"><span class="size-card-icon"></span><strong>A+</strong><small>1464 × 600</small></button>
                         <button type="button" class="size-card" data-size-value="相片比例 2048x1536"><span class="size-card-icon"></span><strong>4:3</strong><small>2048 × 1536</small></button>
                         <button type="button" class="size-card" data-size-value="常用图 800x600"><span class="size-card-icon"></span><strong>4:3</strong><small>800 × 600</small></button>
                         <button type="button" class="size-card" data-size-value="横版图 970x600"><span class="size-card-icon"></span><strong>97:60</strong><small>970 × 600</small></button>
@@ -434,7 +434,7 @@ const RESIZE_FORM = `
             <div class="sf-section">
                 <div class="sf-label">转换规格</div>
                 <select class="sf-select" id="resizePreset">
-                    <option value="aplus1472">A+：1472 × 608 → 1464 × 600</option>
+                    <option value="aplus1464">A+：1464 × 600</option>
                     <option value="wide2560">宽图：2560 × 1024 → 1464 × 600</option>
                     <option value="square2k">2K：2048 × 2048 → 1600 × 1600</option>
                 </select>
@@ -444,7 +444,7 @@ const RESIZE_FORM = `
                 <label class="sf-upload-box resize-upload-box" id="resizeDropZone" for="resizeImageInput">
                     <input id="resizeImageInput" type="file" accept="image/jpeg,image/png,image/webp" hidden>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="26" height="26"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                    <span id="resizeDropText">上传 1472 × 608 图片</span>
+                    <span id="resizeDropText">上传 1464 × 600 图片</span>
                     <small>JPG、PNG、WebP，最大 20 MB</small>
                 </label>
             </div>
@@ -868,7 +868,7 @@ function renderVariantPreview() {
 
 function initResizeTool() {
     const presets = {
-        aplus1472: { sourceWidth: 1472, sourceHeight: 608, width: 1464, height: 600 },
+        aplus1464: { sourceWidth: 1464, sourceHeight: 600, width: 1464, height: 600 },
         wide2560: { sourceWidth: 2560, sourceHeight: 1024, width: 1464, height: 600 },
         square2k: { sourceWidth: 2048, sourceHeight: 2048, width: 1600, height: 1600 }
     };
@@ -885,7 +885,7 @@ function initResizeTool() {
     let sourceName = 'aplus-image';
     let outputType = 'image/png';
 
-    const getPreset = () => presets[presetSelect.value] || presets.aplus1472;
+    const getPreset = () => presets[presetSelect.value] || presets.aplus1464;
     const reset = (message = '等待上传图片') => {
         downloadBtn.disabled = true;
         canvas.style.display = 'none';
@@ -1022,7 +1022,7 @@ function wireSizeResizeHint(selectId, hintId) {
     const hint = document.getElementById(hintId);
     if (!select || !hint) return;
     const update = (showModal = false) => {
-        const show = String(select.value || '').replace(/\s/g, '').includes('1472x608');
+        const show = false;
         hint.hidden = !show;
         hint.style.display = show ? 'block' : 'none';
         if (show && showModal) showResizeReminderModal();
@@ -1043,8 +1043,8 @@ function showResizeReminderModal() {
         <div style="width:48px;height:48px;border-radius:50%;background:#eef2ff;color:#4338ca;display:flex;align-items:center;justify-content:center;margin-bottom:16px">
             <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M8 3v4M16 3v4M8 17h8"/></svg>
         </div>
-        <div style="font-size:1.08rem;font-weight:700;color:#111827">需要最终尺寸 1464 × 600？</div>
-        <div style="margin-top:10px;color:#6b7280;font-size:.88rem;line-height:1.7">当前生成尺寸为 1472 × 608。图片生成完成后，可以进入「尺寸修改」转换为 1464 × 600。</div>
+        <div style="font-size:1.08rem;font-weight:700;color:#111827">A+ 尺寸已改为 1464 × 600</div>
+        <div style="margin-top:10px;color:#6b7280;font-size:.88rem;line-height:1.7">当前 A+ 生成尺寸已经是 1464 × 600，不需要再额外转换。</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:22px">
             <button type="button" id="resizeReminderClose" style="padding:11px;border:1px solid #d1d5db;border-radius:8px;background:#fff;color:#374151;font-weight:600;cursor:pointer">继续制作</button>
             <a href="studio.html?mode=resize&width=1464&height=600" style="display:flex;align-items:center;justify-content:center;padding:11px;border-radius:8px;background:#111827;color:#fff;text-decoration:none;font-weight:600">进入尺寸修改</a>
