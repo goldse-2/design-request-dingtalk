@@ -432,24 +432,25 @@ const RESIZE_FORM = `
     <div class="studio-layout resize-layout">
         <div class="studio-panel">
             <div class="sf-section">
-                <div class="sf-label">转换规格</div>
-                <select class="sf-select" id="resizePreset">
-                    <option value="aplus1464">A+：1464 × 600</option>
-                    <option value="wide2560">宽图：2560 × 1024 → 1464 × 600</option>
-                    <option value="square2k">2K：2048 × 2048 → 1600 × 1600</option>
-                </select>
+                <div class="sf-label">目标尺寸 <span class="sf-req">*</span></div>
+                <div class="resize-target-grid" id="resizeTargetGrid">
+                    <button type="button" class="resize-target-btn" data-width="800" data-height="600">修改成 800 × 600<small>AI 2K 后台处理</small></button>
+                    <button type="button" class="resize-target-btn active" data-width="1464" data-height="600">修改成 1464 × 600<small>命中规格可本地处理</small></button>
+                    <button type="button" class="resize-target-btn" data-width="1600" data-height="1600">修改成 1600 × 1600<small>1:1 图片本地处理</small></button>
+                    <button type="button" class="resize-target-btn" data-width="970" data-height="600">修改成 970 × 600<small>AI 2K 后台处理</small></button>
+                </div>
             </div>
             <div class="sf-section">
                 <div class="sf-label">原始图片 <span class="sf-req">*</span></div>
                 <label class="sf-upload-box resize-upload-box" id="resizeDropZone" for="resizeImageInput">
                     <input id="resizeImageInput" type="file" accept="image/jpeg,image/png,image/webp" hidden>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="26" height="26"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                    <span id="resizeDropText">上传 1464 × 600 图片</span>
+                    <span id="resizeDropText">上传需要修改尺寸的图片</span>
                     <small>JPG、PNG、WebP，最大 20 MB</small>
                 </label>
             </div>
             <div class="resize-status" id="resizeStatus">等待上传图片</div>
-            <button class="sf-submit resize-download" id="resizeDownloadBtn" disabled>下载 1464 × 600 图片</button>
+            <button class="sf-submit resize-download" id="resizeDownloadBtn" disabled>上传图片后继续</button>
         </div>
         <div class="studio-preview resize-preview">
             <div class="studio-preview-tab">预览</div>
@@ -992,13 +993,8 @@ function renderVariantPreview() {
 }
 
 function initResizeTool() {
-    const presets = {
-        aplus1464: { sourceWidth: 1464, sourceHeight: 600, width: 1464, height: 600 },
-        wide2560: { sourceWidth: 2560, sourceHeight: 1024, width: 1464, height: 600 },
-        square2k: { sourceWidth: 2048, sourceHeight: 2048, width: 1600, height: 1600 }
-    };
     const input = document.getElementById('resizeImageInput');
-    const presetSelect = document.getElementById('resizePreset');
+    const targetGrid = document.getElementById('resizeTargetGrid');
     const dropZone = document.getElementById('resizeDropZone');
     const dropText = document.getElementById('resizeDropText');
     const status = document.getElementById('resizeStatus');
@@ -1009,9 +1005,19 @@ function initResizeTool() {
     const context = canvas.getContext('2d');
     let sourceName = 'aplus-image';
     let outputType = 'image/png';
+    let currentFile = null;
+    let currentImage = null;
+    let localReady = false;
 
-    const getPreset = () => presets[presetSelect.value] || presets.aplus1464;
+    const getTarget = () => {
+        const active = targetGrid.querySelector('.resize-target-btn.active');
+        return {
+            width: Number(active?.dataset.width || 1464),
+            height: Number(active?.dataset.height || 600)
+        };
+    };
     const reset = (message = '等待上传图片') => {
+        localReady = false;
         downloadBtn.disabled = true;
         canvas.style.display = 'none';
         emptyPreview.hidden = false;
@@ -1022,12 +1028,12 @@ function initResizeTool() {
         reset(message);
         status.className = 'resize-status error';
     };
-    const updatePreset = () => {
-        const preset = getPreset();
-        dropText.textContent = `上传 ${preset.sourceWidth} × ${preset.sourceHeight} 图片`;
-        downloadBtn.textContent = `下载 ${preset.width} × ${preset.height} 图片`;
-        if (outputBadge) outputBadge.textContent = `${preset.width} × ${preset.height}`;
-        reset();
+    const updateTarget = () => {
+        const target = getTarget();
+        dropText.textContent = '上传需要修改尺寸的图片';
+        if (outputBadge) outputBadge.textContent = `${target.width} × ${target.height}`;
+        if (currentImage && currentFile) prepareResizeResult(currentFile, currentImage);
+        else reset();
     };
     const loadFile = file => {
         reset('正在读取图片...');
@@ -1043,26 +1049,11 @@ function initResizeTool() {
         const image = new Image();
         image.onload = () => {
             URL.revokeObjectURL(imageUrl);
-            const preset = getPreset();
-            if (image.naturalWidth !== preset.sourceWidth || image.naturalHeight !== preset.sourceHeight) {
-                showError(`当前图片是 ${image.naturalWidth} × ${image.naturalHeight}，请上传 ${preset.sourceWidth} × ${preset.sourceHeight} 图片。`);
-                return;
-            }
             sourceName = file.name.replace(/\.[^.]+$/, '') || 'aplus-image';
             outputType = file.type === 'image/jpeg' ? 'image/jpeg' : 'image/png';
-            canvas.width = preset.width;
-            canvas.height = preset.height;
-            context.imageSmoothingEnabled = true;
-            context.imageSmoothingQuality = 'high';
-            context.fillStyle = '#ffffff';
-            context.fillRect(0, 0, preset.width, preset.height);
-            const scaledWidth = image.naturalWidth * (preset.height / image.naturalHeight);
-            context.drawImage(image, (preset.width - scaledWidth) / 2, 0, scaledWidth, preset.height);
-            canvas.style.display = 'block';
-            emptyPreview.hidden = true;
-            downloadBtn.disabled = false;
-            status.className = 'resize-status ready';
-            status.textContent = `转换完成：${preset.sourceWidth} × ${preset.sourceHeight} → ${preset.width} × ${preset.height}`;
+            currentFile = file;
+            currentImage = image;
+            prepareResizeResult(file, image);
         };
         image.onerror = () => {
             URL.revokeObjectURL(imageUrl);
@@ -1070,8 +1061,63 @@ function initResizeTool() {
         };
         image.src = imageUrl;
     };
+    const prepareResizeResult = (file, image) => {
+        const target = getTarget();
+        if (canResizeLocally(image, target)) {
+            renderLocalResize(image, target);
+            localReady = true;
+            downloadBtn.disabled = false;
+            downloadBtn.textContent = `下载 ${target.width} × ${target.height} 图片`;
+            status.className = 'resize-status ready';
+            status.textContent = `可本地转换：${image.naturalWidth} × ${image.naturalHeight} → ${target.width} × ${target.height}，不消耗 AI`;
+            return;
+        }
+        localReady = false;
+        canvas.style.display = 'none';
+        emptyPreview.hidden = false;
+        downloadBtn.disabled = false;
+        downloadBtn.textContent = `提交后台 AI 修改成 ${target.width} × ${target.height}`;
+        status.className = 'resize-status ai';
+        status.textContent = `当前图片 ${image.naturalWidth} × ${image.naturalHeight}，将提交后台 AI 处理；完成后会钉钉通知你。`;
+    };
+    const canResizeLocally = (image, target) => {
+        if (image.naturalWidth === target.width && image.naturalHeight === target.height) return true;
+        if (target.width === 1464 && target.height === 600) {
+            return (image.naturalWidth === 1464 && image.naturalHeight === 600)
+                || (image.naturalWidth === 2560 && image.naturalHeight === 1024);
+        }
+        if (target.width === 1600 && target.height === 1600) {
+            return image.naturalWidth === image.naturalHeight;
+        }
+        return false;
+    };
+    const renderLocalResize = (image, target) => {
+        canvas.width = target.width;
+        canvas.height = target.height;
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = 'high';
+        context.fillStyle = '#ffffff';
+        context.fillRect(0, 0, target.width, target.height);
+        const scaledWidth = image.naturalWidth * (target.height / image.naturalHeight);
+        const scaledHeight = image.naturalHeight * (target.width / image.naturalWidth);
+        if (target.width === target.height && image.naturalWidth === image.naturalHeight) {
+            context.drawImage(image, 0, 0, target.width, target.height);
+        } else if (scaledWidth >= target.width) {
+            context.drawImage(image, (target.width - scaledWidth) / 2, 0, scaledWidth, target.height);
+        } else {
+            context.drawImage(image, 0, (target.height - scaledHeight) / 2, target.width, scaledHeight);
+        }
+        canvas.style.display = 'block';
+        emptyPreview.hidden = true;
+    };
 
-    presetSelect.addEventListener('change', updatePreset);
+    targetGrid.querySelectorAll('.resize-target-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            targetGrid.querySelectorAll('.resize-target-btn').forEach(item => item.classList.remove('active'));
+            btn.classList.add('active');
+            updateTarget();
+        });
+    });
     input.addEventListener('change', () => {
         if (input.files[0]) loadFile(input.files[0]);
         input.value = '';
@@ -1089,18 +1135,54 @@ function initResizeTool() {
         if (file) loadFile(file);
     });
     downloadBtn.addEventListener('click', () => {
+        if (!currentFile || !currentImage) return;
+        const target = getTarget();
+        if (!localReady) {
+            submitResizeAiTask(currentFile, target, status, downloadBtn);
+            return;
+        }
         canvas.toBlob(blob => {
             if (!blob) return;
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
-            const preset = getPreset();
-            link.download = `${sourceName}-${preset.width}x${preset.height}.${outputType === 'image/jpeg' ? 'jpg' : 'png'}`;
+            link.download = `${sourceName}-${target.width}x${target.height}.${outputType === 'image/jpeg' ? 'jpg' : 'png'}`;
             link.click();
             setTimeout(() => URL.revokeObjectURL(url), 1000);
         }, outputType, 0.95);
     });
-    updatePreset();
+    updateTarget();
+}
+
+function fileToStudioUpload(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = event => resolve({
+            name: file.name,
+            mimeType: file.type || 'image/png',
+            base64: String(event.target.result || '').split(',')[1] || '',
+            dataUrl: event.target.result
+        });
+        reader.onerror = () => reject(new Error('图片读取失败，请重新选择。'));
+        reader.readAsDataURL(file);
+    });
+}
+
+async function submitResizeAiTask(file, target, status, btn) {
+    try {
+        const upload = await fileToStudioUpload(file);
+        const size = `${target.width}x${target.height}`;
+        await submitTask('resize_ai', {
+            desc: `AI 尺寸修改为 ${size}`,
+            size,
+            resizeTarget: size,
+            imageName: file.name.replace(/\.[^.]+$/, ''),
+            refImages: [upload]
+        }, status, btn, task => showSuccessModal(task, `尺寸修改任务已提交，目标 ${target.width} × ${target.height}，完成后会通过钉钉通知`));
+    } catch (error) {
+        status.className = 'resize-status error';
+        status.textContent = error.message || '提交失败，请重试';
+    }
 }
 
 function initSizePicker(inputId, hintId) {
@@ -1616,7 +1698,7 @@ async function submitTask(mode, payload, statusEl, btn, onSuccess) {
     try {
         statusEl.textContent = '上传图片中...';
         const productKeys = payload.productImages && payload.productImages.length ? await uploadImages(payload.productImages, 'studio/product') : [];
-        const refPrefix = mode === 'retouch' ? 'studio/retouch' : mode === 'variant' ? 'studio/variant' : 'studio/ref';
+        const refPrefix = mode === 'retouch' ? 'studio/retouch' : mode === 'variant' ? 'studio/variant' : mode === 'resize_ai' ? 'studio/resize' : 'studio/ref';
         const uploadedRefKeys = payload.refImages && payload.refImages.length ? await uploadImages(payload.refImages, refPrefix) : [];
         const refKeys = uploadedRefKeys;
         const modelKeys = payload.modelImages && payload.modelImages.length ? await uploadImages(payload.modelImages, 'studio/model') : [];
@@ -1636,6 +1718,7 @@ async function submitTask(mode, payload, statusEl, btn, onSuccess) {
         if (payload.variantScope) submitPayload.variantScope = payload.variantScope;
         if (payload.colorName) submitPayload.colorName = payload.colorName;
         if (payload.colorHex) submitPayload.colorHex = payload.colorHex;
+        if (payload.resizeTarget) submitPayload.resizeTarget = payload.resizeTarget;
 
         const res = await fetch('/api/studio-submit', {
             method: 'POST',

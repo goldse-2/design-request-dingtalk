@@ -41,7 +41,12 @@
         .resize-status { min-height: 42px; margin-top: 12px; padding: 10px 12px; border-radius: 7px; background: #f3f4f6; color: #6b7280; font-size: .8rem; line-height: 1.6; }
         .resize-status.error { background: #fef2f2; color: #b91c1c; }
         .resize-status.ready { background: #ecfdf5; color: #047857; }
+        .resize-status.ai { background: #eff6ff; color: #1d4ed8; }
         .resize-download:disabled { background: #d1d5db; cursor: not-allowed; }
+        .resize-target-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+        .resize-target-btn { min-height: 52px; padding: 10px; border: 1px solid #d1d5db; border-radius: 9px; background: #fff; color: #374151; font-size: .86rem; font-weight: 800; cursor: pointer; }
+        .resize-target-btn.active { border-color: #111827; background: #111827; color: #fff; box-shadow: 0 8px 18px rgba(17,24,39,.16); }
+        .resize-target-btn small { display: block; margin-top: 3px; font-size: .68rem; font-weight: 600; opacity: .72; }
         .resize-preview-body { min-height: 650px; }
         .resize-preview-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
         .resize-preview-title { font-size: .9rem; font-weight: 700; color: #111827; }
@@ -264,6 +269,6 @@
     帮助中心
 </button>
 
-<script src="studio.js?v=20260714-variant-visual-color"></script>
+<script src="studio.js?v=20260714-resize-ai-task"></script>
 </body>
 </html>

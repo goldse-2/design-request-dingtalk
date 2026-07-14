@@ -1250,7 +1250,7 @@ function renderStudioTask(task) {
         : task.status === 'processing'
             ? ['处理中', '#3b82f6', '#dbeafe']
             : ['待处理', '#f59e0b', '#fef3c7'];
-    const modeText = task.mode === 'retouch' ? '精修图片' : task.mode === 'free' ? '自由模式' : '程序模式';
+    const modeText = task.mode === 'retouch' ? '精修图片' : task.mode === 'variant' ? '变体改色' : task.mode === 'resize_ai' ? '尺寸修改' : task.mode === 'free' ? '自由模式' : '程序模式';
     const time = new Date(task.timestamp).toLocaleString('zh-CN', { timeZone:'Asia/Shanghai', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
 
     const card = document.createElement('div');
@@ -1535,6 +1535,10 @@ function openFeedbackModal(taskId, submitterName) {
 async function sendToRpa(taskId, btn, card, knownTask) {
     const task = knownTask || (await fetch(`/api/studio-tasks?id=${encodeURIComponent(taskId)}`).then(r => r.json()).catch(() => null))?.task;
     const mode = task?.mode || 'free';
+    if (!['free', 'program', 'retouch'].includes(mode)) {
+        alert('这个任务由后台自动处理，不需要发送 RPA');
+        return;
+    }
     
     const programWebhook = 'https://api-rpa.bazhuayu.com/api/v1/bots/webhooks/6a3a40ac622e84b667229fde/invoke';
     const freeWebhook = 'https://api-rpa.bazhuayu.com/api/v1/bots/webhooks/6a31134a622e84b6672263ee/invoke';
@@ -1578,7 +1582,7 @@ function bindStudioBatchActions() {
 }
 
 async function batchSendStudioTasks(btn) {
-    const tasks = studioAdminTasks.filter(task => task.status === 'pending' && !task.sentToRpa);
+    const tasks = studioAdminTasks.filter(task => ['free', 'program', 'retouch'].includes(task.mode) && task.status === 'pending' && !task.sentToRpa);
     if (!tasks.length) {
         alert('当前没有待发送任务');
         return;
@@ -1866,7 +1870,7 @@ function renderStudioHistoryCard(task) {
     const card = document.createElement('div');
     card.style.cssText = 'background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:14px 16px;margin-bottom:10px';
     
-    const modeText = task.mode === 'retouch' ? '精修图片' : task.mode === 'free' ? '自由模式' : '程序模式';
+    const modeText = task.mode === 'retouch' ? '精修图片' : task.mode === 'variant' ? '变体改色' : task.mode === 'resize_ai' ? '尺寸修改' : task.mode === 'free' ? '自由模式' : '程序模式';
     const time = new Date(task.timestamp).toLocaleString('zh-CN', { timeZone:'Asia/Shanghai', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
     
     let html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'

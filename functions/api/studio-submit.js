@@ -5,7 +5,7 @@ export async function onRequestPost(context) {
     try { body = await request.json(); }
     catch { return Response.json({ ok: false, error: 'Invalid JSON' }, { status: 400 }); }
 
-    const { mode, submitter, desc, want, note, scene, analyzePrompt, size, imageName, productName, title, subtitle, otherText, productKeys, refKeys, modelKeys, category, variantScope, colorName, colorHex } = body;
+    const { mode, submitter, desc, want, note, scene, analyzePrompt, size, imageName, productName, title, subtitle, otherText, productKeys, refKeys, modelKeys, category, variantScope, colorName, colorHex, resizeTarget } = body;
     if (!mode || !submitter) {
         return Response.json({ ok: false, error: 'Missing required fields' }, { status: 400 });
     }
@@ -14,6 +14,9 @@ export async function onRequestPost(context) {
     }
     if (mode === 'variant' && (!Array.isArray(refKeys) || refKeys.length < 1)) {
         return Response.json({ ok: false, error: 'Variant mode requires at least one image' }, { status: 400 });
+    }
+    if (mode === 'resize_ai' && (!Array.isArray(refKeys) || refKeys.length !== 1)) {
+        return Response.json({ ok: false, error: 'Resize AI mode requires exactly one image' }, { status: 400 });
     }
     if (!env.SUBMISSIONS) {
         return Response.json({ ok: false, error: 'Storage not configured' }, { status: 500 });
@@ -42,6 +45,7 @@ export async function onRequestPost(context) {
         variantScope: variantScope === 'background' ? 'background' : variantScope === 'product' ? 'product' : '',
         colorName: colorName || '',
         colorHex: colorHex || '',
+        resizeTarget: resizeTarget || '',
         variantNextIndex: 0,
         productKeys: productKeys || [],
         refKeys: refKeys || [],
@@ -103,6 +107,10 @@ export async function onRequestPost(context) {
             } else if (mode === 'variant') {
                 content += `🎨 改色任务已进入处理队列\n`;
                 content += `⏱ 完成后会通过钉钉通知，页面可以先关闭\n\n`;
+            } else if (mode === 'resize_ai') {
+                content += `🖼️ 尺寸修改任务已进入后台处理\n`;
+                content += `目标尺寸：${resizeTarget || size || '-'}\n`;
+                content += `⏱ 完成后会通过钉钉通知，页面可以先关闭\n\n`;
             } else if (queueCount === 0) {
                 content += `🎉 当前无人排队，您的任务将立即处理\n`;
                 content += `⏱ 预计等待：4-8 分钟\n\n`;
@@ -141,6 +149,7 @@ function studioTaskMetadata(task) {
 function studioModeText(mode) {
     if (mode === 'retouch') return '精修图片';
     if (mode === 'variant') return '变体改色';
+    if (mode === 'resize_ai') return '尺寸修改';
     return mode === 'free' ? '自由模式' : '程序模式';
 }
 

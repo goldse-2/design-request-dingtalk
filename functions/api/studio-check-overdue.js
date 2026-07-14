@@ -1,6 +1,7 @@
 import { taskNeedsRpaTranslation, translateForRpa } from '../_shared/ai-translate.js';
 import { markStudioNotificationSent, sendStudioResultImages } from '../_shared/studio-dingtalk.js';
 import { recolorImage } from '../_shared/variant-recolor-core.js';
+import { editImageWithPrompt } from '../_shared/image-edit-core.js';
 
 export async function onRequestGet(context) {
     const { env, request, waitUntil } = context;
@@ -41,7 +42,7 @@ export async function onRequestGet(context) {
             if (meta.kind !== 'studio') continue;
 
             const createdAt = Number(meta.timestamp || 0);
-            if (meta.mode === 'variant') {
+            if (meta.mode === 'variant' || meta.mode === 'resize_ai') {
                 if ((meta.status === 'pending' || meta.status === 'processing' || meta.status === 'done') && !meta.dingtalkNotified && !meta.pausedAuto) {
                     if (createdAt && (now - createdAt) >= autoSendThreshold) autoSendKeys.push(key.name);
                 }
@@ -74,24 +75,26 @@ export async function onRequestGet(context) {
                     : new Date(task.createdAt || task.timestamp || 0).getTime();
                 if (!createdAt || (now - createdAt) < autoSendThreshold) continue;
 
-                if (task.mode === 'variant') {
+                if (task.mode === 'variant' || task.mode === 'resize_ai') {
                     try {
-                        const result = await processVariantTaskStep(env, task, origin);
+                        const result = task.mode === 'resize_ai'
+                            ? await processResizeAiTask(env, task)
+                            : await processVariantTaskStep(env, task, origin);
                         autoSent.push(task.id);
                         if (result.done && task.submitter?.unionId && env.DINGTALK_APPKEY && env.DINGTALK_APPSECRET) {
                             await notifyUserDone(env, task, origin)
                                 .then(() => markStudioNotificationSent(env, task.id))
-                                .catch(e => console.error('Notify variant done failed:', e.message));
+                                .catch(e => console.error('Notify background image task done failed:', e.message));
                         }
                     } catch (e) {
                         const errMsg = String(e.message || e).slice(0, 300);
                         autoErrors.push({ id: task.id, error: errMsg });
-                        task.variantLastError = errMsg;
-                        task.variantLastAttemptAt = new Date().toISOString();
+                        task.backgroundLastError = errMsg;
+                        task.backgroundLastAttemptAt = new Date().toISOString();
                         await env.SUBMISSIONS.put(task.id, JSON.stringify(task), {
                             metadata: studioTaskMetadata(task)
                         });
-                        console.error('Variant recolor failed:', task.id, e.message);
+                        console.error('Background image task failed:', task.id, e.message);
                     }
                     continue;
                 }
@@ -260,6 +263,63 @@ async function processVariantTaskStep(env, task, origin) {
     return { done: task.status === 'done', stored };
 }
 
+async function processResizeAiTask(env, task) {
+    if (!env.SUBMISSION_FILES) throw new Error('R2 storage not configured');
+    if (task.status === 'done' && Array.isArray(task.resultKeys) && task.resultKeys.length) return { done: true };
+
+    const refKeys = Array.isArray(task.refKeys) ? task.refKeys : [];
+    const source = refKeys[0];
+    if (!source?.key) throw new Error('Resize source image not found');
+
+    const target = parseResizeTarget(task.resizeTarget || task.size || '1464x600');
+    const sourceObject = await env.SUBMISSION_FILES.get(source.key);
+    if (!sourceObject) throw new Error('Resize source image missing');
+
+    const mimeType = sourceObject.httpMetadata?.contentType || guessContentType(source.name || source.key);
+    const base64 = arrayBufferToBase64(await sourceObject.arrayBuffer());
+    const prompt = [
+        `Resize and adapt the uploaded image to exactly ${target.width}x${target.height}px.`,
+        'Keep the original product, subject, colors, text, logo, material details, lighting style, and composition intent as much as possible.',
+        'Use a clean ecommerce-quality result. Do not add watermarks, frames, captions, extra text, or unrelated objects.',
+        'Return only one final image.'
+    ].join('\n');
+    const result = await editImageWithPrompt({
+        env,
+        prompt,
+        mimeType,
+        base64,
+        maxBytes: 20 * 1024 * 1024
+    });
+    const stored = await storeResizeAiResult(env, task, result, source.name || 'resize-source.png', target);
+
+    task.resultKeys = [stored];
+    task.status = 'done';
+    task.completedAt = new Date().toISOString();
+    task.completeNote = `AI 尺寸修改完成：${target.width} × ${target.height}`;
+    task.backgroundLastAttemptAt = new Date().toISOString();
+    task.backgroundLastError = '';
+
+    await env.SUBMISSIONS.put(task.id, JSON.stringify(task), { metadata: studioTaskMetadata(task) });
+    return { done: true, stored };
+}
+
+async function storeResizeAiResult(env, task, result, sourceName, target) {
+    const fetched = await resultToBytes(result);
+    const ext = extensionFromMime(fetched.mimeType);
+    const safeName = sanitizeName(String(sourceName || 'resize-source.png').replace(/\.[^.]+$/, ''));
+    const key = `studio-results/${task.id}/resize-${target.width}x${target.height}-${safeName}.${ext}`;
+    await env.SUBMISSION_FILES.put(key, fetched.bytes, {
+        httpMetadata: { contentType: fetched.mimeType }
+    });
+    return { key, name: `${safeName}-尺寸修改-${target.width}x${target.height}.${ext}` };
+}
+
+function parseResizeTarget(value) {
+    const match = String(value || '').match(/(\d{3,5})\s*[x×*]\s*(\d{3,5})/i);
+    if (!match) return { width: 1464, height: 600 };
+    return { width: Number(match[1]), height: Number(match[2]) };
+}
+
 async function storeVariantResult(env, task, result, sourceName, index) {
     const fetched = await resultToBytes(result);
     const ext = extensionFromMime(fetched.mimeType);
@@ -292,7 +352,9 @@ async function notifyUserDone(env, task, origin) {
     const token = await getAccessToken(env);
     const staffId = await getStaffId(token, task.submitter.unionId);
     if (!staffId) throw new Error('No staff id');
-    const content = `图片制作完成 ✅\n\n变体改色已完成，共 ${Array.isArray(task.resultKeys) ? task.resultKeys.length : 0} 张。\n请到网站查看下载：${origin}/studio-tasks.html`;
+    const resultCount = Array.isArray(task.resultKeys) ? task.resultKeys.length : 0;
+    const modeText = task.mode === 'resize_ai' ? `尺寸修改已完成${task.resizeTarget ? '：' + task.resizeTarget : ''}` : '变体改色已完成';
+    const content = `图片制作完成 ✅\n\n${modeText}，共 ${resultCount} 张。\n请到网站查看下载：${origin}/studio-tasks.html`;
     const response = await fetch('https://api.dingtalk.com/v1.0/robot/oToMessages/batchSend', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-acs-dingtalk-access-token': token },
@@ -456,6 +518,7 @@ function formatSizeRequirement(size) {
 function studioModeText(mode) {
     if (mode === 'retouch') return '精修图片';
     if (mode === 'variant') return '变体改色';
+    if (mode === 'resize_ai') return '尺寸修改';
     return mode === 'free' ? '自由模式' : '程序模式';
 }
 

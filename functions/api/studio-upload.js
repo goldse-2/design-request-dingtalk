@@ -18,9 +18,13 @@ export async function onRequestPost(context) {
     if (!file.type?.startsWith('image/')) {
         return Response.json({ ok: false, error: 'Only image files are allowed' }, { status: 400 });
     }
-    const maxSize = prefix === 'studio/retouch' ? 15 * 1024 * 1024 : 8 * 1024 * 1024;
+    const maxSize = prefix === 'studio/resize'
+        ? 20 * 1024 * 1024
+        : (prefix === 'studio/retouch' || prefix === 'studio/variant')
+            ? 15 * 1024 * 1024
+            : 8 * 1024 * 1024;
     if (file.size > maxSize) {
-        return Response.json({ ok: false, error: `Image must not exceed ${prefix === 'studio/retouch' ? '15MB' : '8MB'}` }, { status: 413 });
+        return Response.json({ ok: false, error: `Image must not exceed ${Math.round(maxSize / 1024 / 1024)}MB` }, { status: 413 });
     }
 
     const ext = (file.name || 'img.png').split('.').pop().toLowerCase();
