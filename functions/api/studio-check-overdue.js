@@ -43,8 +43,12 @@ export async function onRequestGet(context) {
             processingQueueIds = migrated.processingQueueIds;
         }
 
-        const autoSendTasks = await readStudioTasks(env, autoQueueIds);
-        const tasks = await readStudioTasks(env, processingQueueIds);
+        const autoBatchIds = autoQueueIds.slice(0, 10);
+        const processingBatchIds = processingQueueIds.slice(0, 20);
+        const deferredAutoQueue = autoQueueIds.slice(autoBatchIds.length);
+        const deferredProcessingQueue = processingQueueIds.slice(processingBatchIds.length);
+        const autoSendTasks = await readStudioTasks(env, autoBatchIds);
+        const tasks = await readStudioTasks(env, processingBatchIds);
         const nextAutoQueue = [];
         const nextProcessingQueue = [];
 
@@ -174,8 +178,10 @@ export async function onRequestGet(context) {
             }
         }
 
-        await writeQueue(env.SUBMISSIONS, AUTO_QUEUE_KEY, nextAutoQueue);
-        await writeQueue(env.SUBMISSIONS, PROCESSING_QUEUE_KEY, unique(nextProcessingQueue));
+        const finalAutoQueue = unique([...nextAutoQueue, ...deferredAutoQueue]);
+        const finalProcessingQueue = unique([...nextProcessingQueue, ...deferredProcessingQueue]);
+        await writeQueue(env.SUBMISSIONS, AUTO_QUEUE_KEY, finalAutoQueue);
+        await writeQueue(env.SUBMISSIONS, PROCESSING_QUEUE_KEY, finalProcessingQueue);
 
         return Response.json({
             ok: true,
@@ -185,7 +191,9 @@ export async function onRequestGet(context) {
             autoSentTasks: autoSent,
             autoErrors,
             notified: notified.length,
-            tasks: notified
+            tasks: notified,
+            queueRemaining: finalAutoQueue.length,
+            processingQueueRemaining: finalProcessingQueue.length
         });
     } catch (err) {
         return Response.json({ ok: false, error: err.message }, { status: 500 });
