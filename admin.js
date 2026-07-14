@@ -1303,19 +1303,29 @@ function renderStudioTask(task) {
     editBtn.textContent = '✎ 编辑需求';
     editBtn.style.cssText = 'margin:4px 0 2px;font-size:0.78rem;color:#374151;background:#f3f4f6;border:none;border-radius:7px;padding:5px 14px;cursor:pointer;font-weight:600';
 
+    const optimizeBtn = document.createElement('button');
+    optimizeBtn.type = 'button';
+    optimizeBtn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m12 3-1.5 3.5L7 8l3.5 1.5L12 13l1.5-3.5L17 8l-3.5-1.5L12 3Z"/><path d="m5 14-.8 1.8L2.5 16.5l1.7.7L5 19l.8-1.8 1.7-.7-1.7-.7L5 14Z"/></svg><span>优化关键词</span>';
+    optimizeBtn.style.cssText = 'margin:4px 0 2px;display:inline-flex;align-items:center;gap:6px;font-size:0.78rem;color:#4338ca;background:#eef2ff;border:1px solid #c7d2fe;border-radius:7px;padding:5px 12px;cursor:pointer;font-weight:700';
+
+    const editActions = document.createElement('div');
+    editActions.style.cssText = 'display:flex;align-items:center;flex-wrap:wrap;gap:8px';
+    editActions.append(editBtn, optimizeBtn);
+
     const editWrap = document.createElement('div');
     editWrap.style.cssText = 'margin:8px 0';
     editWrap.hidden = true;
     editWrap.innerHTML = '<label style="font-size:0.78rem;color:#6b7280;display:block;margin-bottom:4px">编辑需求提示</label>'
         + '<textarea id="studioDesc-' + task.id + '" style="width:100%;min-height:64px;font-size:0.82rem;color:#374151;border:1px solid #e5e7eb;border-radius:8px;padding:8px;resize:vertical;line-height:1.5">' + esc(task.desc || '') + '</textarea>'
-        + '<button type="button" id="studioDescSave-' + task.id + '" style="margin-top:6px;font-size:0.78rem;color:#6366f1;background:#fff;border:1px solid #6366f1;border-radius:7px;padding:5px 14px;cursor:pointer;font-weight:600">保存需求</button>';
-    card.appendChild(editBtn);
+        + '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:6px"><button type="button" id="studioDescSave-' + task.id + '" style="font-size:0.78rem;color:#6366f1;background:#fff;border:1px solid #6366f1;border-radius:7px;padding:5px 14px;cursor:pointer;font-weight:600">保存需求</button><span id="studioOptimizeStatus-' + task.id + '" style="font-size:0.76rem;color:#6b7280"></span></div>';
+    card.appendChild(editActions);
     card.appendChild(editWrap);
     editBtn.onclick = () => {
         editWrap.hidden = !editWrap.hidden;
         editBtn.textContent = editWrap.hidden ? '✎ 编辑需求' : '收起编辑';
         if (!editWrap.hidden) editWrap.querySelector('textarea').focus();
     };
+    optimizeBtn.onclick = () => optimizeStudioDesc(task, editWrap, editBtn, optimizeBtn);
     editWrap.querySelector('#studioDescSave-' + task.id).onclick = (e) => saveStudioDesc(task.id, e.target);
 
     // source image thumbnails
@@ -1580,6 +1590,50 @@ async function sendToRpa(taskId, btn, card, knownTask) {
         btn.disabled = false;
         btn.textContent = originalText;
         showRpaResult(false, null, null, e.message);
+    }
+}
+
+async function optimizeStudioDesc(task, editWrap, editBtn, btn) {
+    const textarea = document.getElementById('studioDesc-' + task.id);
+    const status = document.getElementById('studioOptimizeStatus-' + task.id);
+    const prompt = String(textarea?.value || '').trim();
+    if (prompt.length < 2) {
+        alert('请先填写需要优化的关键词');
+        textarea?.focus();
+        return;
+    }
+
+    editWrap.hidden = false;
+    editBtn.textContent = '收起编辑';
+    const label = btn.querySelector('span');
+    const originalLabel = label.textContent;
+    btn.disabled = true;
+    label.textContent = '优化中...';
+    status.textContent = 'AI 正在优化，请稍候';
+    status.style.color = '#6b7280';
+
+    try {
+        const response = await fetch('/api/admin-optimize-prompt', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt })
+        });
+        const data = await response.json();
+        if (!response.ok || !data.ok || !data.optimized) {
+            throw new Error(data.error || '优化失败');
+        }
+        textarea.value = data.optimized;
+        textarea.focus();
+        status.textContent = task.sentToRpa
+            ? '已优化，请确认保存；重新发送 RPA 后生效'
+            : '已优化，请确认后保存';
+        status.style.color = '#047857';
+    } catch (error) {
+        status.textContent = '优化失败：' + error.message;
+        status.style.color = '#b91c1c';
+    } finally {
+        btn.disabled = false;
+        label.textContent = originalLabel;
     }
 }
 

@@ -10,7 +10,8 @@ const ADMIN_PATHS = new Set([
     '/api/send-feedback',
     '/api/notify-test',
     '/api/studio-webhook',
-    '/api/studio-complete'
+    '/api/studio-complete',
+    '/api/admin-optimize-prompt'
 ]);
 
 export async function onRequest(context) {

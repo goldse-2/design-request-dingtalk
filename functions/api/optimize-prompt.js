@@ -56,12 +56,7 @@ export async function onRequestPost({ request, env }) {
         return Response.json({ ok: false, error: `提示词不能超过 ${inputLimit} 字` }, { status: 400 });
     }
 
-    const requestContent = {
-        system: '你是专业电商视觉提示词编辑。把用户的原始描述优化为适合 GPT Image 2.0 的中文生图提示词。保留用户的产品、数量、文字内容、品牌要求和核心意图，不得擅自改变。禁止输出任何尺寸、像素、分辨率、画面比例或宽高信息。避免空泛形容词，避免解释、标题、Markdown、引号和负面提示词列表。只输出可直接用于生图的一段提示词，控制在 800 个中文字符内。',
-        user: `原始提示词：${prompt}`,
-        temperature: 0.45,
-        maxTokens: 900
-    };
+    const requestContent = buildOptimizeRequest(prompt);
     const actionLimit = ACTION_LIMITS[action];
     const quota = await consumeDailyQuota(env.SUBMISSIONS, userId, action);
     if (!quota.allowed) {
@@ -93,6 +88,15 @@ export async function onRequestPost({ request, env }) {
                     : 'AI 服务连接失败，请稍后重试';
         return Response.json({ ok: false, error: message, remaining: quota.previousRemaining }, { status: 503 });
     }
+}
+
+export function buildOptimizeRequest(prompt) {
+    return {
+        system: '你是专业电商视觉提示词编辑。把用户的原始描述优化为适合 GPT Image 2.0 的中文生图提示词。保留用户的产品、数量、文字内容、品牌要求和核心意图，不得擅自改变。禁止输出任何尺寸、像素、分辨率、画面比例或宽高信息。避免空泛形容词，避免解释、标题、Markdown、引号和负面提示词列表。只输出可直接用于生图的一段提示词，控制在 800 个中文字符内。',
+        user: `原始提示词：${prompt}`,
+        temperature: 0.45,
+        maxTokens: 900
+    };
 }
 
 function validateOrigin(request) {
