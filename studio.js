@@ -438,6 +438,14 @@ const RESIZE_FORM = `
                     <button type="button" class="resize-target-btn active" data-width="1464" data-height="600">修改成 1464 × 600<small>命中规格可本地处理</small></button>
                     <button type="button" class="resize-target-btn" data-width="1600" data-height="1600">修改成 1600 × 1600<small>1:1 图片本地处理</small></button>
                     <button type="button" class="resize-target-btn" data-width="970" data-height="600">修改成 970 × 600<small>AI 2K 后台处理</small></button>
+                    <button type="button" class="resize-target-btn" data-width="600" data-height="450">修改成 600 × 450<small>AI 2K 后台处理</small></button>
+                    <button type="button" class="resize-target-btn" data-custom="true">自定义尺寸<small>输入目标宽度和高度</small></button>
+                </div>
+                <div class="resize-custom-size" id="resizeCustomSize" hidden>
+                    <label>宽度（px）<input id="resizeCustomWidth" type="number" min="100" max="5000" step="1" inputmode="numeric" placeholder="例如 1200"></label>
+                    <span class="resize-custom-separator">×</span>
+                    <label>高度（px）<input id="resizeCustomHeight" type="number" min="100" max="5000" step="1" inputmode="numeric" placeholder="例如 900"></label>
+                    <div class="resize-custom-hint">宽度和高度可填写 100–5000 px</div>
                 </div>
             </div>
             <div class="sf-section">
@@ -1002,6 +1010,9 @@ function initResizeTool() {
     const outputBadge = document.getElementById('resizeOutputBadge');
     const emptyPreview = document.getElementById('resizeEmptyPreview');
     const canvas = document.getElementById('resizeCanvas');
+    const customSize = document.getElementById('resizeCustomSize');
+    const customWidth = document.getElementById('resizeCustomWidth');
+    const customHeight = document.getElementById('resizeCustomHeight');
     const context = canvas.getContext('2d');
     let sourceName = 'aplus-image';
     let outputType = 'image/png';
@@ -1011,11 +1022,23 @@ function initResizeTool() {
 
     const getTarget = () => {
         const active = targetGrid.querySelector('.resize-target-btn.active');
+        if (active?.dataset.custom === 'true') {
+            return {
+                width: Number(customWidth?.value || 0),
+                height: Number(customHeight?.value || 0),
+                custom: true
+            };
+        }
         return {
             width: Number(active?.dataset.width || 1464),
-            height: Number(active?.dataset.height || 600)
+            height: Number(active?.dataset.height || 600),
+            custom: false
         };
     };
+    const isValidTarget = target => Number.isInteger(target.width)
+        && Number.isInteger(target.height)
+        && target.width >= 100 && target.width <= 5000
+        && target.height >= 100 && target.height <= 5000;
     const reset = (message = '等待上传图片') => {
         localReady = false;
         downloadBtn.disabled = true;
@@ -1030,7 +1053,13 @@ function initResizeTool() {
     };
     const updateTarget = () => {
         const target = getTarget();
+        customSize.hidden = !target.custom;
         dropText.textContent = '上传需要修改尺寸的图片';
+        if (!isValidTarget(target)) {
+            if (outputBadge) outputBadge.textContent = '自定义尺寸';
+            reset('请输入 100–5000 px 的自定义宽度和高度');
+            return;
+        }
         if (outputBadge) outputBadge.textContent = `${target.width} × ${target.height}`;
         if (currentImage && currentFile) prepareResizeResult(currentFile, currentImage);
         else reset();
@@ -1063,6 +1092,10 @@ function initResizeTool() {
     };
     const prepareResizeResult = (file, image) => {
         const target = getTarget();
+        if (!isValidTarget(target)) {
+            showError('请输入 100–5000 px 的自定义宽度和高度。');
+            return;
+        }
         if (canResizeLocally(image, target)) {
             renderLocalResize(image, target);
             localReady = true;
@@ -1118,6 +1151,7 @@ function initResizeTool() {
             updateTarget();
         });
     });
+    [customWidth, customHeight].forEach(field => field?.addEventListener('input', updateTarget));
     input.addEventListener('change', () => {
         if (input.files[0]) loadFile(input.files[0]);
         input.value = '';
@@ -1137,6 +1171,10 @@ function initResizeTool() {
     downloadBtn.addEventListener('click', () => {
         if (!currentFile || !currentImage) return;
         const target = getTarget();
+        if (!isValidTarget(target)) {
+            showError('请输入 100–5000 px 的自定义宽度和高度。');
+            return;
+        }
         if (!localReady) {
             submitResizeAiTask(currentFile, target, status, downloadBtn);
             return;

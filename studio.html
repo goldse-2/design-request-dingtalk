@@ -47,6 +47,12 @@
         .resize-target-btn { min-height: 52px; padding: 10px; border: 1px solid #d1d5db; border-radius: 9px; background: #fff; color: #374151; font-size: .86rem; font-weight: 800; cursor: pointer; }
         .resize-target-btn.active { border-color: #111827; background: #111827; color: #fff; box-shadow: 0 8px 18px rgba(17,24,39,.16); }
         .resize-target-btn small { display: block; margin-top: 3px; font-size: .68rem; font-weight: 600; opacity: .72; }
+        .resize-custom-size { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); gap: 8px; align-items: end; margin-top: 10px; padding: 11px; border: 1px solid #e5e7eb; border-radius: 9px; background: #f9fafb; }
+        .resize-custom-size[hidden] { display: none; }
+        .resize-custom-size label { color: #6b7280; font-size: .72rem; font-weight: 700; }
+        .resize-custom-size input { width: 100%; min-height: 38px; margin-top: 5px; padding: 8px 9px; border: 1px solid #d1d5db; border-radius: 7px; background: #fff; color: #111827; font-size: .86rem; }
+        .resize-custom-separator { padding-bottom: 9px; color: #9ca3af; font-weight: 800; }
+        .resize-custom-hint { grid-column: 1 / -1; color: #9ca3af; font-size: .7rem; line-height: 1.4; }
         .resize-preview-body { min-height: 650px; }
         .resize-preview-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
         .resize-preview-title { font-size: .9rem; font-weight: 700; color: #111827; }
@@ -269,6 +275,6 @@
     帮助中心
 </button>
 
-<script src="studio.js?v=20260714-resize-ai-task"></script>
+<script src="studio.js?v=20260714-resize-custom"></script>
 </body>
 </html>

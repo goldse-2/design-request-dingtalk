@@ -18,6 +18,9 @@ export async function onRequestPost(context) {
     if (mode === 'resize_ai' && (!Array.isArray(refKeys) || refKeys.length !== 1)) {
         return Response.json({ ok: false, error: 'Resize AI mode requires exactly one image' }, { status: 400 });
     }
+    if (mode === 'resize_ai' && !isValidResizeTarget(resizeTarget || size)) {
+        return Response.json({ ok: false, error: '目标尺寸必须在 100–5000 px 之间' }, { status: 400 });
+    }
     if (!env.SUBMISSIONS) {
         return Response.json({ ok: false, error: 'Storage not configured' }, { status: 500 });
     }
@@ -158,6 +161,14 @@ function studioModeText(mode) {
     if (mode === 'variant') return '变体改色';
     if (mode === 'resize_ai') return '尺寸修改';
     return mode === 'free' ? '自由模式' : '程序模式';
+}
+
+function isValidResizeTarget(value) {
+    const match = String(value || '').trim().match(/^(\d{3,4})\s*[x×*]\s*(\d{3,4})$/i);
+    if (!match) return false;
+    const width = Number(match[1]);
+    const height = Number(match[2]);
+    return width >= 100 && width <= 5000 && height >= 100 && height <= 5000;
 }
 
 async function appendQueue(kv, key, taskId) {
