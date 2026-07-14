@@ -3,7 +3,7 @@ export async function onRequestGet(context) {
     const url = new URL(request.url);
     const includeAll = url.searchParams.get('all') === '1';
     const builtin = await getBuiltinExamples(context);
-    const custom = await getCustomExamples(env);
+    const custom = sortCustomExamples(await getCustomExamples(env));
     const visibleCustom = includeAll ? custom : custom.filter(x => x.status === 'approved');
     return Response.json({ ok: true, examples: [...visibleCustom, ...builtin] });
 }
@@ -68,7 +68,20 @@ export async function onRequestPatch(context) {
     if (!target) return Response.json({ ok: false, error: 'Not found' }, { status: 404 });
 
     if (action === 'approve') target.status = 'approved';
-    else if (action === 'reject') target.status = 'pending';
+    else if (action === 'reject') {
+        target.status = 'pending';
+        target.pinned = false;
+        delete target.pinnedAt;
+    } else if (action === 'pin') {
+        for (const item of list) {
+            item.pinned = item.id === id;
+            if (!item.pinned) delete item.pinnedAt;
+        }
+        target.pinnedAt = new Date().toISOString();
+    } else if (action === 'unpin') {
+        target.pinned = false;
+        delete target.pinnedAt;
+    }
     if (typeof prompt === 'string' && prompt.trim()) {
         target.prompt = prompt.trim();
         target.title = makeTitle(prompt);
@@ -103,6 +116,17 @@ async function getCustomExamples(env) {
     const raw = await env.SUBMISSIONS.get('studio-examples-index');
     if (!raw) return [];
     try { return JSON.parse(raw); } catch { return []; }
+}
+
+function sortCustomExamples(list) {
+    return [...list].sort((left, right) => {
+        const pinOrder = Number(Boolean(right.pinned)) - Number(Boolean(left.pinned));
+        if (pinOrder) return pinOrder;
+        if (left.pinned && right.pinned) {
+            return String(right.pinnedAt || '').localeCompare(String(left.pinnedAt || ''));
+        }
+        return 0;
+    });
 }
 
 async function getBuiltinExamples(context) {

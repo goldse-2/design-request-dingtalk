@@ -2079,14 +2079,17 @@ function exampleCard(item) {
     return '<div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;background:#fff;display:flex;flex-direction:column">'
         + '<img src="' + item.image + '" style="width:100%;height:160px;object-fit:cover;display:block">'
         + '<div style="padding:12px;display:flex;flex-direction:column;gap:8px;flex:1">'
-        + '<div style="font-weight:700;font-size:0.86rem;color:#111827">' + escapeHtml(item.title || '未命名案例') + '</div>'
+        + '<div style="display:flex;align-items:center;gap:6px;min-width:0"><div style="font-weight:700;font-size:0.86rem;color:#111827;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escapeHtml(item.title || '未命名案例') + '</div>'
+        + (item.pinned ? '<span style="flex:none;font-size:0.7rem;color:#b45309;background:#fef3c7;border-radius:4px;padding:2px 5px;font-weight:700">已置顶</span>' : '')
+        + '</div>'
         + '<textarea id="exPrompt-' + item.id + '" style="width:100%;min-height:70px;font-size:0.78rem;color:#374151;border:1px solid #e5e7eb;border-radius:8px;padding:8px;resize:vertical;line-height:1.45">' + escapeHtml(item.prompt || '') + '</textarea>'
-        + '<div style="display:flex;gap:8px;margin-top:auto">'
-        + '<button onclick="saveExamplePrompt(\'' + item.id + '\')" style="flex:1;padding:7px;border:1px solid #6366f1;background:#fff;color:#6366f1;border-radius:8px;cursor:pointer;font-size:0.78rem">保存提示词</button>'
+        + '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:auto">'
+        + '<button onclick="saveExamplePrompt(\'' + item.id + '\')" style="padding:7px;border:1px solid #6366f1;background:#fff;color:#6366f1;border-radius:8px;cursor:pointer;font-size:0.78rem">保存提示词</button>'
         + (approved
-            ? '<button onclick="setExampleStatus(\'' + item.id + '\',\'reject\')" style="flex:1;padding:7px;border:1px solid #f59e0b;background:#fff;color:#f59e0b;border-radius:8px;cursor:pointer;font-size:0.78rem">下架</button>'
-            : '<button onclick="setExampleStatus(\'' + item.id + '\',\'approve\')" style="flex:1;padding:7px;border:1px solid #10b981;background:#10b981;color:#fff;border-radius:8px;cursor:pointer;font-size:0.78rem">审核通过</button>')
-        + '<button onclick="deleteStudioExample(\'' + item.id + '\')" style="padding:7px 10px;border:1px solid #ef4444;background:#fff;color:#ef4444;border-radius:8px;cursor:pointer;font-size:0.78rem">删除</button>'
+            ? '<button onclick="setExamplePinned(\'' + item.id + '\',' + Boolean(item.pinned) + ')" style="padding:7px;border:1px solid #d97706;background:' + (item.pinned ? '#fffbeb' : '#fff') + ';color:#b45309;border-radius:8px;cursor:pointer;font-size:0.78rem">' + (item.pinned ? '取消置顶' : '置顶') + '</button>'
+                + '<button onclick="setExampleStatus(\'' + item.id + '\',\'reject\')" style="padding:7px;border:1px solid #f59e0b;background:#fff;color:#f59e0b;border-radius:8px;cursor:pointer;font-size:0.78rem">下架</button>'
+            : '<button onclick="setExampleStatus(\'' + item.id + '\',\'approve\')" style="padding:7px;border:1px solid #10b981;background:#10b981;color:#fff;border-radius:8px;cursor:pointer;font-size:0.78rem">审核通过</button>')
+        + '<button onclick="deleteStudioExample(\'' + item.id + '\')" style="padding:7px;border:1px solid #ef4444;background:#fff;color:#ef4444;border-radius:8px;cursor:pointer;font-size:0.78rem">删除</button>'
         + '</div></div></div>';
 }
 
@@ -2098,6 +2101,17 @@ async function setExampleStatus(id, action) {
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok || !json.ok) { alert('操作失败：' + (json.error || res.status)); return; }
+    loadExamplesAdmin();
+}
+
+async function setExamplePinned(id, isPinned) {
+    const res = await fetch('/api/studio-examples', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, action: isPinned ? 'unpin' : 'pin' })
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json.ok) { alert('置顶失败：' + (json.error || res.status)); return; }
     loadExamplesAdmin();
 }
 
