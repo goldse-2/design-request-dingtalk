@@ -16,7 +16,8 @@ export async function recolorImage({ env, scope, colorName, colorHex, mimeType, 
     if (estimateBase64Bytes(safeBase64) > MAX_IMAGE_BYTES) throw new Error('图片单张不能超过 15MB');
     if (!safeColorName && !safeColorHex) throw new Error('请选择目标颜色');
 
-    const prompt = buildPrompt(safeScope, safeColorName, safeColorHex);
+    const prompt = buildPrompt(safeScope, safeColorName, safeColorHex)
+        + '\nReturn the final image in JPEG format with an opaque background.';
     const apiBase = String(env.APIKEYFUN_API_BASE || DEFAULT_API_BASE).replace(/\/+$/, '');
     const model = String(env.APIKEYFUN_IMAGE_MODEL || DEFAULT_MODEL);
     const controller = new AbortController();
@@ -55,7 +56,13 @@ async function callResponsesApi({ apiBase, apiKey, model, prompt, mimeType, base
         }],
         store: false
     };
-    if (withTool) body.tools = [{ type: 'image_generation' }];
+    if (withTool) {
+        body.tools = [{
+            type: 'image_generation',
+            output_format: 'jpeg',
+            background: 'opaque'
+        }];
+    }
     const response = await fetch(buildEndpoint(apiBase, 'responses'), {
         method: 'POST',
         headers: {
@@ -95,7 +102,7 @@ function extractImageResult(data) {
     if (image.url) return { url: image.url, mimeType: image.mimeType || 'image/png' };
     const base64 = image.base64 || image.b64_json || image.image_base64;
     if (!base64) return null;
-    const mimeType = image.mimeType || 'image/png';
+    const mimeType = inferImageMimeType(base64, image.mimeType);
     return { dataUrl: `data:${mimeType};base64,${base64}`, mimeType };
 }
 
@@ -107,23 +114,37 @@ function collectImages(value, candidates) {
     }
     if (typeof value !== 'object') return;
     if (value.type === 'image_generation_call' && value.result) {
-        candidates.push({ base64: value.result, mimeType: 'image/png' });
+        candidates.push({ base64: value.result, mimeType: inferImageMimeType(value.result) });
     }
     if (value.type === 'output_image' || value.type === 'image') {
         candidates.push({
             url: value.url,
             base64: value.image_base64 || value.base64 || value.b64_json,
-            mimeType: value.mime_type || value.mimeType || 'image/png'
+            mimeType: inferImageMimeType(
+                value.image_base64 || value.base64 || value.b64_json,
+                value.mime_type || value.mimeType
+            )
         });
     }
     if (value.b64_json || value.image_base64 || value.base64 || value.url) {
         candidates.push({
             url: value.url,
             base64: value.b64_json || value.image_base64 || value.base64,
-            mimeType: value.mime_type || value.mimeType || 'image/png'
+            mimeType: inferImageMimeType(
+                value.b64_json || value.image_base64 || value.base64,
+                value.mime_type || value.mimeType
+            )
         });
     }
     Object.keys(value).forEach(key => collectImages(value[key], candidates));
+}
+
+function inferImageMimeType(base64, fallback = 'image/png') {
+    const value = String(base64 || '').replace(/\s/g, '');
+    if (value.startsWith('/9j/')) return 'image/jpeg';
+    if (value.startsWith('iVBOR')) return 'image/png';
+    if (value.startsWith('UklGR')) return 'image/webp';
+    return fallback || 'image/png';
 }
 
 function buildEndpoint(apiBase, path) {

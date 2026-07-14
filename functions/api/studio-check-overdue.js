@@ -403,7 +403,7 @@ async function processResizeAiTask(env, task) {
         `Resize and adapt the uploaded image to exactly ${target.width}x${target.height}px.`,
         'Keep the original product, subject, colors, text, logo, material details, lighting style, and composition intent as much as possible.',
         'Use a clean ecommerce-quality result. Do not add watermarks, frames, captions, extra text, or unrelated objects.',
-        'Return only one final image.'
+        'Return only one final image in JPEG format with an opaque background.'
     ].join('\n');
     const result = await editImageWithPrompt({
         env,
@@ -457,17 +457,27 @@ async function resultToBytes(result) {
     if (result?.dataUrl) {
         const match = String(result.dataUrl).match(/^data:([^;]+);base64,(.+)$/);
         if (!match) throw new Error('Invalid variant data URL');
-        return { mimeType: match[1], bytes: base64ToBytes(match[2]) };
+        const bytes = base64ToBytes(match[2]);
+        return { mimeType: detectImageMimeType(bytes, match[1]), bytes };
     }
     if (result?.url) {
         const response = await fetch(result.url);
         if (!response.ok) throw new Error('Variant result image download failed');
+        const bytes = await response.arrayBuffer();
         return {
-            mimeType: response.headers.get('content-type') || result.mimeType || 'image/png',
-            bytes: await response.arrayBuffer()
+            mimeType: detectImageMimeType(bytes, response.headers.get('content-type') || result.mimeType),
+            bytes
         };
     }
     throw new Error('Variant result image missing');
+}
+
+function detectImageMimeType(buffer, fallback = 'image/png') {
+    const bytes = new Uint8Array(buffer);
+    if (bytes[0] === 0xff && bytes[1] === 0xd8) return 'image/jpeg';
+    if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return 'image/png';
+    if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46) return 'image/webp';
+    return String(fallback || '').split(';')[0] || 'image/png';
 }
 
 async function notifyUserDone(env, task, origin) {
