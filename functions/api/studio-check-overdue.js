@@ -13,16 +13,19 @@ export async function onRequestGet(context) {
         const now = Date.now();
         const url = new URL(request.url);
         const rpaOnly = url.searchParams.get('rpaOnly') === '1';
+        const imageOnly = url.searchParams.get('imageOnly') === '1';
         const autoSendThreshold = 2 * 60 * 1000;
         const overdueThreshold = 15 * 60 * 1000;
         const autoSent = [];
         const autoErrors = [];
         const notified = [];
-        const AUTO_QUEUE_KEY = 'studio:autoQueue:v1';
-        const PROCESSING_QUEUE_KEY = 'studio:processingQueue:v1';
+        const RPA_QUEUE_KEY = 'studio:rpaQueue:v2';
+        const IMAGE_QUEUE_KEY = 'studio:imageQueue:v2';
+        const PROCESSING_QUEUE_KEY = 'studio:processingQueue:v2';
+        const selectedQueueKey = imageOnly ? IMAGE_QUEUE_KEY : RPA_QUEUE_KEY;
 
-        // Outside business hours, skip KV entirely so paused overnight checks cost no operations.
-        if (!isAutoSendWindow(now)) {
+        // RPA auto-send follows business hours. Image tasks do not require approval and can run anytime.
+        if (!imageOnly && !isAutoSendWindow(now)) {
             return Response.json({
                 ok: true,
                 suspended: true,
@@ -37,16 +40,19 @@ export async function onRequestGet(context) {
             });
         }
 
-        let autoQueueIds = await readQueue(env.SUBMISSIONS, AUTO_QUEUE_KEY);
-        let processingQueueIds = await readQueue(env.SUBMISSIONS, PROCESSING_QUEUE_KEY);
+        let autoQueueIds = await readQueue(env.SUBMISSIONS, selectedQueueKey);
+        let processingQueueIds = imageOnly ? [] : await readQueue(env.SUBMISSIONS, PROCESSING_QUEUE_KEY);
         if (autoQueueIds === null || processingQueueIds === null) {
-            const migrated = await migrateQueues(env, now, autoSendThreshold, overdueThreshold);
-            autoQueueIds = migrated.autoQueueIds;
-            processingQueueIds = migrated.processingQueueIds;
+            const migrated = await migrateQueues(env);
+            await writeQueue(env.SUBMISSIONS, RPA_QUEUE_KEY, migrated.rpaQueueIds);
+            await writeQueue(env.SUBMISSIONS, IMAGE_QUEUE_KEY, migrated.imageQueueIds);
+            await writeQueue(env.SUBMISSIONS, PROCESSING_QUEUE_KEY, migrated.processingQueueIds);
+            autoQueueIds = imageOnly ? migrated.imageQueueIds : migrated.rpaQueueIds;
+            processingQueueIds = imageOnly ? [] : migrated.processingQueueIds;
         }
 
-        const autoBatchIds = autoQueueIds.slice(0, 3);
-        const processingBatchIds = processingQueueIds.slice(0, 10);
+        const autoBatchIds = autoQueueIds.slice(0, imageOnly ? 1 : 3);
+        const processingBatchIds = imageOnly ? [] : processingQueueIds.slice(0, 10);
         const deferredAutoQueue = autoQueueIds.slice(autoBatchIds.length);
         const deferredProcessingQueue = processingQueueIds.slice(processingBatchIds.length);
         const autoSendTasks = await readStudioTasks(env, autoBatchIds);
@@ -65,20 +71,18 @@ export async function onRequestGet(context) {
             const retouchWebhook = env.RPA_WEBHOOK_URL_RETOUCH || 'https://api-rpa.bazhuayu.com/api/v1/bots/webhooks/6a543c91645904b3178e096b/invoke';
             const origin = new URL(request.url).origin;
             for (const task of autoSendTasks) {
+                const isImageTask = task.mode === 'variant' || task.mode === 'resize_ai';
+                if (imageOnly !== isImageTask) continue;
                 const createdAt = typeof task.timestamp === 'number'
                     ? task.timestamp
                     : new Date(task.createdAt || task.timestamp || 0).getTime();
-                if (!createdAt || (now - createdAt) < autoSendThreshold) {
+                if (!imageOnly && (!createdAt || (now - createdAt) < autoSendThreshold)) {
                     nextAutoQueue.push(task.id);
                     continue;
                 }
-                if (task.pausedAuto) continue;
+                if (!imageOnly && task.pausedAuto) continue;
 
-                if (task.mode === 'variant' || task.mode === 'resize_ai') {
-                    if (rpaOnly) {
-                        deferredAutoQueue.push(task.id);
-                        continue;
-                    }
+                if (isImageTask) {
                     try {
                         const result = task.mode === 'resize_ai'
                             ? await processResizeAiTask(env, task)
@@ -186,8 +190,10 @@ export async function onRequestGet(context) {
 
         const finalAutoQueue = unique([...nextAutoQueue, ...deferredAutoQueue]);
         const finalProcessingQueue = unique([...nextProcessingQueue, ...deferredProcessingQueue]);
-        await writeQueue(env.SUBMISSIONS, AUTO_QUEUE_KEY, finalAutoQueue);
-        await writeQueue(env.SUBMISSIONS, PROCESSING_QUEUE_KEY, finalProcessingQueue);
+        await writeQueue(env.SUBMISSIONS, selectedQueueKey, finalAutoQueue);
+        if (!imageOnly) {
+            await writeQueue(env.SUBMISSIONS, PROCESSING_QUEUE_KEY, finalProcessingQueue);
+        }
 
         return Response.json({
             ok: true,
@@ -199,8 +205,10 @@ export async function onRequestGet(context) {
             notified: notified.length,
             tasks: notified,
             rpaOnly,
+            imageOnly,
+            queueType: imageOnly ? 'image' : 'rpa',
             queueRemaining: finalAutoQueue.length,
-            processingQueueRemaining: finalProcessingQueue.length
+            processingQueueRemaining: imageOnly ? null : finalProcessingQueue.length
         });
     } catch (err) {
         return Response.json({ ok: false, error: err.message }, { status: 500 });
@@ -265,8 +273,9 @@ function unique(ids) {
     return [...new Set(Array.isArray(ids) ? ids : [])];
 }
 
-async function migrateQueues(env, now, autoSendThreshold, overdueThreshold) {
-    const autoQueueIds = [];
+async function migrateQueues(env) {
+    const rpaQueueIds = [];
+    const imageQueueIds = [];
     const processingQueueIds = [];
     let cursor;
     let pages = 0;
@@ -281,12 +290,11 @@ async function migrateQueues(env, now, autoSendThreshold, overdueThreshold) {
             const meta = key.metadata || {};
             const mode = meta.mode || '';
             const status = meta.status || '';
-            const timestamp = typeof meta.timestamp === 'number' ? meta.timestamp : Number(meta.timestamp || 0);
             const isBackgroundTask = mode === 'variant' || mode === 'resize_ai';
 
             if (isBackgroundTask) {
-                if (['pending', 'processing', 'done'].includes(status) && !meta.pausedAuto && !meta.dingtalkNotified && !meta.r2AutoNotified) {
-                    autoQueueIds.push(key.name);
+                if (['pending', 'processing', 'done'].includes(status) && !meta.dingtalkNotified && !meta.r2AutoNotified) {
+                    imageQueueIds.push(key.name);
                 }
                 continue;
             }
@@ -295,7 +303,7 @@ async function migrateQueues(env, now, autoSendThreshold, overdueThreshold) {
                 && status === 'pending'
                 && !meta.sentToRpa
                 && !meta.pausedAuto) {
-                autoQueueIds.push(key.name);
+                rpaQueueIds.push(key.name);
             }
 
             if (status === 'processing'
@@ -309,7 +317,8 @@ async function migrateQueues(env, now, autoSendThreshold, overdueThreshold) {
     } while (cursor && pages < 5);
 
     return {
-        autoQueueIds: unique(autoQueueIds),
+        rpaQueueIds: unique(rpaQueueIds),
+        imageQueueIds: unique(imageQueueIds),
         processingQueueIds: unique(processingQueueIds)
     };
 }

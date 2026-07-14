@@ -60,7 +60,10 @@ export async function onRequestPost(context) {
         await env.SUBMISSIONS.put(taskId, JSON.stringify(task), {
             metadata: studioTaskMetadata(task)
         });
-        await appendQueue(env.SUBMISSIONS, 'studio:autoQueue:v1', taskId);
+        const queueKey = mode === 'variant' || mode === 'resize_ai'
+            ? 'studio:imageQueue:v2'
+            : 'studio:rpaQueue:v2';
+        await appendQueue(env.SUBMISSIONS, queueKey, taskId);
     } catch (err) {
         return Response.json({ ok: false, error: 'Storage failed' }, { status: 500 });
     }
@@ -69,7 +72,10 @@ export async function onRequestPost(context) {
     let queueCount = 0;
 
     // 发送钉钉通知给管理员
-    if (env.DINGTALK_APPKEY && env.DINGTALK_APPSECRET && env.ADMIN_USER_ID) {
+    if (['free', 'program', 'retouch'].includes(mode)
+        && env.DINGTALK_APPKEY
+        && env.DINGTALK_APPSECRET
+        && env.ADMIN_USER_ID) {
         const origin = new URL(request.url).origin;
         const p = (async () => {
             const token = await getAccessToken(env).catch(() => null);

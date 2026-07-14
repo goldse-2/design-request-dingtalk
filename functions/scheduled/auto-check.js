@@ -1,17 +1,19 @@
 export async function onRequest(context) {
-    const { env } = context;
     
     try {
-        const checkUrl = 'https://design-request-dingtalk.pages.dev/api/studio-check-overdue?rpaOnly=1';
-        const res = await fetch(checkUrl);
-        const data = await res.json();
+        const origin = new URL(context.request.url).origin;
+        const rpaRes = await fetch(origin + '/api/studio-check-overdue?rpaOnly=1');
+        const rpaData = await rpaRes.json();
+        const imageRes = await fetch(origin + '/api/studio-check-overdue?imageOnly=1');
+        const imageData = await imageRes.json();
         
-        console.log('Auto-check triggered:', data);
+        console.log('Auto-check triggered:', { rpa: rpaData, image: imageData });
         
         return Response.json({
             ok: true,
             timestamp: new Date().toISOString(),
-            result: data
+            result: rpaData,
+            imageResult: imageData
         });
     } catch (err) {
         console.error('Auto-check failed:', err);

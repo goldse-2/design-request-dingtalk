@@ -26,8 +26,12 @@ export async function onRequestPost(context) {
         await env.SUBMISSIONS.put(taskId, JSON.stringify(task), {
             metadata: studioTaskMetadata(task)
         });
-        if (!task.pausedAuto && task.kind === 'studio' && task.status === 'pending' && !task.sentToRpa) {
-            await appendQueue(env.SUBMISSIONS, 'studio:autoQueue:v1', taskId);
+        if (!task.pausedAuto
+            && task.kind === 'studio'
+            && ['free', 'program', 'retouch'].includes(task.mode)
+            && task.status === 'pending'
+            && !task.sentToRpa) {
+            await appendQueue(env.SUBMISSIONS, 'studio:rpaQueue:v2', taskId);
         }
 
         return Response.json({ ok: true });

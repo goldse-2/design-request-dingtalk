@@ -1167,6 +1167,7 @@ checkAuth();
 let studioAdminTasks = [];
 let studioNotifyRefreshTimer = null;
 let studioNotifyRefreshAttempts = 0;
+const studioApprovalModes = new Set(['free', 'program', 'retouch']);
 
 async function loadStudioAdmin() {
     const container = document.getElementById('studioAdminContent');
@@ -1219,7 +1220,7 @@ async function loadStudioAdmin() {
         renderStudioTasks(tasks, 'all');
         
         tasks.forEach(task => {
-            if (task.status === 'pending' && !task.sentToRpa && !task.pausedAuto) {
+            if (studioApprovalModes.has(task.mode) && task.status === 'pending' && !task.sentToRpa && !task.pausedAuto) {
                 const createdAt = typeof task.timestamp === 'number' ? task.timestamp : new Date(task.createdAt || task.timestamp || 0).getTime();
                 startCountdownTimer(task.id, createdAt);
             }
@@ -1245,6 +1246,7 @@ function renderStudioTasks(allTasks, category) {
 }
 
 function renderStudioTask(task) {
+    const requiresApproval = studioApprovalModes.has(task.mode);
     const st = task.status === 'done'
         ? ['待通知', '#16a34a', '#dcfce7']
         : task.status === 'processing'
@@ -1271,9 +1273,9 @@ function renderStudioTask(task) {
         + '<span style="font-weight:700;color:#111827">' + esc(displayTaskTitle) + '</span>'
         + '<span style="font-size:0.8rem;color:#6b7280">' + modeText + '</span>'
         + '<span style="font-size:0.75rem;background:' + st[2] + ';color:' + st[1] + ';padding:2px 10px;border-radius:10px">' + st[0] + '</span>';
-    if (task.status === 'pending' && !task.sentToRpa && task.pausedAuto) {
+    if (requiresApproval && task.status === 'pending' && !task.sentToRpa && task.pausedAuto) {
         html += '<span style="font-size:0.72rem;background:#fff7ed;color:#b45309;padding:2px 10px;border-radius:10px">已挂起自动发送</span>';
-    } else if (task.status === 'pending' && !task.sentToRpa) {
+    } else if (requiresApproval && task.status === 'pending' && !task.sentToRpa) {
         const createdAt = typeof task.timestamp === 'number' ? task.timestamp : new Date(task.createdAt || task.timestamp || 0).getTime();
         const elapsed = Date.now() - createdAt;
         const autoSendThreshold = 2 * 60 * 1000;
@@ -1357,7 +1359,14 @@ function renderStudioTask(task) {
     uploadBtn.style.cssText = 'font-size:0.82rem;color:#16a34a;background:#fff;border:1px solid #16a34a;border-radius:7px;padding:7px 16px;cursor:pointer;font-weight:600';
     uploadBtn.onclick = () => openManualUpload(task.id, card);
 
-    actions.append(feedbackBtn, rpaBtn, viewCodeBtn, uploadBtn);
+    if (requiresApproval) {
+        actions.append(feedbackBtn, rpaBtn, viewCodeBtn, uploadBtn);
+    } else {
+        const automaticLabel = document.createElement('span');
+        automaticLabel.textContent = 'AI 自动处理，无需审批';
+        automaticLabel.style.cssText = 'font-size:0.82rem;color:#047857;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:7px;padding:7px 12px;font-weight:600';
+        actions.append(automaticLabel);
+    }
     card.appendChild(actions);
     return card;
 }
@@ -1646,7 +1655,7 @@ function scheduleStudioNotificationRefresh(tasks) {
 }
 
 async function batchPauseStudioTasks(btn) {
-    const tasks = studioAdminTasks.filter(task => task.status === 'pending' && !task.sentToRpa && !task.pausedAuto);
+    const tasks = studioAdminTasks.filter(task => studioApprovalModes.has(task.mode) && task.status === 'pending' && !task.sentToRpa && !task.pausedAuto);
     if (!tasks.length) {
         alert('当前没有可挂起的待发送任务');
         return;
