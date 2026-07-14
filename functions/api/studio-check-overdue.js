@@ -11,6 +11,8 @@ export async function onRequestGet(context) {
 
     try {
         const now = Date.now();
+        const url = new URL(request.url);
+        const rpaOnly = url.searchParams.get('rpaOnly') === '1';
         const autoSendThreshold = 2 * 60 * 1000;
         const overdueThreshold = 15 * 60 * 1000;
         const autoSent = [];
@@ -43,8 +45,8 @@ export async function onRequestGet(context) {
             processingQueueIds = migrated.processingQueueIds;
         }
 
-        const autoBatchIds = autoQueueIds.slice(0, 10);
-        const processingBatchIds = processingQueueIds.slice(0, 20);
+        const autoBatchIds = autoQueueIds.slice(0, 3);
+        const processingBatchIds = processingQueueIds.slice(0, 10);
         const deferredAutoQueue = autoQueueIds.slice(autoBatchIds.length);
         const deferredProcessingQueue = processingQueueIds.slice(processingBatchIds.length);
         const autoSendTasks = await readStudioTasks(env, autoBatchIds);
@@ -73,6 +75,10 @@ export async function onRequestGet(context) {
                 if (task.pausedAuto) continue;
 
                 if (task.mode === 'variant' || task.mode === 'resize_ai') {
+                    if (rpaOnly) {
+                        deferredAutoQueue.push(task.id);
+                        continue;
+                    }
                     try {
                         const result = task.mode === 'resize_ai'
                             ? await processResizeAiTask(env, task)
@@ -118,11 +124,11 @@ export async function onRequestGet(context) {
                     if (task.mode === 'free' && taskNeedsRpaTranslation(task)) {
                         payload.params["描述"] = await translateForRpa(env, payload.params["描述"]);
                     }
-                    const res = await fetch(webhookUrl, {
+                    const res = await fetchWithTimeout(webhookUrl, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(payload)
-                    });
+                    }, 12000);
                     const text = await res.text();
                     if (!res.ok) throw new Error('RPA webhook HTTP ' + res.status + ': ' + text.slice(0, 300));
 
@@ -192,6 +198,7 @@ export async function onRequestGet(context) {
             autoErrors,
             notified: notified.length,
             tasks: notified,
+            rpaOnly,
             queueRemaining: finalAutoQueue.length,
             processingQueueRemaining: finalProcessingQueue.length
         });
@@ -218,6 +225,19 @@ async function safeKvGet(kv, key) {
     } catch (err) {
         console.error('KV get failed:', key, err.message);
         return null;
+    }
+}
+
+async function fetchWithTimeout(url, options, timeoutMs) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        return await fetch(url, { ...options, signal: controller.signal });
+    } catch (err) {
+        if (err?.name === 'AbortError') throw new Error('RPA webhook timed out');
+        throw err;
+    } finally {
+        clearTimeout(timeout);
     }
 }
 

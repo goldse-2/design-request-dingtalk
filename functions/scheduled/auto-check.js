@@ -2,7 +2,7 @@ export async function onRequest(context) {
     const { env } = context;
     
     try {
-        const checkUrl = 'https://design-request-dingtalk.pages.dev/api/studio-check-overdue';
+        const checkUrl = 'https://design-request-dingtalk.pages.dev/api/studio-check-overdue?rpaOnly=1';
         const res = await fetch(checkUrl);
         const data = await res.json();
         
