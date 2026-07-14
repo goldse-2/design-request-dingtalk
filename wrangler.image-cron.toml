@@ -1,0 +1,6 @@
+name = "design-request-image-cron"
+main = "workers/studio-image-cron.js"
+compatibility_date = "2024-01-01"
+
+[triggers]
+crons = ["*/3 * * * *"]

@@ -4,16 +4,13 @@ export async function onRequest(context) {
         const origin = new URL(context.request.url).origin;
         const rpaRes = await fetch(origin + '/api/studio-check-overdue?rpaOnly=1');
         const rpaData = await rpaRes.json();
-        const imageRes = await fetch(origin + '/api/studio-check-overdue?imageOnly=1');
-        const imageData = await imageRes.json();
         
-        console.log('Auto-check triggered:', { rpa: rpaData, image: imageData });
+        console.log('Auto-check triggered:', rpaData);
         
         return Response.json({
             ok: true,
             timestamp: new Date().toISOString(),
-            result: rpaData,
-            imageResult: imageData
+            result: rpaData
         });
     } catch (err) {
         console.error('Auto-check failed:', err);
