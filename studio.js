@@ -456,11 +456,12 @@ const RESIZE_FORM = `
             <div class="sf-section">
                 <div class="sf-label">原始图片 <span class="sf-req">*</span></div>
                 <label class="sf-upload-box resize-upload-box" id="resizeDropZone" for="resizeImageInput">
-                    <input id="resizeImageInput" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+                    <input id="resizeImageInput" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="26" height="26"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                    <span id="resizeDropText">上传需要修改尺寸的图片</span>
-                    <small>JPG、PNG、WebP，最大 20 MB</small>
+                    <span id="resizeDropText">批量上传需要修改尺寸的图片</span>
+                    <small>JPG、PNG、WebP，单张最大 20 MB，最多 10 张</small>
                 </label>
+                <div class="resize-file-list" id="resizeFileList"></div>
             </div>
             <div class="resize-status" id="resizeStatus">等待上传图片</div>
             <button class="sf-submit resize-download" id="resizeDownloadBtn" disabled>上传图片后继续</button>
@@ -593,6 +594,7 @@ const VARIANT_FORM = `
     </div>`;
 
 const uploads = { freeImages: [], freeModel: null, freeScene: null, freeProduct: [], freeProduct1: null, freeProduct2: null, progRef: [], progProduct: [], retouchImage: null, cutoutImage: null, variantImages: [] };
+let resizeToolCleanup = null;
 const MAX_STUDIO_FILE_SIZE = 8 * 1024 * 1024;
 const MAX_RETOUCH_FILE_SIZE = 15 * 1024 * 1024;
 const MAX_VARIANT_FILE_SIZE = 15 * 1024 * 1024;
@@ -686,6 +688,10 @@ function fillPreset(key) {
 let cachedStudioGalleryPreview = null;
 
 function renderForm() {
+    if (resizeToolCleanup) {
+        resizeToolCleanup();
+        resizeToolCleanup = null;
+    }
     const area = document.getElementById('studioFormArea');
     const attachedGallery = area.querySelector('.studio-gallery-preview');
     if (attachedGallery) cachedStudioGalleryPreview = attachedGallery;
@@ -1138,6 +1144,7 @@ function initResizeTool() {
     const targetGrid = document.getElementById('resizeTargetGrid');
     const dropZone = document.getElementById('resizeDropZone');
     const dropText = document.getElementById('resizeDropText');
+    const fileList = document.getElementById('resizeFileList');
     const status = document.getElementById('resizeStatus');
     const downloadBtn = document.getElementById('resizeDownloadBtn');
     const canvas = document.getElementById('resizeCanvas');
@@ -1146,11 +1153,35 @@ function initResizeTool() {
     const customHeight = document.getElementById('resizeCustomHeight');
     const reflowInput = document.getElementById('resizeReflow');
     const context = canvas.getContext('2d');
-    let sourceName = 'aplus-image';
-    let outputType = 'image/png';
     let currentFile = null;
     let currentImage = null;
-    let localReady = false;
+    let selectedFiles = [];
+    const previewUrls = new Map();
+    const MAX_RESIZE_BATCH_FILES = 10;
+    resizeToolCleanup = () => previewUrls.forEach(url => URL.revokeObjectURL(url));
+
+    const getPreviewUrl = file => {
+        if (!previewUrls.has(file)) previewUrls.set(file, URL.createObjectURL(file));
+        return previewUrls.get(file);
+    };
+    const releasePreviewUrl = file => {
+        const url = previewUrls.get(file);
+        if (url) URL.revokeObjectURL(url);
+        previewUrls.delete(file);
+    };
+    const readImageFile = file => new Promise((resolve, reject) => {
+        const imageUrl = URL.createObjectURL(file);
+        const image = new Image();
+        image.onload = () => {
+            URL.revokeObjectURL(imageUrl);
+            resolve(image);
+        };
+        image.onerror = () => {
+            URL.revokeObjectURL(imageUrl);
+            reject(new Error('图片读取失败，请重新选择。'));
+        };
+        image.src = imageUrl;
+    });
 
     const getTarget = () => {
         const active = targetGrid.querySelector('.resize-target-btn.active');
@@ -1172,7 +1203,6 @@ function initResizeTool() {
         && target.width >= 100 && target.width <= 5000
         && target.height >= 100 && target.height <= 5000;
     const reset = (message = '等待上传图片') => {
-        localReady = false;
         downloadBtn.disabled = true;
         canvas.style.display = 'none';
         status.className = 'resize-status';
@@ -1182,42 +1212,112 @@ function initResizeTool() {
         reset(message);
         status.className = 'resize-status error';
     };
+    const renderSelectedFiles = () => {
+        fileList.innerHTML = '';
+        selectedFiles.forEach((file, index) => {
+            const item = document.createElement('div');
+            item.className = 'resize-file-item';
+
+            const image = document.createElement('img');
+            image.src = getPreviewUrl(file);
+            image.alt = '';
+
+            const name = document.createElement('div');
+            name.className = 'resize-file-name';
+            name.title = file.name;
+            name.textContent = `${index + 1}. ${file.name}`;
+
+            const remove = document.createElement('button');
+            remove.type = 'button';
+            remove.className = 'resize-file-remove';
+            remove.title = '移除图片';
+            remove.textContent = '×';
+            remove.addEventListener('click', () => {
+                const removed = selectedFiles.splice(index, 1)[0];
+                if (removed) releasePreviewUrl(removed);
+                renderSelectedFiles();
+                if (selectedFiles.length) loadFile(selectedFiles[0]);
+                else {
+                    currentFile = null;
+                    currentImage = null;
+                    reset();
+                }
+            });
+
+            item.append(image, name, remove);
+            fileList.appendChild(item);
+        });
+    };
+    const applyBatchSummary = () => {
+        const count = selectedFiles.length;
+        if (!count) return;
+        if (count > 1) {
+            status.textContent = `已选择 ${count} 张图片，点击后会按顺序逐张处理。第一张：${status.textContent}`;
+            downloadBtn.textContent = `开始逐张处理 ${count} 张图片`;
+        }
+    };
+    const validateResizeFile = file => {
+        if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) return '请选择 JPG、PNG 或 WebP 图片。';
+        if (file.size > 20 * 1024 * 1024) return `${file.name} 超过单张 20 MB 限制。`;
+        return '';
+    };
+    const addFiles = files => {
+        const incoming = Array.from(files || []);
+        const remaining = MAX_RESIZE_BATCH_FILES - selectedFiles.length;
+        if (remaining <= 0) {
+            showError(`最多批量上传 ${MAX_RESIZE_BATCH_FILES} 张图片。`);
+            return;
+        }
+
+        const accepted = [];
+        for (const file of incoming.slice(0, remaining)) {
+            const error = validateResizeFile(file);
+            if (error) {
+                showError(error);
+                continue;
+            }
+            accepted.push(file);
+        }
+        if (!accepted.length) return;
+
+        selectedFiles.push(...accepted);
+        renderSelectedFiles();
+        loadFile(selectedFiles[0]);
+        if (incoming.length > remaining) {
+            status.className = 'resize-status error';
+            status.textContent = `最多选择 ${MAX_RESIZE_BATCH_FILES} 张，超出的图片未加入。`;
+        }
+    };
     const updateTarget = () => {
         const target = getTarget();
         customSize.hidden = !target.custom;
-        dropText.textContent = '上传需要修改尺寸的图片';
+        dropText.textContent = '批量上传需要修改尺寸的图片';
         if (!isValidTarget(target)) {
             reset('请输入 100–5000 px 的自定义宽度和高度');
             return;
         }
-        if (currentImage && currentFile) prepareResizeResult(currentFile, currentImage);
+        if (currentImage && currentFile) {
+            prepareResizeResult(currentFile, currentImage);
+            applyBatchSummary();
+        }
         else reset();
     };
-    const loadFile = file => {
+    const loadFile = async file => {
         reset('正在读取图片...');
-        if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-            showError('请选择 JPG、PNG 或 WebP 图片。');
+        const validationError = validateResizeFile(file);
+        if (validationError) {
+            showError(validationError);
             return;
         }
-        if (file.size > 20 * 1024 * 1024) {
-            showError('图片不能超过 20 MB。');
-            return;
-        }
-        const imageUrl = URL.createObjectURL(file);
-        const image = new Image();
-        image.onload = () => {
-            URL.revokeObjectURL(imageUrl);
-            sourceName = file.name.replace(/\.[^.]+$/, '') || 'aplus-image';
-            outputType = file.type === 'image/jpeg' ? 'image/jpeg' : 'image/png';
+        try {
+            const image = await readImageFile(file);
             currentFile = file;
             currentImage = image;
             prepareResizeResult(file, image);
-        };
-        image.onerror = () => {
-            URL.revokeObjectURL(imageUrl);
-            showError('图片读取失败，请重新选择。');
-        };
-        image.src = imageUrl;
+            applyBatchSummary();
+        } catch (error) {
+            showError(error.message || '图片读取失败，请重新选择。');
+        }
     };
     const prepareResizeResult = (file, image) => {
         const target = getTarget();
@@ -1227,14 +1327,12 @@ function initResizeTool() {
         }
         if (!reflowInput.checked && canResizeLocally(image, target)) {
             renderLocalResize(image, target);
-            localReady = true;
             downloadBtn.disabled = false;
             downloadBtn.textContent = `下载 ${target.width} × ${target.height} 图片`;
             status.className = 'resize-status ready';
             status.textContent = `可本地转换：${image.naturalWidth} × ${image.naturalHeight} → ${target.width} × ${target.height}，不消耗 AI`;
             return;
         }
-        localReady = false;
         canvas.style.display = 'none';
         downloadBtn.disabled = false;
         downloadBtn.textContent = `提交后台 AI 修改成 ${target.width} × ${target.height}`;
@@ -1272,6 +1370,24 @@ function initResizeTool() {
         }
         canvas.style.display = 'none';
     };
+    const downloadLocalResult = (file, image, target) => new Promise((resolve, reject) => {
+        renderLocalResize(image, target);
+        const type = file.type === 'image/jpeg' ? 'image/jpeg' : 'image/png';
+        const baseName = file.name.replace(/\.[^.]+$/, '') || 'aplus-image';
+        canvas.toBlob(blob => {
+            if (!blob) {
+                reject(new Error(`${file.name} 转换失败。`));
+                return;
+            }
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${baseName}-${target.width}x${target.height}.${type === 'image/jpeg' ? 'jpg' : 'png'}`;
+            link.click();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+            resolve();
+        }, type, 0.95);
+    });
 
     targetGrid.querySelectorAll('.resize-target-btn').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -1283,7 +1399,7 @@ function initResizeTool() {
     [customWidth, customHeight].forEach(field => field?.addEventListener('input', updateTarget));
     reflowInput.addEventListener('change', updateTarget);
     input.addEventListener('change', () => {
-        if (input.files[0]) loadFile(input.files[0]);
+        if (input.files.length) addFiles(input.files);
         input.value = '';
     });
     ['dragenter', 'dragover'].forEach(type => dropZone.addEventListener(type, event => {
@@ -1295,29 +1411,94 @@ function initResizeTool() {
         dropZone.classList.remove('dragging');
     }));
     dropZone.addEventListener('drop', event => {
-        const file = event.dataTransfer.files[0];
-        if (file) loadFile(file);
+        if (event.dataTransfer.files.length) addFiles(event.dataTransfer.files);
     });
-    downloadBtn.addEventListener('click', () => {
-        if (!currentFile || !currentImage) return;
+    downloadBtn.addEventListener('click', async () => {
+        if (!selectedFiles.length || downloadBtn.dataset.loading === '1') return;
         const target = getTarget();
         if (!isValidTarget(target)) {
             showError('请输入 100–5000 px 的自定义宽度和高度。');
             return;
         }
-        if (!localReady) {
-            submitResizeAiTask(currentFile, target, reflowInput.checked, status, downloadBtn);
-            return;
+
+        downloadBtn.dataset.loading = '1';
+        downloadBtn.disabled = true;
+        const originalFiles = [...selectedFiles];
+        const prepared = [];
+        try {
+            status.className = 'resize-status ai';
+            status.textContent = `正在读取 1/${originalFiles.length} 张图片...`;
+            for (let index = 0; index < originalFiles.length; index++) {
+                status.textContent = `正在读取 ${index + 1}/${originalFiles.length} 张图片...`;
+                prepared.push({ file: originalFiles[index], image: await readImageFile(originalFiles[index]) });
+            }
+
+            const hasAiTasks = prepared.some(item => reflowInput.checked || !canResizeLocally(item.image, target));
+            if (hasAiTasks && !currentUser) {
+                showLoginModal();
+                return;
+            }
+            if (hasAiTasks && !hasAgreed()) {
+                openGuide();
+                guideShowPage(2);
+                return;
+            }
+
+            let localCount = 0;
+            let aiCount = 0;
+            const failedFiles = [];
+            for (let index = 0; index < prepared.length; index++) {
+                const item = prepared[index];
+                status.textContent = `正在处理 ${index + 1}/${prepared.length}：${item.file.name}`;
+                try {
+                    const useLocal = !reflowInput.checked && canResizeLocally(item.image, target);
+                    if (useLocal) {
+                        await downloadLocalResult(item.file, item.image, target);
+                        localCount++;
+                        await new Promise(resolve => setTimeout(resolve, 300));
+                    } else {
+                        await submitResizeAiTask(item.file, target, reflowInput.checked);
+                        aiCount++;
+                    }
+                } catch (error) {
+                    failedFiles.push(item.file);
+                    console.error('Resize batch item failed:', item.file.name, error);
+                }
+            }
+
+            originalFiles.forEach(file => {
+                if (!failedFiles.includes(file)) releasePreviewUrl(file);
+            });
+            selectedFiles = failedFiles;
+            renderSelectedFiles();
+            currentFile = null;
+            currentImage = null;
+
+            if (failedFiles.length) {
+                status.className = 'resize-status error';
+                status.textContent = `已完成 ${localCount + aiCount} 张，${failedFiles.length} 张失败并保留在列表中，可再次处理。`;
+                loadFile(failedFiles[0]);
+            } else {
+                reset(`已按顺序处理 ${localCount + aiCount} 张图片。`);
+                status.className = 'resize-status ready';
+            }
+            if (aiCount) {
+                showSuccessModal(null, `${aiCount} 个尺寸修改任务已按顺序加入队列，后台会逐张处理，完成后通过钉钉通知`);
+                loadResizeQueue();
+            }
+        } catch (error) {
+            status.className = 'resize-status error';
+            status.textContent = error.message || '批量处理失败，请重试。';
+        } finally {
+            downloadBtn.dataset.loading = '';
+            if (!selectedFiles.length) {
+                downloadBtn.disabled = true;
+                downloadBtn.textContent = '上传图片后继续';
+            } else {
+                downloadBtn.disabled = false;
+                applyBatchSummary();
+            }
         }
-        canvas.toBlob(blob => {
-            if (!blob) return;
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `${sourceName}-${target.width}x${target.height}.${outputType === 'image/jpeg' ? 'jpg' : 'png'}`;
-            link.click();
-            setTimeout(() => URL.revokeObjectURL(url), 1000);
-        }, outputType, 0.95);
     });
     updateTarget();
     loadResizeQueue();
@@ -1337,25 +1518,31 @@ function fileToStudioUpload(file) {
     });
 }
 
-async function submitResizeAiTask(file, target, resizeReflow, status, btn) {
-    try {
-        const upload = await fileToStudioUpload(file);
-        const size = `${target.width}x${target.height}`;
-        await submitTask('resize_ai', {
+async function submitResizeAiTask(file, target, resizeReflow) {
+    const upload = await fileToStudioUpload(file);
+    const refKeys = await uploadImages([upload], 'studio/resize');
+    const size = `${target.width}x${target.height}`;
+    const response = await fetch('/api/studio-submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            mode: 'resize_ai',
+            submitter: currentUser,
+            productKeys: [],
+            modelKeys: [],
+            refKeys,
             desc: `AI 尺寸修改为 ${size}${resizeReflow ? '，允许重新排版' : ''}`,
             size,
             resizeTarget: size,
             resizeReflow,
-            imageName: file.name.replace(/\.[^.]+$/, ''),
-            refImages: [upload]
-        }, status, btn, task => {
-            showSuccessModal(task, `尺寸修改任务已提交，目标 ${target.width} × ${target.height}，完成后会通过钉钉通知`);
-            loadResizeQueue();
-        });
-    } catch (error) {
-        status.className = 'resize-status error';
-        status.textContent = error.message || '提交失败，请重试';
+            imageName: file.name.replace(/\.[^.]+$/, '')
+        })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok) {
+        throw new Error('提交失败：' + (result.error || response.status));
     }
+    return result;
 }
 
 function initSizePicker(inputId, hintId) {
