@@ -501,7 +501,7 @@ const RETOUCH_FORM = `
             <div id="retouchStatus" class="studio-status" style="margin-top:10px"></div>
         </div>
         <div class="studio-preview retouch-preview">
-            <div class="studio-preview-tab retouch-queue-head"><span>精修队列</span><a href="studio-tasks.html">查看全部</a></div>
+            <div class="studio-preview-tab retouch-queue-head"><span>精修队列</span></div>
             <div class="studio-preview-body">
                 <div class="retouch-queue-summary" id="retouchQueueSummary"></div>
                 <div class="retouch-queue-list" id="retouchQueueList"><div class="retouch-queue-empty">正在加载精修队列...</div></div>
@@ -796,7 +796,7 @@ async function loadRetouchQueue() {
     }
 
     try {
-        const response = await fetch('/api/studio-tasks?unionId=' + encodeURIComponent(currentUser.unionId) + '&mode=retouch&limit=8');
+        const response = await fetch('/api/studio-tasks?retouchQueue=1&limit=12');
         const data = await response.json();
         if (!response.ok || !data.ok) throw new Error(data.error || '加载失败');
         renderRetouchQueue(Array.isArray(data.tasks) ? data.tasks : [], list, summary);
@@ -807,42 +807,26 @@ async function loadRetouchQueue() {
 }
 
 function renderRetouchQueue(tasks, list, summary) {
-    const pending = tasks.filter(task => task.status === 'pending').length;
-    const processing = tasks.filter(task => task.status === 'processing').length;
-    const done = tasks.filter(task => task.status === 'done').length;
-    summary.innerHTML = '<span>待处理 ' + pending + '</span><span>处理中 ' + processing + '</span><span>已完成 ' + done + '</span>';
+    const activeTasks = tasks.filter(task => task.status === 'pending' || task.status === 'processing');
+    const pending = activeTasks.filter(task => task.status === 'pending').length;
+    const processing = activeTasks.filter(task => task.status === 'processing').length;
+    summary.innerHTML = '<span>待处理 ' + pending + '</span><span>处理中 ' + processing + '</span>';
     list.innerHTML = '';
-    if (!tasks.length) {
+    if (!activeTasks.length) {
         list.innerHTML = '<div class="retouch-queue-empty">暂无精修任务</div>';
         return;
     }
 
     const statusMap = {
         pending: ['待处理', '#b45309', '#fef3c7'],
-        processing: ['处理中', '#1d4ed8', '#dbeafe'],
-        done: ['已完成', '#047857', '#d1fae5'],
-        rejected: ['已驳回', '#b91c1c', '#fee2e2']
+        processing: ['处理中', '#1d4ed8', '#dbeafe']
     };
-    tasks.forEach(task => {
+    activeTasks.forEach(task => {
         const row = document.createElement('div');
         row.className = 'retouch-queue-row';
-        const source = Array.isArray(task.refKeys) ? task.refKeys[0] : null;
-        const thumb = document.createElement('img');
-        thumb.className = 'retouch-queue-thumb';
-        thumb.alt = '';
-        if (source?.key) thumb.src = '/api/library-file/' + encodeURIComponent(source.key);
-
-        const detail = document.createElement('div');
-        detail.style.minWidth = '0';
-        const taskName = String(task.imageName || source?.name || '精修图片').replace(/^[^-]+-/, '');
-        const time = new Date(task.timestamp || task.createdAt).toLocaleString('zh-CN', { timeZone:'Asia/Shanghai', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
         const name = document.createElement('div');
         name.className = 'retouch-queue-name';
-        name.textContent = taskName;
-        const meta = document.createElement('div');
-        meta.className = 'retouch-queue-meta';
-        meta.textContent = time;
-        detail.append(name, meta);
+        name.textContent = (task.submitterName || '匿名用户') + ' 提交';
 
         const state = statusMap[task.status] || statusMap.pending;
         const badge = document.createElement('span');
@@ -850,7 +834,7 @@ function renderRetouchQueue(tasks, list, summary) {
         badge.textContent = state[0];
         badge.style.color = state[1];
         badge.style.background = state[2];
-        row.append(thumb, detail, badge);
+        row.append(name, badge);
         list.appendChild(row);
     });
 }

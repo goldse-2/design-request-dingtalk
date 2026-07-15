@@ -65,6 +65,7 @@ export async function onRequestGet(context) {
     const all = url.searchParams.get('all') === '1';
     const active = url.searchParams.get('active') === '1';
     const history = url.searchParams.get('history') === '1';
+    const retouchQueue = url.searchParams.get('retouchQueue') === '1';
     const mode = String(url.searchParams.get('mode') || '').trim();
     const requestedLimit = Number(url.searchParams.get('limit'));
     const taskLimit = Number.isFinite(requestedLimit) && requestedLimit > 0
@@ -81,6 +82,10 @@ export async function onRequestGet(context) {
         }
 
         const list = await env.SUBMISSIONS.list({ prefix: 'studio-', limit: 1000 });
+        if (retouchQueue) {
+            return publicRetouchQueue(env, list.keys, taskLimit);
+        }
+
         let syncedTasks = new Map();
         if (env.SUBMISSION_FILES && active) {
             syncedTasks = await syncR2StudioResults(env, request, list.keys);
@@ -133,6 +138,34 @@ export async function onRequestGet(context) {
     } catch (err) {
         return Response.json({ ok: false, error: err.message }, { status: 500 });
     }
+}
+
+async function publicRetouchQueue(env, listedKeys, requestedLimit) {
+    const limit = Math.min(requestedLimit, 20);
+    const keys = listedKeys
+        .filter(key => key.metadata?.kind === 'studio')
+        .filter(key => key.metadata?.mode === 'retouch')
+        .filter(key => key.metadata?.status === 'pending' || key.metadata?.status === 'processing')
+        .sort((left, right) => Number(left.metadata?.timestamp || 0) - Number(right.metadata?.timestamp || 0))
+        .slice(0, limit)
+        .map(key => key.name);
+    const raws = await Promise.all(keys.map(key => env.SUBMISSIONS.get(key)));
+    const tasks = raws
+        .map(raw => {
+            try { return JSON.parse(raw); } catch { return null; }
+        })
+        .filter(task => task?.kind === 'studio' && task.mode === 'retouch')
+        .filter(task => task.status === 'pending' || task.status === 'processing')
+        .map(task => ({
+            id: task.id,
+            status: task.status,
+            timestamp: task.timestamp,
+            submitterName: task.submitter?.name || '匿名用户'
+        }));
+
+    return Response.json({ ok: true, tasks }, {
+        headers: { 'Cache-Control': 'public, max-age=30, s-maxage=60' }
+    });
 }
 
 async function syncR2StudioResults(env, request, listedKeys) {
