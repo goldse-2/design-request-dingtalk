@@ -395,6 +395,7 @@ const PROGRAM_FORM = `
             </div>
             <div class="sf-section">
                 <div class="sf-label">白底产品图 <span class="sf-req">*</span> <span class="sf-sub">(2张)</span></div>
+                <div class="program-product-hint">有不同角度时，请上传两个不同角度；没有其他角度时，请将同一张图片上传两次。</div>
                 <div class="sf-upload-row">
                     <div class="sf-upload-box" id="progProductDrop" tabindex="-1">
                         <input type="file" id="progProductInput" accept="image/*" multiple hidden>
