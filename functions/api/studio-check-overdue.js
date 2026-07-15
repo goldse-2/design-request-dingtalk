@@ -51,6 +51,9 @@ export async function onRequestGet(context) {
             processingQueueIds = imageOnly ? [] : migrated.processingQueueIds;
         }
 
+        const initialAutoQueue = [...autoQueueIds];
+        const initialProcessingQueue = [...processingQueueIds];
+
         const autoBatchIds = autoQueueIds.slice(0, imageOnly ? 1 : 3);
         const processingBatchIds = imageOnly ? [] : processingQueueIds.slice(0, 10);
         const deferredAutoQueue = autoQueueIds.slice(autoBatchIds.length);
@@ -190,8 +193,10 @@ export async function onRequestGet(context) {
 
         const finalAutoQueue = unique([...nextAutoQueue, ...deferredAutoQueue]);
         const finalProcessingQueue = unique([...nextProcessingQueue, ...deferredProcessingQueue]);
-        await writeQueue(env.SUBMISSIONS, selectedQueueKey, finalAutoQueue);
-        if (!imageOnly) {
+        if (!queuesEqual(initialAutoQueue, finalAutoQueue)) {
+            await writeQueue(env.SUBMISSIONS, selectedQueueKey, finalAutoQueue);
+        }
+        if (!imageOnly && !queuesEqual(initialProcessingQueue, finalProcessingQueue)) {
             await writeQueue(env.SUBMISSIONS, PROCESSING_QUEUE_KEY, finalProcessingQueue);
         }
 
@@ -271,6 +276,11 @@ async function writeQueue(kv, key, ids) {
 
 function unique(ids) {
     return [...new Set(Array.isArray(ids) ? ids : [])];
+}
+
+function queuesEqual(left, right) {
+    if (left.length !== right.length) return false;
+    return left.every((id, index) => id === right[index]);
 }
 
 async function migrateQueues(env) {
