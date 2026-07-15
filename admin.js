@@ -2040,6 +2040,7 @@ function renderStudioHistoryCard(task) {
     }
     
     if (task.resultKeys && task.resultKeys.length) {
+        const previewSize = studioResultPreviewSize(task);
         const label = document.createElement('div');
         label.style.cssText = 'font-size:0.82rem;color:#16a34a;font-weight:600;margin:14px 0 6px';
         label.textContent = '✓ 成品图（点击下载）';
@@ -2051,14 +2052,24 @@ function renderStudioHistoryCard(task) {
             a.href = '/api/library-file/' + encodeURIComponent(k.key) + '?dl=1';
             a.download = k.name;
             a.title = '下载 ' + k.name;
-            a.style.cssText = 'width:80px;height:80px;display:block';
-            a.innerHTML = '<img src="/api/library-file/' + encodeURIComponent(k.key) + '" style="width:80px;height:80px;object-fit:cover;border-radius:8px;border:1px solid #e5e7eb" loading="lazy">';
+            a.style.cssText = 'width:' + previewSize.width + 'px;height:' + previewSize.height + 'px;display:block';
+            a.innerHTML = '<img src="/api/library-file/' + encodeURIComponent(k.key) + '" style="width:100%;height:100%;object-fit:' + previewSize.fit + ';background:#f8fafc;border-radius:8px;border:1px solid #e5e7eb" loading="lazy">';
             row.appendChild(a);
         });
         card.appendChild(row);
     }
     
     return card;
+}
+
+function studioResultPreviewSize(task) {
+    if (task.mode !== 'resize_ai') return { width: 80, height: 80, fit: 'cover' };
+    const match = String(task.resizeTarget || task.size || '').match(/(\d{3,5})\s*[x×*]\s*(\d{3,5})/i);
+    if (!match) return { width: 160, height: 80, fit: 'contain' };
+    const ratio = Number(match[1]) / Number(match[2]);
+    if (!Number.isFinite(ratio) || ratio <= 0) return { width: 160, height: 80, fit: 'contain' };
+    if (ratio >= 1) return { width: 180, height: Math.max(56, Math.round(180 / ratio)), fit: 'contain' };
+    return { width: Math.max(56, Math.round(110 * ratio)), height: 110, fit: 'contain' };
 }
 
 function initExamplesToggle() {
