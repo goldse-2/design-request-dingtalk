@@ -1,9 +1,7 @@
-name: Auto Check Studio Tasks
+name: Manual Check Studio Tasks
 
 on:
-  schedule:
-    - cron: '*/3 * * * *'  # 每3分钟运行一次
-  workflow_dispatch:  # 允许手动触发
+  workflow_dispatch:
 
 jobs:
   check:
@@ -11,5 +9,5 @@ jobs:
     steps:
       - name: Trigger auto-check
         run: |
-          curl -s "https://design-request-dingtalk.pages.dev/api/studio-check-overdue"
+          curl --fail --silent --show-error "https://design-request-dingtalk.pages.dev/api/studio-check-overdue?rpaOnly=1"
           echo "Auto-check triggered at $(date)"
