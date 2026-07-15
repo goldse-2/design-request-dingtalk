@@ -35,7 +35,7 @@ export async function onRequestPost(context) {
     if (originalFile && env.SUBMISSION_FILES) {
         try {
             const bytes = base64ToBytes(originalFile);
-            fileKey = `${submissionId}/${fileName}`;
+            fileKey = `submissions/${submissionId}/${fileName}`;
             await env.SUBMISSION_FILES.put(fileKey, bytes, {
                 httpMetadata: {
                     contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -82,11 +82,7 @@ export async function onRequestPost(context) {
             if (submission.submitter?.unionId) {
                 await notifySubmitter(accessToken, env, submission, queuePosition, origin).catch(e => console.error('Submitter notify failed:', e.message));
             }
-            await cleanOldFiles(env).catch(e => console.error('Cleanup failed:', e.message));
         })();
-        if (waitUntil) waitUntil(p);
-    } else if (env.SUBMISSION_FILES) {
-        const p = cleanOldFiles(env).catch(e => console.error('Cleanup failed:', e.message));
         if (waitUntil) waitUntil(p);
     }
 
@@ -224,23 +220,6 @@ async function notifySubmitter(accessToken, env, submission, queuePosition, orig
     content += `完成后会自动通知您`;
 
     return sendText(accessToken, env, [staffId], content);
-}
-
-async function cleanOldFiles(env) {
-    if (!env.SUBMISSION_FILES || !env.SUBMISSIONS) return;
-    const cutoff = Date.now() - 60 * 24 * 60 * 60 * 1000;
-    const list = await env.SUBMISSIONS.list({ limit: 1000 });
-    for (const key of list.keys) {
-        if (key.metadata?.timestamp && key.metadata.timestamp < cutoff) {
-            const raw = await env.SUBMISSIONS.get(key.name);
-            if (raw) {
-                const sub = JSON.parse(raw);
-                if (sub.fileKey) {
-                    await env.SUBMISSION_FILES.delete(sub.fileKey).catch(() => {});
-                }
-            }
-        }
-    }
 }
 
 function base64ToBytes(base64) {

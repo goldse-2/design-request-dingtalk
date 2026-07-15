@@ -1,3 +1,5 @@
+import { RECORD_RETENTION_SECONDS } from '../_shared/studio-task-storage.js';
+
 export async function onRequestPost(context) {
     const { request, env, waitUntil } = context;
     let body;
@@ -80,15 +82,11 @@ export async function onRequestPost(context) {
             submission.archivedAt = Date.now();
             if (message) submission.resultMessage = message;
             await env.SUBMISSIONS.put(submissionId, JSON.stringify(submission), {
-                metadata: { taskType: submission.taskType, timestamp: submission.timestamp, archived: true, archivedAt: submission.archivedAt }
+                metadata: { taskType: submission.taskType, timestamp: submission.timestamp, archived: true, archivedAt: submission.archivedAt },
+                expirationTtl: RECORD_RETENTION_SECONDS
             });
         }
         await env.SUBMISSIONS.put('__lastUpdated', String(Date.now()));
-
-        if (env.SUBMISSIONS) {
-            const cleanup = cleanArchived(env).catch(() => {});
-            if (waitUntil) waitUntil(cleanup);
-        }
 
         if (submission.submitter?.unionId && env.DINGTALK_APPKEY && env.DINGTALK_APPSECRET) {
             const p = sendWorkNotice(env, submission, action, message, eta, images && images.length ? images : (imageBase64 ? [imageBase64] : []))
@@ -99,27 +97,6 @@ export async function onRequestPost(context) {
         return Response.json({ ok: true, action, submissionId });
     } catch (err) {
         return Response.json({ ok: false, error: err.message }, { status: 500 });
-    }
-}
-
-async function cleanArchived(env) {
-    const cutoff = Date.now() - 45 * 24 * 60 * 60 * 1000;
-    const list = await env.SUBMISSIONS.list({ limit: 1000 });
-    for (const key of list.keys) {
-        const archivedAt = key.metadata?.archivedAt;
-        if (archivedAt && archivedAt < cutoff) {
-            const raw = await env.SUBMISSIONS.get(key.name);
-            if (raw) {
-                try {
-                    const sub = JSON.parse(raw);
-                    if (sub.fileKey && env.SUBMISSION_FILES) await env.SUBMISSION_FILES.delete(sub.fileKey).catch(() => {});
-                    if (sub.data?.directPhotoKeys && env.SUBMISSION_FILES) {
-                        for (const k of sub.data.directPhotoKeys) await env.SUBMISSION_FILES.delete(k.key).catch(() => {});
-                    }
-                } catch {}
-            }
-            await env.SUBMISSIONS.delete(key.name).catch(() => {});
-        }
     }
 }
 

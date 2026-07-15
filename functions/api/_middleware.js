@@ -11,7 +11,8 @@ const ADMIN_PATHS = new Set([
     '/api/notify-test',
     '/api/studio-webhook',
     '/api/studio-complete',
-    '/api/admin-optimize-prompt'
+    '/api/admin-optimize-prompt',
+    '/api/retention-cleanup'
 ]);
 
 export async function onRequest(context) {

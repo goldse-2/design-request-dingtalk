@@ -1,4 +1,5 @@
 import { markStudioNotificationSent, sendStudioResultImages } from '../_shared/studio-dingtalk.js';
+import { RECORD_RETENTION_MS, studioTaskPutOptions, studioTaskRetentionAnchor } from '../_shared/studio-task-storage.js';
 
 export async function onRequestPatch(context) {
     const { request, env } = context;
@@ -47,9 +48,7 @@ export async function onRequestPatch(context) {
     if (typeof desc === 'string') task.desc = desc;
     if (typeof note === 'string') task.note = note;
 
-    await env.SUBMISSIONS.put(id, JSON.stringify(task), {
-        metadata: studioTaskMetadata(task)
-    });
+    await env.SUBMISSIONS.put(id, JSON.stringify(task), studioTaskPutOptions(task));
     return Response.json({ ok: true, task, requeued: action === 'retryImage' });
 }
 
@@ -129,7 +128,10 @@ export async function onRequestGet(context) {
             });
         }
         if (history) {
-            tasks = tasks.filter(t => t.status === 'done' && (t.dingtalkNotified || t.r2AutoNotified));
+            const cutoff = Date.now() - RECORD_RETENTION_MS;
+            tasks = tasks.filter(t => t.status === 'done'
+                && (t.dingtalkNotified || t.r2AutoNotified)
+                && studioTaskRetentionAnchor(t, 0) >= cutoff);
         }
 
         tasks.sort((a, b) => b.timestamp - a.timestamp);
@@ -200,9 +202,7 @@ async function syncR2StudioResults(env, request, listedKeys) {
         task.completeNote = task.completeNote || 'R2 成品图已自动同步';
         task.r2AutoCompleted = true;
 
-        await env.SUBMISSIONS.put(task.id, JSON.stringify(task), {
-            metadata: studioTaskMetadata(task)
-        });
+        await env.SUBMISSIONS.put(task.id, JSON.stringify(task), studioTaskPutOptions(task));
 
         if (!task.r2AutoNotified && task.submitter?.unionId && env.DINGTALK_APPKEY && env.DINGTALK_APPSECRET) {
             try {
@@ -215,22 +215,6 @@ async function syncR2StudioResults(env, request, listedKeys) {
         }
     }
     return taskMap;
-}
-
-function studioTaskMetadata(task) {
-    return {
-        kind: 'studio',
-        mode: task.mode,
-        status: task.status,
-        timestamp: task.timestamp,
-        unionId: task.submitter?.unionId || '',
-        sentToRpa: Boolean(task.sentToRpa),
-        sentToRpaAt: task.sentToRpaAt || '',
-        pausedAuto: Boolean(task.pausedAuto),
-        overdueNotified: Boolean(task.overdueNotified),
-        dingtalkNotified: Boolean(task.dingtalkNotified),
-        r2AutoNotified: Boolean(task.r2AutoNotified)
-    };
 }
 
 async function notifyUserDone(env, task, origin) {

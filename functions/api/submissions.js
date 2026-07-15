@@ -1,3 +1,5 @@
+import { RECORD_RETENTION_MS } from '../_shared/studio-task-storage.js';
+
 let _cache = { data: null, time: 0 };
 const CACHE_TTL = 60000; // 60 seconds
 
@@ -108,7 +110,8 @@ export async function onRequestGet(context) {
             });
 
         if (history) {
-            submissions = submissions.filter(sub => sub.archived);
+            const cutoff = Date.now() - RECORD_RETENTION_MS;
+            submissions = submissions.filter(sub => sub.archived && (sub.archivedAt || sub.timestamp || 0) >= cutoff);
         } else {
             submissions = submissions.filter(sub => !sub.archived);
         }

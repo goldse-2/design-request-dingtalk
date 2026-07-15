@@ -1,3 +1,5 @@
+import { studioTaskPutOptions } from './studio-task-storage.js';
+
 export async function sendStudioResultImages(env, accessToken, staffId, task, origin) {
     const resultKeys = Array.isArray(task?.resultKeys)
         ? task.resultKeys.filter(item => item && item.key)
@@ -51,9 +53,7 @@ export async function markStudioNotificationSent(env, taskId, field = 'dingtalkN
     latestTask[field] = true;
     latestTask[field === 'r2AutoNotified' ? 'r2AutoNotifiedAt' : 'dingtalkNotifiedAt'] = notifiedAt;
 
-    await env.SUBMISSIONS.put(taskId, JSON.stringify(latestTask), {
-        metadata: studioTaskMetadata(latestTask)
-    });
+    await env.SUBMISSIONS.put(taskId, JSON.stringify(latestTask), studioTaskPutOptions(latestTask));
     return latestTask;
 }
 
@@ -62,20 +62,4 @@ function encodeKeyToken(key) {
     let binary = '';
     bytes.forEach(byte => { binary += String.fromCharCode(byte); });
     return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
-}
-
-function studioTaskMetadata(task) {
-    return {
-        kind: 'studio',
-        mode: task.mode,
-        status: task.status,
-        timestamp: task.timestamp,
-        unionId: task.submitter?.unionId || '',
-        sentToRpa: Boolean(task.sentToRpa),
-        sentToRpaAt: task.sentToRpaAt || '',
-        pausedAuto: Boolean(task.pausedAuto),
-        overdueNotified: Boolean(task.overdueNotified),
-        dingtalkNotified: Boolean(task.dingtalkNotified),
-        r2AutoNotified: Boolean(task.r2AutoNotified)
-    };
 }

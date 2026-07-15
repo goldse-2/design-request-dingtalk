@@ -2,6 +2,7 @@ import { taskNeedsRpaTranslation, translateForRpa } from '../_shared/ai-translat
 import { markStudioNotificationSent, sendStudioResultImages } from '../_shared/studio-dingtalk.js';
 import { recolorImage } from '../_shared/variant-recolor-core.js';
 import { editImageWithPrompt } from '../_shared/image-edit-core.js';
+import { studioTaskPutOptions } from '../_shared/studio-task-storage.js';
 
 export async function onRequestGet(context) {
     const { env, request, waitUntil } = context;
@@ -108,9 +109,7 @@ export async function onRequestGet(context) {
                         autoErrors.push({ id: task.id, error: errMsg });
                         task.backgroundLastError = errMsg;
                         task.backgroundLastAttemptAt = new Date().toISOString();
-                        await env.SUBMISSIONS.put(task.id, JSON.stringify(task), {
-                            metadata: studioTaskMetadata(task)
-                        });
+                        await env.SUBMISSIONS.put(task.id, JSON.stringify(task), studioTaskPutOptions(task));
                         console.error('Background image task failed:', task.id, e.message);
                         nextAutoQueue.push(task.id);
                     }
@@ -146,9 +145,7 @@ export async function onRequestGet(context) {
                     task.autoRpaLastResponse = text.slice(0, 300);
                     task.rpaSentPayload = payload;
                     if (!task.size && pickedSize) task.size = pickedSize;
-                    await env.SUBMISSIONS.put(task.id, JSON.stringify(task), {
-                        metadata: studioTaskMetadata(task)
-                    });
+                    await env.SUBMISSIONS.put(task.id, JSON.stringify(task), studioTaskPutOptions(task));
 
                     autoSent.push(task.id);
                     nextProcessingQueue.push(task.id);
@@ -160,9 +157,7 @@ export async function onRequestGet(context) {
                     autoErrors.push({ id: task.id, error: errMsg });
                     task.autoRpaLastError = errMsg;
                     task.autoRpaLastAttemptAt = new Date().toISOString();
-                    await env.SUBMISSIONS.put(task.id, JSON.stringify(task), {
-                        metadata: studioTaskMetadata(task)
-                    });
+                    await env.SUBMISSIONS.put(task.id, JSON.stringify(task), studioTaskPutOptions(task));
                     console.error('Auto send RPA failed:', task.id, e.message);
                     nextAutoQueue.push(task.id);
                 }
@@ -181,9 +176,7 @@ export async function onRequestGet(context) {
             if (env.DINGTALK_APPKEY && env.DINGTALK_APPSECRET && env.ADMIN_USER_ID) {
                 const p = notifyOverdue(env, task).then(() => {
                     task.overdueNotified = true;
-                    return env.SUBMISSIONS.put(task.id, JSON.stringify(task), {
-                        metadata: studioTaskMetadata(task)
-                    });
+                    return env.SUBMISSIONS.put(task.id, JSON.stringify(task), studioTaskPutOptions(task));
                 }).catch(e => console.error('Notify overdue failed:', e.message));
                 if (waitUntil) waitUntil(p);
                 else await p;
@@ -357,7 +350,7 @@ async function processVariantTaskStep(env, task, origin) {
     if (index >= refKeys.length) {
         task.status = 'done';
         task.completedAt = task.completedAt || new Date().toISOString();
-        await env.SUBMISSIONS.put(task.id, JSON.stringify(task), { metadata: studioTaskMetadata(task) });
+        await env.SUBMISSIONS.put(task.id, JSON.stringify(task), studioTaskPutOptions(task));
         return { done: true };
     }
 
@@ -391,7 +384,7 @@ async function processVariantTaskStep(env, task, origin) {
         task.completeNote = '变体改色完成';
     }
 
-    await env.SUBMISSIONS.put(task.id, JSON.stringify(task), { metadata: studioTaskMetadata(task) });
+    await env.SUBMISSIONS.put(task.id, JSON.stringify(task), studioTaskPutOptions(task));
     return { done: task.status === 'done', stored };
 }
 
@@ -426,7 +419,7 @@ async function processResizeAiTask(env, task) {
     task.backgroundLastAttemptAt = new Date().toISOString();
     task.backgroundLastError = '';
 
-    await env.SUBMISSIONS.put(task.id, JSON.stringify(task), { metadata: studioTaskMetadata(task) });
+    await env.SUBMISSIONS.put(task.id, JSON.stringify(task), studioTaskPutOptions(task));
     return { done: true, stored };
 }
 
@@ -550,22 +543,6 @@ function guessContentType(name) {
 
 function extensionFromMime(mimeType) {
     return String(mimeType || '').includes('jpeg') ? 'jpg' : String(mimeType || '').includes('webp') ? 'webp' : 'png';
-}
-
-function studioTaskMetadata(task) {
-    return {
-        kind: 'studio',
-        mode: task.mode,
-        status: task.status,
-        timestamp: task.timestamp,
-        unionId: task.submitter?.unionId || '',
-        sentToRpa: Boolean(task.sentToRpa),
-        sentToRpaAt: task.sentToRpaAt || '',
-        pausedAuto: Boolean(task.pausedAuto),
-        overdueNotified: Boolean(task.overdueNotified),
-        dingtalkNotified: Boolean(task.dingtalkNotified),
-        r2AutoNotified: Boolean(task.r2AutoNotified)
-    };
 }
 
 function buildRpaPayload(task, origin) {

@@ -1,4 +1,5 @@
 import { markStudioNotificationSent, sendStudioResultImages } from '../_shared/studio-dingtalk.js';
+import { studioTaskPutOptions } from '../_shared/studio-task-storage.js';
 
 export async function onRequestPost(context) {
     const { request, env, waitUntil } = context;
@@ -63,9 +64,7 @@ export async function onRequestPost(context) {
         task.completedAt = new Date().toISOString();
         if (message) task.completeNote = message;
 
-        await env.SUBMISSIONS.put(taskId, JSON.stringify(task), {
-            metadata: studioTaskMetadata(task)
-        });
+        await env.SUBMISSIONS.put(taskId, JSON.stringify(task), studioTaskPutOptions(task));
 
         if (task.submitter?.unionId && env.DINGTALK_APPKEY && env.DINGTALK_APPSECRET) {
             const origin = new URL(request.url).origin;
@@ -128,20 +127,4 @@ function base64ToBytes(base64) {
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
     return bytes;
-}
-
-function studioTaskMetadata(task) {
-    return {
-        kind: 'studio',
-        mode: task.mode,
-        status: task.status,
-        timestamp: task.timestamp,
-        unionId: task.submitter?.unionId || '',
-        sentToRpa: Boolean(task.sentToRpa),
-        sentToRpaAt: task.sentToRpaAt || '',
-        pausedAuto: Boolean(task.pausedAuto),
-        overdueNotified: Boolean(task.overdueNotified),
-        dingtalkNotified: Boolean(task.dingtalkNotified),
-        r2AutoNotified: Boolean(task.r2AutoNotified)
-    };
 }

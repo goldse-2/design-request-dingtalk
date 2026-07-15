@@ -1,3 +1,5 @@
+import { studioTaskPutOptions } from '../_shared/studio-task-storage.js';
+
 export async function onRequestPost(context) {
     const { request, env } = context;
 
@@ -23,9 +25,7 @@ export async function onRequestPost(context) {
         const task = JSON.parse(raw);
         task.pausedAuto = !!pausedAuto;
 
-        await env.SUBMISSIONS.put(taskId, JSON.stringify(task), {
-            metadata: studioTaskMetadata(task)
-        });
+        await env.SUBMISSIONS.put(taskId, JSON.stringify(task), studioTaskPutOptions(task));
         if (!task.pausedAuto
             && task.kind === 'studio'
             && ['free', 'program', 'retouch'].includes(task.mode)
@@ -38,22 +38,6 @@ export async function onRequestPost(context) {
     } catch (err) {
         return Response.json({ ok: false, error: err.message }, { status: 500 });
     }
-}
-
-function studioTaskMetadata(task) {
-    return {
-        kind: 'studio',
-        mode: task.mode,
-        status: task.status,
-        timestamp: task.timestamp,
-        unionId: task.submitter?.unionId || '',
-        sentToRpa: Boolean(task.sentToRpa),
-        sentToRpaAt: task.sentToRpaAt || '',
-        pausedAuto: Boolean(task.pausedAuto),
-        overdueNotified: Boolean(task.overdueNotified),
-        dingtalkNotified: Boolean(task.dingtalkNotified),
-        r2AutoNotified: Boolean(task.r2AutoNotified)
-    };
 }
 
 async function appendQueue(kv, key, taskId) {

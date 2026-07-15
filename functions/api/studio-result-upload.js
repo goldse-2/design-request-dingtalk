@@ -1,4 +1,5 @@
 import { markStudioNotificationSent, sendStudioResultImages } from '../_shared/studio-dingtalk.js';
+import { studioTaskPutOptions } from '../_shared/studio-task-storage.js';
 
 export async function onRequestPost(context) {
     const { request, env, waitUntil } = context;
@@ -49,9 +50,7 @@ export async function onRequestPost(context) {
     task.completedAt = new Date().toISOString();
     task.completeNote = task.completeNote || '成品图已上传';
 
-    await env.SUBMISSIONS.put(taskId, JSON.stringify(task), {
-        metadata: studioTaskMetadata(task)
-    });
+    await env.SUBMISSIONS.put(taskId, JSON.stringify(task), studioTaskPutOptions(task));
 
     if (task.submitter?.unionId && env.DINGTALK_APPKEY && env.DINGTALK_APPSECRET) {
         const notify = notifyUserDone(env, task, new URL(request.url).origin)
@@ -89,22 +88,6 @@ function guessContentType(name) {
     const ext = name.split('.').pop().toLowerCase();
     const map = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif' };
     return map[ext] || 'application/octet-stream';
-}
-
-function studioTaskMetadata(task) {
-    return {
-        kind: 'studio',
-        mode: task.mode,
-        status: task.status,
-        timestamp: task.timestamp,
-        unionId: task.submitter?.unionId || '',
-        sentToRpa: Boolean(task.sentToRpa),
-        sentToRpaAt: task.sentToRpaAt || '',
-        pausedAuto: Boolean(task.pausedAuto),
-        overdueNotified: Boolean(task.overdueNotified),
-        dingtalkNotified: Boolean(task.dingtalkNotified),
-        r2AutoNotified: Boolean(task.r2AutoNotified)
-    };
 }
 
 async function notifyUserDone(env, task, origin) {
