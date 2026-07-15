@@ -100,6 +100,7 @@ export async function onRequestGet(context) {
     const active = url.searchParams.get('active') === '1';
     const history = url.searchParams.get('history') === '1';
     const retouchQueue = url.searchParams.get('retouchQueue') === '1';
+    const resizeQueue = url.searchParams.get('resizeQueue') === '1';
     const mode = String(url.searchParams.get('mode') || '').trim();
     const requestedLimit = Number(url.searchParams.get('limit'));
     const taskLimit = Number.isFinite(requestedLimit) && requestedLimit > 0
@@ -116,8 +117,8 @@ export async function onRequestGet(context) {
         }
 
         const list = await env.SUBMISSIONS.list({ prefix: 'studio-', limit: 1000 });
-        if (retouchQueue) {
-            return publicRetouchQueue(env, list.keys, taskLimit);
+        if (retouchQueue || resizeQueue) {
+            return publicStudioQueue(env, list.keys, taskLimit, resizeQueue ? 'resize_ai' : 'retouch');
         }
 
         let syncedTasks = new Map();
@@ -177,11 +178,11 @@ export async function onRequestGet(context) {
     }
 }
 
-async function publicRetouchQueue(env, listedKeys, requestedLimit) {
+async function publicStudioQueue(env, listedKeys, requestedLimit, queueMode) {
     const limit = Math.min(requestedLimit, 20);
     const keys = listedKeys
         .filter(key => key.metadata?.kind === 'studio')
-        .filter(key => key.metadata?.mode === 'retouch')
+        .filter(key => key.metadata?.mode === queueMode)
         .filter(key => key.metadata?.status === 'pending' || key.metadata?.status === 'processing')
         .sort((left, right) => Number(left.metadata?.timestamp || 0) - Number(right.metadata?.timestamp || 0))
         .slice(0, limit)
@@ -191,7 +192,7 @@ async function publicRetouchQueue(env, listedKeys, requestedLimit) {
         .map(raw => {
             try { return JSON.parse(raw); } catch { return null; }
         })
-        .filter(task => task?.kind === 'studio' && task.mode === 'retouch')
+        .filter(task => task?.kind === 'studio' && task.mode === queueMode)
         .filter(task => task.status === 'pending' || task.status === 'processing')
         .map(task => ({
             id: task.id,

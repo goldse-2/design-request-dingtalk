@@ -463,18 +463,13 @@ const RESIZE_FORM = `
             </div>
             <div class="resize-status" id="resizeStatus">等待上传图片</div>
             <button class="sf-submit resize-download" id="resizeDownloadBtn" disabled>上传图片后继续</button>
+            <canvas id="resizeCanvas" style="display:none"></canvas>
         </div>
         <div class="studio-preview resize-preview">
-            <div class="studio-preview-tab">预览</div>
-            <div class="studio-preview-body resize-preview-body">
-                <div class="resize-preview-head">
-                    <div class="resize-preview-title">输出预览</div>
-                    <span class="resize-size-badge" id="resizeOutputBadge">1464 × 600</span>
-                </div>
-                <div class="resize-canvas-wrap">
-                    <div class="resize-empty" id="resizeEmptyPreview">上传图片后显示转换结果</div>
-                    <canvas id="resizeCanvas"></canvas>
-                </div>
+            <div class="studio-preview-tab retouch-queue-head"><span>尺寸修改队列</span></div>
+            <div class="studio-preview-body">
+                <div class="retouch-queue-summary" id="resizeQueueSummary"></div>
+                <div class="retouch-queue-list" id="resizeQueueList"><div class="retouch-queue-empty">正在加载尺寸修改队列...</div></div>
             </div>
         </div>
     </div>`;
@@ -799,21 +794,42 @@ async function loadRetouchQueue() {
         const response = await fetch('/api/studio-tasks?retouchQueue=1&limit=12&format=names-v1');
         const data = await response.json();
         if (!response.ok || !data.ok) throw new Error(data.error || '加载失败');
-        renderRetouchQueue(Array.isArray(data.tasks) ? data.tasks : [], list, summary);
+        renderRetouchQueue(Array.isArray(data.tasks) ? data.tasks : [], list, summary, '暂无精修任务');
     } catch {
         summary.innerHTML = '';
         list.innerHTML = '<div class="retouch-queue-empty">精修队列加载失败，请稍后再试</div>';
     }
 }
 
-function renderRetouchQueue(tasks, list, summary) {
+async function loadResizeQueue() {
+    const list = document.getElementById('resizeQueueList');
+    const summary = document.getElementById('resizeQueueSummary');
+    if (!list || !summary) return;
+    if (!currentUser?.unionId) {
+        summary.innerHTML = '';
+        list.innerHTML = '<div class="retouch-queue-empty">登录后查看尺寸修改队列</div>';
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/studio-tasks?resizeQueue=1&limit=12&format=names-v1');
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.error || '加载失败');
+        renderRetouchQueue(Array.isArray(data.tasks) ? data.tasks : [], list, summary, '暂无尺寸修改任务');
+    } catch {
+        summary.innerHTML = '';
+        list.innerHTML = '<div class="retouch-queue-empty">尺寸修改队列加载失败，请稍后再试</div>';
+    }
+}
+
+function renderRetouchQueue(tasks, list, summary, emptyText) {
     const activeTasks = tasks.filter(task => task.status === 'pending' || task.status === 'processing');
     const pending = activeTasks.filter(task => task.status === 'pending').length;
     const processing = activeTasks.filter(task => task.status === 'processing').length;
     summary.innerHTML = '<span>待处理 ' + pending + '</span><span>处理中 ' + processing + '</span>';
     list.innerHTML = '';
     if (!activeTasks.length) {
-        list.innerHTML = '<div class="retouch-queue-empty">暂无精修任务</div>';
+        list.innerHTML = '<div class="retouch-queue-empty">' + emptyText + '</div>';
         return;
     }
 
@@ -1055,8 +1071,6 @@ function initResizeTool() {
     const dropText = document.getElementById('resizeDropText');
     const status = document.getElementById('resizeStatus');
     const downloadBtn = document.getElementById('resizeDownloadBtn');
-    const outputBadge = document.getElementById('resizeOutputBadge');
-    const emptyPreview = document.getElementById('resizeEmptyPreview');
     const canvas = document.getElementById('resizeCanvas');
     const customSize = document.getElementById('resizeCustomSize');
     const customWidth = document.getElementById('resizeCustomWidth');
@@ -1092,7 +1106,6 @@ function initResizeTool() {
         localReady = false;
         downloadBtn.disabled = true;
         canvas.style.display = 'none';
-        emptyPreview.hidden = false;
         status.className = 'resize-status';
         status.textContent = message;
     };
@@ -1105,11 +1118,9 @@ function initResizeTool() {
         customSize.hidden = !target.custom;
         dropText.textContent = '上传需要修改尺寸的图片';
         if (!isValidTarget(target)) {
-            if (outputBadge) outputBadge.textContent = '自定义尺寸';
             reset('请输入 100–5000 px 的自定义宽度和高度');
             return;
         }
-        if (outputBadge) outputBadge.textContent = `${target.width} × ${target.height}`;
         if (currentImage && currentFile) prepareResizeResult(currentFile, currentImage);
         else reset();
     };
@@ -1156,7 +1167,6 @@ function initResizeTool() {
         }
         localReady = false;
         canvas.style.display = 'none';
-        emptyPreview.hidden = false;
         downloadBtn.disabled = false;
         downloadBtn.textContent = `提交后台 AI 修改成 ${target.width} × ${target.height}`;
         status.className = 'resize-status ai';
@@ -1191,8 +1201,7 @@ function initResizeTool() {
         } else {
             context.drawImage(image, 0, (target.height - scaledHeight) / 2, target.width, scaledHeight);
         }
-        canvas.style.display = 'block';
-        emptyPreview.hidden = true;
+        canvas.style.display = 'none';
     };
 
     targetGrid.querySelectorAll('.resize-target-btn').forEach(btn => {
@@ -1242,6 +1251,7 @@ function initResizeTool() {
         }, outputType, 0.95);
     });
     updateTarget();
+    loadResizeQueue();
 }
 
 function fileToStudioUpload(file) {
@@ -1269,7 +1279,10 @@ async function submitResizeAiTask(file, target, resizeReflow, status, btn) {
             resizeReflow,
             imageName: file.name.replace(/\.[^.]+$/, ''),
             refImages: [upload]
-        }, status, btn, task => showSuccessModal(task, `尺寸修改任务已提交，目标 ${target.width} × ${target.height}，完成后会通过钉钉通知`));
+        }, status, btn, task => {
+            showSuccessModal(task, `尺寸修改任务已提交，目标 ${target.width} × ${target.height}，完成后会通过钉钉通知`);
+            loadResizeQueue();
+        });
     } catch (error) {
         status.className = 'resize-status error';
         status.textContent = error.message || '提交失败，请重试';
