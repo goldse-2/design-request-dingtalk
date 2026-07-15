@@ -440,13 +440,33 @@ export function buildResizePrompt(target, allowReflow) {
 
 async function storeResizeAiResult(env, task, result, sourceName, target) {
     const fetched = await resultToBytes(result);
-    const ext = extensionFromMime(fetched.mimeType);
+    const exact = await transformToExactJpeg(env, fetched, target);
     const safeName = sanitizeName(String(sourceName || 'resize-source.png').replace(/\.[^.]+$/, ''));
-    const key = `studio-results/${task.id}/resize-${target.width}x${target.height}-${safeName}.${ext}`;
-    await env.SUBMISSION_FILES.put(key, fetched.bytes, {
-        httpMetadata: { contentType: fetched.mimeType }
+    const key = `studio-results/${task.id}/resize-${target.width}x${target.height}-${safeName}.jpg`;
+    await env.SUBMISSION_FILES.put(key, exact.bytes, {
+        httpMetadata: { contentType: 'image/jpeg' }
     });
-    return { key, name: `${safeName}-尺寸修改-${target.width}x${target.height}.${ext}` };
+    return { key, name: `${safeName}-尺寸修改-${target.width}x${target.height}.jpg` };
+}
+
+export async function transformToExactJpeg(env, image, target) {
+    if (!env.IMAGES?.input || !env.IMAGES?.info) {
+        throw new Error('Exact image resizing is not configured');
+    }
+
+    const transformed = await env.IMAGES
+        .input(new Blob([image.bytes], { type: image.mimeType }).stream())
+        .transform({ width: target.width, height: target.height, fit: 'cover' })
+        .output({ format: 'image/jpeg', quality: 95 });
+    const response = transformed.response();
+    if (!response.ok) throw new Error(`Exact image resize failed: HTTP ${response.status}`);
+
+    const bytes = await response.arrayBuffer();
+    const info = await env.IMAGES.info(new Blob([bytes], { type: 'image/jpeg' }).stream());
+    if (info.width !== target.width || info.height !== target.height) {
+        throw new Error(`Exact image resize mismatch: ${info.width}x${info.height}`);
+    }
+    return { bytes, mimeType: 'image/jpeg' };
 }
 
 function parseResizeTarget(value) {
