@@ -565,13 +565,13 @@ const VARIANT_FORM = `
                 </div>
             </div>
             <div class="sf-section">
-                <div class="sf-label">图片 <span class="sf-req">*</span> <span class="sf-sub" id="variantImgCount">(0/5)</span></div>
+                <div class="sf-label">图片 <span class="sf-req">*</span> <span class="sf-sub" id="variantImgCount">(0/20)</span></div>
                 <div class="sf-upload-row">
                     <div class="sf-upload-box variant-upload-box" id="variantDrop">
                         <input type="file" id="variantInput" accept="image/*" multiple hidden>
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="24" height="24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                         <span>上传图片</span>
-                        <small>默认最多 5 张，单张最大 15 MB</small>
+                        <small>默认最多 20 张，单张最大 15 MB</small>
                     </div>
                     <div class="sf-preview-list" id="variantPreviewList"></div>
                 </div>
@@ -598,6 +598,7 @@ let resizeToolCleanup = null;
 const MAX_STUDIO_FILE_SIZE = 8 * 1024 * 1024;
 const MAX_RETOUCH_FILE_SIZE = 15 * 1024 * 1024;
 const MAX_VARIANT_FILE_SIZE = 15 * 1024 * 1024;
+const MAX_VARIANT_IMAGES = 20;
 
 function validateStudioImage(file) {
     if (!file?.type?.startsWith('image/')) return '请选择图片文件';
@@ -944,9 +945,9 @@ function initVariantMode() {
     const colorPicker = initVariantColorPicker();
 
     const addFiles = files => {
-        const remaining = 5 - uploads.variantImages.length;
+        const remaining = MAX_VARIANT_IMAGES - uploads.variantImages.length;
         if (remaining <= 0) {
-            showStudioUploadError('变体改色最多上传 5 张图片');
+            showStudioUploadError(`变体改色最多上传 ${MAX_VARIANT_IMAGES} 张图片`);
             return;
         }
         Array.from(files).slice(0, remaining).forEach(file => {
@@ -964,7 +965,7 @@ function initVariantMode() {
             };
             reader.readAsDataURL(file);
         });
-        if (files.length > remaining) showStudioUploadError('最多上传 5 张，已自动限制');
+        if (files.length > remaining) showStudioUploadError(`最多上传 ${MAX_VARIANT_IMAGES} 张，已自动限制`);
     };
 
     drop.addEventListener('click', () => input.click());
@@ -1123,8 +1124,8 @@ function renderVariantPreview() {
     const drop = document.getElementById('variantDrop');
     if (!list) return;
     const n = uploads.variantImages.length;
-    if (count) count.textContent = '(' + n + '/5)';
-    if (drop) drop.style.display = n >= 5 ? 'none' : '';
+    if (count) count.textContent = '(' + n + '/' + MAX_VARIANT_IMAGES + ')';
+    if (drop) drop.style.display = n >= MAX_VARIANT_IMAGES ? 'none' : '';
     list.innerHTML = '';
     uploads.variantImages.forEach((f, i) => {
         const item = document.createElement('div');
