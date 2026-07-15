@@ -469,7 +469,7 @@ export async function transformToExactJpeg(env, image, target) {
     return { bytes, mimeType: 'image/jpeg' };
 }
 
-function parseResizeTarget(value) {
+export function parseResizeTarget(value) {
     const match = String(value || '').match(/(\d{3,5})\s*[x×*]\s*(\d{3,5})/i);
     if (!match) return { width: 1464, height: 600 };
     return { width: Number(match[1]), height: Number(match[2]) };

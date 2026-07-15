@@ -1,5 +1,6 @@
 import { markStudioNotificationSent, sendStudioResultImages } from '../_shared/studio-dingtalk.js';
 import { RECORD_RETENTION_MS, studioTaskPutOptions, studioTaskRetentionAnchor } from '../_shared/studio-task-storage.js';
+import { parseResizeTarget, transformToExactJpeg } from './studio-check-overdue.js';
 
 export async function onRequestPatch(context) {
     const { request, env } = context;
@@ -45,11 +46,45 @@ export async function onRequestPatch(context) {
         await env.SUBMISSIONS.put(queueKey, JSON.stringify([id, ...queue.filter(taskId => taskId !== id)].slice(0, 300)));
     }
 
+    if (action === 'repairResize') {
+        if (task.mode !== 'resize_ai' || task.status !== 'done') {
+            return Response.json({ ok: false, error: 'Only completed resize tasks can be repaired' }, { status: 400 });
+        }
+        if (!env.SUBMISSION_FILES) {
+            return Response.json({ ok: false, error: 'R2 storage not configured' }, { status: 500 });
+        }
+
+        const current = Array.isArray(task.resultKeys) ? task.resultKeys[0] : null;
+        if (!current?.key) {
+            return Response.json({ ok: false, error: 'Resize result not found' }, { status: 404 });
+        }
+        const object = await env.SUBMISSION_FILES.get(current.key);
+        if (!object) {
+            return Response.json({ ok: false, error: 'Resize result file missing' }, { status: 404 });
+        }
+
+        const target = parseResizeTarget(task.resizeTarget || task.size || '1464x600');
+        const exact = await transformToExactJpeg(env, {
+            bytes: await object.arrayBuffer(),
+            mimeType: object.httpMetadata?.contentType || 'image/jpeg'
+        }, target);
+        const baseKey = String(current.key).replace(/\.[^.]+$/, '');
+        const key = `${baseKey}-exact-${Date.now()}.jpg`;
+        const baseName = String(current.name || `resize-${target.width}x${target.height}.jpg`).replace(/\.[^.]+$/, '');
+        const name = `${baseName}-精确尺寸.jpg`;
+        await env.SUBMISSION_FILES.put(key, exact.bytes, {
+            httpMetadata: { contentType: 'image/jpeg' }
+        });
+        task.resultKeys = [{ key, name }];
+        task.completeNote = `AI 尺寸修改完成：${target.width} × ${target.height}（已校正精确像素）`;
+        task.exactResizeRepairedAt = new Date().toISOString();
+    }
+
     if (typeof desc === 'string') task.desc = desc;
     if (typeof note === 'string') task.note = note;
 
     await env.SUBMISSIONS.put(id, JSON.stringify(task), studioTaskPutOptions(task));
-    return Response.json({ ok: true, task, requeued: action === 'retryImage' });
+    return Response.json({ ok: true, task, requeued: action === 'retryImage', repaired: action === 'repairResize' });
 }
 
 export async function onRequestGet(context) {
