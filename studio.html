@@ -66,6 +66,11 @@
         .resize-canvas-wrap canvas { display: none; width: min(100%, 1464px); height: auto; background: #fff; box-shadow: 0 2px 10px rgba(15,23,42,.15); }
         .resize-empty { color: #9ca3af; font-size: .86rem; text-align: center; }
         .retouch-upload-box { width: 100%; min-height: 150px; }
+        .retouch-left-stack { display:flex; flex-direction:column; gap:16px; width:420px; min-width:0; }
+        .retouch-left-stack .studio-panel { width:100% !important; }
+        .cutout-panel-title { margin-bottom:4px; color:#111827; font-size:1rem; font-weight:800; }
+        .cutout-panel-copy { margin-bottom:14px; color:#6b7280; font-size:.78rem; line-height:1.55; }
+        .cutout-auto-hint { margin-top:10px; padding:8px 10px; border-left:3px solid #10b981; border-radius:0 6px 6px 0; background:#ecfdf5; color:#047857; font-size:.75rem; line-height:1.5; }
         .retouch-shoot-hint { margin-top: 10px; color: #6b7280; font-size: .78rem; line-height: 1.6; text-align: center; }
         .retouch-shoot-hint a { color: #4338ca; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
         .retouch-selected { display: none; align-items: center; gap: 10px; margin-top: 12px; padding: 9px; border: 1px solid #e5e7eb; border-radius: 7px; background: #f9fafb; }
@@ -105,6 +110,7 @@
         @media (max-width: 860px) {
             .studio-layout { grid-template-columns: minmax(0, 1fr) !important; gap: 16px !important; }
             .studio-panel, .studio-preview { width: 100% !important; min-width: 0; }
+            .retouch-left-stack { width:100%; }
             .resize-preview-body { min-height: 340px; }
             .resize-canvas-wrap { min-height: 280px; }
             .retouch-queue-list { min-height:280px; }
@@ -284,6 +290,6 @@
     帮助中心
 </button>
 
-<script src="studio.js?v=20260715-retouch-names"></script>
+<script src="studio.js?v=20260715-cutout"></script>
 </body>
 </html>

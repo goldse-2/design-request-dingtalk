@@ -73,6 +73,9 @@ export async function onRequestGet(context) {
                 ? env.RPA_WEBHOOK_URL_FREE || await safeKvGet(env.SUBMISSIONS, 'studio:rpaWebhookUrl:free') || 'https://api-rpa.bazhuayu.com/api/v1/bots/webhooks/6a31134a622e84b6672263ee/invoke'
                 : '';
             const retouchWebhook = env.RPA_WEBHOOK_URL_RETOUCH || 'https://api-rpa.bazhuayu.com/api/v1/bots/webhooks/6a543c91645904b3178e096b/invoke';
+            const cutoutWebhook = autoModes.has('cutout')
+                ? env.RPA_WEBHOOK_URL_CUTOUT || 'https://api-rpa.bazhuayu.com/api/v1/bots/webhooks/6a573bbfc272480ce63d81d4/invoke'
+                : '';
             const origin = new URL(request.url).origin;
             for (const task of autoSendTasks) {
                 const isImageTask = task.mode === 'variant' || task.mode === 'resize_ai';
@@ -122,6 +125,8 @@ export async function onRequestGet(context) {
                     ? programWebhook
                     : task.mode === 'retouch'
                         ? retouchWebhook
+                        : task.mode === 'cutout'
+                            ? cutoutWebhook
                         : freeWebhook;
                 if (!webhookUrl) continue;
 
@@ -302,7 +307,7 @@ async function migrateQueues(env) {
                 continue;
             }
 
-            if (['free', 'program', 'retouch'].includes(mode)
+            if (['free', 'program', 'retouch', 'cutout'].includes(mode)
                 && status === 'pending'
                 && !meta.sentToRpa
                 && !meta.pausedAuto) {
@@ -593,9 +598,9 @@ function buildRpaPayload(task, origin) {
     const allImageUrls = [...productUrls, ...refUrls].map(x => x.url).filter(Boolean);
 
     let pickedSize;
-    if (task.mode === 'retouch') {
+    if (task.mode === 'retouch' || task.mode === 'cutout') {
         const sourceImageUrl = refUrls[0]?.url;
-        if (!sourceImageUrl) throw new Error('Retouch image not found');
+        if (!sourceImageUrl) throw new Error(task.mode === 'cutout' ? 'Cutout image not found' : 'Retouch image not found');
         return {
             pickedSize: '',
             payload: {
@@ -682,6 +687,7 @@ function formatSizeRequirement(size) {
 
 function studioModeText(mode) {
     if (mode === 'retouch') return '精修图片';
+    if (mode === 'cutout') return '白底抠图';
     if (mode === 'variant') return '变体改色';
     if (mode === 'resize_ai') return '尺寸修改';
     return mode === 'free' ? '自由模式' : '程序模式';

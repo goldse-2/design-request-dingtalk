@@ -21,11 +21,15 @@ export async function onRequestPost(context) {
         const task = JSON.parse(raw);
         const effectiveWebhookUrl = task.mode === 'retouch'
             ? env.RPA_WEBHOOK_URL_RETOUCH || 'https://api-rpa.bazhuayu.com/api/v1/bots/webhooks/6a543c91645904b3178e096b/invoke'
+            : task.mode === 'cutout'
+                ? env.RPA_WEBHOOK_URL_CUTOUT || 'https://api-rpa.bazhuayu.com/api/v1/bots/webhooks/6a573bbfc272480ce63d81d4/invoke'
             : webhookUrl;
         const webhookKey = task.mode === 'program'
             ? 'studio:rpaWebhookUrl:program'
             : task.mode === 'retouch'
                 ? 'studio:rpaWebhookUrl:retouch'
+                : task.mode === 'cutout'
+                    ? 'studio:rpaWebhookUrl:cutout'
                 : 'studio:rpaWebhookUrl:free';
         await env.SUBMISSIONS.put(webhookKey, effectiveWebhookUrl);
 
@@ -43,10 +47,10 @@ export async function onRequestPost(context) {
         let payload;
         let pickedSize;
         
-        if (task.mode === 'retouch') {
+        if (task.mode === 'retouch' || task.mode === 'cutout') {
             const sourceImageUrl = refUrls[0]?.url;
             if (!sourceImageUrl) {
-                return Response.json({ ok: false, error: 'Retouch image not found' }, { status: 400 });
+                return Response.json({ ok: false, error: task.mode === 'cutout' ? 'Cutout image not found' : 'Retouch image not found' }, { status: 400 });
             }
             payload = {
                 params: {

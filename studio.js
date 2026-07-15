@@ -131,7 +131,7 @@ function onAgreeChange(checked) {
 }
 function applyAgreementGate() {
     const agreed = hasAgreed();
-    document.querySelectorAll('.studio-submit-btn, #freeSubmit, #progSubmit, #retouchSubmit, #variantSubmit').forEach(btn => {
+    document.querySelectorAll('.studio-submit-btn, #freeSubmit, #progSubmit, #retouchSubmit, #cutoutSubmit, #variantSubmit').forEach(btn => {
         if (!btn) return;
         if (agreed) {
             btn.classList.remove('is-gated');
@@ -477,24 +477,47 @@ const RESIZE_FORM = `
 
 const RETOUCH_FORM = `
     <div class="studio-layout retouch-layout">
-        <div class="studio-panel">
-            <div class="sf-section">
-                <div class="sf-label">待精修图片 <span class="sf-req">*</span></div>
-                <label class="sf-upload-box retouch-upload-box" id="retouchDropZone" for="retouchImageInput">
-                    <input id="retouchImageInput" type="file" accept="image/jpeg,image/png,image/webp" hidden>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="26" height="26"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                    <span>上传图片</span>
-                    <small>JPG、PNG、WebP，最大 15 MB</small>
-                </label>
-                <div class="retouch-selected" id="retouchSelected">
-                    <img id="retouchSelectedImage" alt="待精修图片">
-                    <span class="retouch-selected-name" id="retouchSelectedName"></span>
-                    <button type="button" class="retouch-selected-remove" id="retouchRemoveBtn" title="移除图片">&times;</button>
+        <div class="retouch-left-stack">
+            <div class="studio-panel">
+                <div class="sf-section">
+                    <div class="sf-label">待精修图片 <span class="sf-req">*</span></div>
+                    <label class="sf-upload-box retouch-upload-box" id="retouchDropZone" for="retouchImageInput">
+                        <input id="retouchImageInput" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="26" height="26"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        <span>上传图片</span>
+                        <small>JPG、PNG、WebP，最大 15 MB</small>
+                    </label>
+                    <div class="retouch-selected" id="retouchSelected">
+                        <img id="retouchSelectedImage" alt="待精修图片">
+                        <span class="retouch-selected-name" id="retouchSelectedName"></span>
+                        <button type="button" class="retouch-selected-remove" id="retouchRemoveBtn" title="移除图片">&times;</button>
+                    </div>
                 </div>
+                <button class="sf-submit" id="retouchSubmit">开始精修</button>
+                <div class="retouch-shoot-hint">需要拍摄可以在这里提交<a href="library.html?shoot=1">拍摄需求</a></div>
+                <div id="retouchStatus" class="studio-status" style="margin-top:10px"></div>
             </div>
-            <button class="sf-submit" id="retouchSubmit">开始精修</button>
-            <div class="retouch-shoot-hint">需要拍摄可以在这里提交<a href="library.html?shoot=1">拍摄需求</a></div>
-            <div id="retouchStatus" class="studio-status" style="margin-top:10px"></div>
+            <div class="studio-panel cutout-panel">
+                <div class="cutout-panel-title">白底抠图</div>
+                <div class="cutout-panel-copy">上传一张图片，自动抠出产品并处理为白底图。</div>
+                <div class="sf-section">
+                    <div class="sf-label">待处理图片 <span class="sf-req">*</span></div>
+                    <label class="sf-upload-box retouch-upload-box" id="cutoutDropZone" for="cutoutImageInput">
+                        <input id="cutoutImageInput" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="26" height="26"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        <span>上传图片</span>
+                        <small>JPG、PNG、WebP，最大 15 MB</small>
+                    </label>
+                    <div class="retouch-selected" id="cutoutSelected">
+                        <img id="cutoutSelectedImage" alt="待处理图片">
+                        <span class="retouch-selected-name" id="cutoutSelectedName"></span>
+                        <button type="button" class="retouch-selected-remove" id="cutoutRemoveBtn" title="移除图片">&times;</button>
+                    </div>
+                </div>
+                <button class="sf-submit" id="cutoutSubmit">开始白底抠图</button>
+                <div class="cutout-auto-hint">无需审核，提交后立即发送处理；完成后会通过钉钉通知。</div>
+                <div id="cutoutStatus" class="studio-status" style="margin-top:10px"></div>
+            </div>
         </div>
         <div class="studio-preview retouch-preview">
             <div class="studio-preview-tab retouch-queue-head"><span>精修队列</span></div>
@@ -569,7 +592,7 @@ const VARIANT_FORM = `
         </div>
     </div>`;
 
-const uploads = { freeImages: [], freeModel: null, freeScene: null, freeProduct: [], freeProduct1: null, freeProduct2: null, progRef: [], progProduct: [], retouchImage: null, variantImages: [] };
+const uploads = { freeImages: [], freeModel: null, freeScene: null, freeProduct: [], freeProduct1: null, freeProduct2: null, progRef: [], progProduct: [], retouchImage: null, cutoutImage: null, variantImages: [] };
 const MAX_STUDIO_FILE_SIZE = 8 * 1024 * 1024;
 const MAX_RETOUCH_FILE_SIZE = 15 * 1024 * 1024;
 const MAX_VARIANT_FILE_SIZE = 15 * 1024 * 1024;
@@ -666,7 +689,7 @@ function renderForm() {
     const area = document.getElementById('studioFormArea');
     const attachedGallery = area.querySelector('.studio-gallery-preview');
     if (attachedGallery) cachedStudioGalleryPreview = attachedGallery;
-    uploads.freeImages = []; uploads.freeModel = null; uploads.freeScene = null; uploads.freeProduct = []; uploads.freeProduct1 = null; uploads.freeProduct2 = null; uploads.progRef = []; uploads.progProduct = []; uploads.retouchImage = null; uploads.variantImages = [];
+    uploads.freeImages = []; uploads.freeModel = null; uploads.freeScene = null; uploads.freeProduct = []; uploads.freeProduct1 = null; uploads.freeProduct2 = null; uploads.progRef = []; uploads.progProduct = []; uploads.retouchImage = null; uploads.cutoutImage = null; uploads.variantImages = [];
     let galleryWasReady = false;
     if (currentMode === 'free') {
         galleryWasReady = renderGenerationMode(area, FREE_FORM);
@@ -725,29 +748,55 @@ function renderGenerationMode(area, formHtml) {
 }
 
 function initRetouchMode() {
-    const input = document.getElementById('retouchImageInput');
-    const dropZone = document.getElementById('retouchDropZone');
-    const removeButton = document.getElementById('retouchRemoveBtn');
+    wireSingleImageUpload({
+        inputId: 'retouchImageInput',
+        dropZoneId: 'retouchDropZone',
+        removeButtonId: 'retouchRemoveBtn',
+        statusId: 'retouchStatus',
+        uploadKey: 'retouchImage',
+        render: renderRetouchSelection
+    });
+    wireSingleImageUpload({
+        inputId: 'cutoutImageInput',
+        dropZoneId: 'cutoutDropZone',
+        removeButtonId: 'cutoutRemoveBtn',
+        statusId: 'cutoutStatus',
+        uploadKey: 'cutoutImage',
+        render: renderCutoutSelection
+    });
+    document.getElementById('retouchSubmit').addEventListener('click', submitRetouch);
+    document.getElementById('cutoutSubmit').addEventListener('click', submitCutout);
+    loadRetouchQueue();
+}
+
+function wireSingleImageUpload({ inputId, dropZoneId, removeButtonId, statusId, uploadKey, render }) {
+    const dropZone = document.getElementById(dropZoneId);
+    const removeButton = document.getElementById(removeButtonId);
+    const actualInput = document.getElementById(inputId);
+    if (!actualInput || !dropZone || !removeButton) return;
 
     const selectFile = file => {
         const validationError = validateStudioImage(file);
-        if (validationError) { showStudioUploadError(validationError); return; }
+        if (validationError) {
+            showStudioFieldError(document.getElementById(statusId), validationError, dropZone);
+            return;
+        }
         const reader = new FileReader();
         reader.onload = event => {
-            uploads.retouchImage = {
+            uploads[uploadKey] = {
                 name: file.name,
                 base64: event.target.result.split(',')[1],
                 mimeType: file.type,
                 dataUrl: event.target.result
             };
-            renderRetouchSelection();
+            render();
         };
         reader.readAsDataURL(file);
     };
 
-    input.addEventListener('change', () => {
-        if (input.files[0]) selectFile(input.files[0]);
-        input.value = '';
+    actualInput.addEventListener('change', () => {
+        if (actualInput.files[0]) selectFile(actualInput.files[0]);
+        actualInput.value = '';
     });
     ['dragenter', 'dragover'].forEach(type => dropZone.addEventListener(type, event => {
         event.preventDefault();
@@ -760,9 +809,10 @@ function initRetouchMode() {
     dropZone.addEventListener('drop', event => {
         if (event.dataTransfer.files[0]) selectFile(event.dataTransfer.files[0]);
     });
-    removeButton.addEventListener('click', clearRetouchSelection);
-    document.getElementById('retouchSubmit').addEventListener('click', submitRetouch);
-    loadRetouchQueue();
+    removeButton.addEventListener('click', () => {
+        uploads[uploadKey] = null;
+        render();
+    });
 }
 
 function renderRetouchSelection() {
@@ -780,6 +830,23 @@ function renderRetouchSelection() {
     }
     image.src = picked.dataUrl;
     name.textContent = picked.name || '上次图片';
+}
+
+function renderCutoutSelection() {
+    const selected = document.getElementById('cutoutSelected');
+    const image = document.getElementById('cutoutSelectedImage');
+    const name = document.getElementById('cutoutSelectedName');
+    const picked = uploads.cutoutImage;
+    if (!selected || !image || !name) return;
+
+    selected.classList.toggle('visible', Boolean(picked));
+    if (!picked) {
+        image.removeAttribute('src');
+        name.textContent = '';
+        return;
+    }
+    image.src = picked.dataUrl;
+    name.textContent = picked.name || '待处理图片';
 }
 
 async function loadRetouchQueue() {
@@ -1805,7 +1872,7 @@ async function submitTask(mode, payload, statusEl, btn, onSuccess) {
     try {
         statusEl.textContent = '上传图片中...';
         const productKeys = payload.productImages && payload.productImages.length ? await uploadImages(payload.productImages, 'studio/product') : [];
-        const refPrefix = mode === 'retouch' ? 'studio/retouch' : mode === 'variant' ? 'studio/variant' : mode === 'resize_ai' ? 'studio/resize' : 'studio/ref';
+        const refPrefix = mode === 'retouch' ? 'studio/retouch' : mode === 'cutout' ? 'studio/cutout' : mode === 'variant' ? 'studio/variant' : mode === 'resize_ai' ? 'studio/resize' : 'studio/ref';
         const uploadedRefKeys = payload.refImages && payload.refImages.length ? await uploadImages(payload.refImages, refPrefix) : [];
         const refKeys = uploadedRefKeys;
         const modelKeys = payload.modelImages && payload.modelImages.length ? await uploadImages(payload.modelImages, 'studio/model') : [];
@@ -2226,6 +2293,22 @@ function submitRetouch() {
     submitTask('retouch', {
         refImages: [uploads.retouchImage]
     }, status, document.getElementById('retouchSubmit'), task => showSuccessModal(task, '精修图片预计约 30 分钟完成'));
+}
+
+function submitCutout() {
+    const status = document.getElementById('cutoutStatus');
+    if (!uploads.cutoutImage) {
+        showStudioFieldError(status, '请上传待处理图片', document.getElementById('cutoutDropZone'));
+        return;
+    }
+    submitTask('cutout', {
+        refImages: [uploads.cutoutImage]
+    }, status, document.getElementById('cutoutSubmit'), task => {
+        const message = task.autoSent
+            ? '白底抠图已发送处理，完成后会通过钉钉通知'
+            : '任务已保存，系统会自动重试发送，无需审核';
+        showSuccessModal(task, message);
+    });
 }
 
 async function submitVariant() {

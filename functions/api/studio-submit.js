@@ -14,6 +14,9 @@ export async function onRequestPost(context) {
     if (mode === 'retouch' && (!Array.isArray(refKeys) || refKeys.length !== 1)) {
         return Response.json({ ok: false, error: 'Retouch mode requires exactly one image' }, { status: 400 });
     }
+    if (mode === 'cutout' && (!Array.isArray(refKeys) || refKeys.length !== 1)) {
+        return Response.json({ ok: false, error: 'Cutout mode requires exactly one image' }, { status: 400 });
+    }
     if (mode === 'variant' && (!Array.isArray(refKeys) || refKeys.length < 1)) {
         return Response.json({ ok: false, error: 'Variant mode requires at least one image' }, { status: 400 });
     }
@@ -62,12 +65,29 @@ export async function onRequestPost(context) {
         createdAt: new Date(timestamp).toISOString()
     };
 
+    let autoSent = false;
+    let autoSendError = '';
     try {
         await env.SUBMISSIONS.put(taskId, JSON.stringify(task), studioTaskPutOptions(task));
-        const queueKey = mode === 'variant' || mode === 'resize_ai'
-            ? 'studio:imageQueue:v2'
-            : 'studio:rpaQueue:v2';
-        await appendQueue(env.SUBMISSIONS, queueKey, taskId);
+        if (mode === 'cutout') {
+            try {
+                await dispatchCutoutTask(request, env, task);
+                autoSent = true;
+                await env.SUBMISSIONS.put(taskId, JSON.stringify(task), studioTaskPutOptions(task));
+                await appendQueue(env.SUBMISSIONS, 'studio:processingQueue:v2', taskId);
+            } catch (error) {
+                autoSendError = String(error?.message || error).slice(0, 300);
+                task.autoRpaLastError = autoSendError;
+                task.autoRpaLastAttemptAt = new Date().toISOString();
+                await env.SUBMISSIONS.put(taskId, JSON.stringify(task), studioTaskPutOptions(task));
+                await appendQueue(env.SUBMISSIONS, 'studio:rpaQueue:v2', taskId);
+            }
+        } else {
+            const queueKey = mode === 'variant' || mode === 'resize_ai'
+                ? 'studio:imageQueue:v2'
+                : 'studio:rpaQueue:v2';
+            await appendQueue(env.SUBMISSIONS, queueKey, taskId);
+        }
     } catch (err) {
         return Response.json({ ok: false, error: 'Storage failed' }, { status: 500 });
     }
@@ -115,6 +135,11 @@ export async function onRequestPost(context) {
             if (mode === 'retouch') {
                 content += `🖼️ 精修任务已进入处理队列\n`;
                 content += `⏱ 预计等待：约 30 分钟\n\n`;
+            } else if (mode === 'cutout') {
+                content += autoSent
+                    ? `🖼️ 白底抠图任务已自动发送处理\n`
+                    : `🖼️ 白底抠图任务已保存，系统会自动重试发送\n`;
+                content += `⏱ 完成后会通过钉钉通知，页面可以先关闭\n\n`;
             } else if (mode === 'variant') {
                 content += `🎨 改色任务已进入处理队列\n`;
                 content += `⏱ 完成后会通过钉钉通知，页面可以先关闭\n\n`;
@@ -138,14 +163,58 @@ export async function onRequestPost(context) {
         if (waitUntil) waitUntil(p2);
     }
 
-    return Response.json({ ok: true, id: taskId });
+    return Response.json({ ok: true, id: taskId, autoSent, autoSendError });
 }
 
 function studioModeText(mode) {
     if (mode === 'retouch') return '精修图片';
+    if (mode === 'cutout') return '白底抠图';
     if (mode === 'variant') return '变体改色';
     if (mode === 'resize_ai') return '尺寸修改';
     return mode === 'free' ? '自由模式' : '程序模式';
+}
+
+async function dispatchCutoutTask(request, env, task) {
+    const source = task.refKeys?.[0];
+    if (!source?.key) throw new Error('Cutout image not found');
+
+    const origin = new URL(request.url).origin;
+    const payload = {
+        params: {
+            "待处理图片链接": `${origin}/api/public-image/${encodeKeyToken(source.key)}`,
+            "任务ID": task.id
+        }
+    };
+    const webhookUrl = env.RPA_WEBHOOK_URL_CUTOUT || 'https://api-rpa.bazhuayu.com/api/v1/bots/webhooks/6a573bbfc272480ce63d81d4/invoke';
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 12000);
+    let response;
+    try {
+        response = await fetch(webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+            signal: controller.signal
+        });
+    } finally {
+        clearTimeout(timer);
+    }
+    const text = await response.text();
+    if (!response.ok) throw new Error(`RPA webhook HTTP ${response.status}: ${text.slice(0, 300)}`);
+
+    task.status = 'processing';
+    task.sentToRpa = true;
+    task.sentToRpaAt = new Date().toISOString();
+    task.autoRpaLastAttemptAt = task.sentToRpaAt;
+    task.autoRpaLastResponse = text.slice(0, 300);
+    task.rpaSentPayload = payload;
+}
+
+function encodeKeyToken(key) {
+    const bytes = new TextEncoder().encode(String(key || ''));
+    let binary = '';
+    bytes.forEach(byte => { binary += String.fromCharCode(byte); });
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
 }
 
 function isValidResizeTarget(value) {
