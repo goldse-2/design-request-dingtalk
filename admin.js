@@ -1376,6 +1376,14 @@ function renderStudioTask(task) {
         automaticLabel.textContent = 'AI 自动处理，无需审批';
         automaticLabel.style.cssText = 'font-size:0.82rem;color:#047857;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:7px;padding:7px 12px;font-weight:600';
         actions.append(automaticLabel);
+        if (task.mode === 'resize_ai' && task.status !== 'done') {
+            const retryBtn = document.createElement('button');
+            retryBtn.type = 'button';
+            retryBtn.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 6v5h-5"/><path d="M20 11a8 8 0 1 0 2 5"/></svg><span>重新发送</span>';
+            retryBtn.style.cssText = 'display:inline-flex;align-items:center;gap:6px;font-size:0.82rem;color:#fff;background:#6366f1;border:none;border-radius:7px;padding:7px 14px;cursor:pointer;font-weight:600';
+            retryBtn.onclick = () => retryImageTask(task.id, retryBtn);
+            actions.append(retryBtn);
+        }
     }
     card.appendChild(actions);
     return card;
@@ -1402,6 +1410,28 @@ function startCountdownTimer(taskId, createdAt) {
             countdownEl.textContent = '⏱ ' + mins + '分' + secs + '秒后自动发送';
         }
     }, 1000);
+}
+
+async function retryImageTask(taskId, btn) {
+    if (!confirm('确认重新发送这个尺寸修改任务吗？重新处理会消耗一次 AI 图片额度。')) return;
+    const label = btn.querySelector('span');
+    btn.disabled = true;
+    label.textContent = '发送中...';
+    try {
+        const response = await fetch('/api/studio-tasks', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: taskId, action: 'retryImage' })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.ok) throw new Error(data.error || '重新发送失败');
+        label.textContent = '已重新发送';
+        setTimeout(() => loadStudioAdmin(), 800);
+    } catch (error) {
+        alert('重新发送失败：' + error.message);
+        btn.disabled = false;
+        label.textContent = '重新发送';
+    }
 }
 
 function getSubmissionProductName(sub) {

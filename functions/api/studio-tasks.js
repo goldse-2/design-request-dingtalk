@@ -9,7 +9,7 @@ export async function onRequestPatch(context) {
     try { body = await request.json(); }
     catch { return Response.json({ ok: false, error: 'Invalid JSON' }, { status: 400 }); }
 
-    const { id, desc, note } = body;
+    const { id, desc, note, action } = body;
     if (!id) return Response.json({ ok: false, error: 'Missing id' }, { status: 400 });
 
     const raw = await env.SUBMISSIONS.get(id);
@@ -19,13 +19,38 @@ export async function onRequestPatch(context) {
     try { task = JSON.parse(raw); } catch { return Response.json({ ok: false, error: 'Bad data' }, { status: 500 }); }
     if (task.kind !== 'studio') return Response.json({ ok: false, error: 'Not a studio task' }, { status: 400 });
 
+    if (action === 'retryImage') {
+        if (task.mode !== 'resize_ai') {
+            return Response.json({ ok: false, error: 'Only resize tasks can be resent here' }, { status: 400 });
+        }
+        if (task.status === 'done') {
+            return Response.json({ ok: false, error: '已完成任务不能重新发送' }, { status: 409 });
+        }
+
+        const queueKey = 'studio:imageQueue:v2';
+        const queueRaw = await env.SUBMISSIONS.get(queueKey).catch(() => null);
+        let queue = [];
+        if (queueRaw) {
+            try { queue = JSON.parse(queueRaw); } catch { queue = []; }
+        }
+        if (!Array.isArray(queue)) queue = [];
+
+        task.status = 'pending';
+        task.backgroundLastError = '';
+        task.backgroundLastAttemptAt = '';
+        task.backgroundRetriedAt = new Date().toISOString();
+        task.dingtalkNotified = false;
+        task.r2AutoNotified = false;
+        await env.SUBMISSIONS.put(queueKey, JSON.stringify([id, ...queue.filter(taskId => taskId !== id)].slice(0, 300)));
+    }
+
     if (typeof desc === 'string') task.desc = desc;
     if (typeof note === 'string') task.note = note;
 
     await env.SUBMISSIONS.put(id, JSON.stringify(task), {
         metadata: studioTaskMetadata(task)
     });
-    return Response.json({ ok: true, task });
+    return Response.json({ ok: true, task, requeued: action === 'retryImage' });
 }
 
 export async function onRequestGet(context) {
