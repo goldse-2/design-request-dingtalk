@@ -515,6 +515,13 @@ const RETOUCH_FORM = `
                         <button type="button" class="retouch-selected-remove" id="cutoutRemoveBtn" title="移除图片">&times;</button>
                     </div>
                 </div>
+                <div class="sf-section">
+                    <label class="sf-label" for="cutoutOutputFormat">导出格式</label>
+                    <select id="cutoutOutputFormat" style="width:100%;height:42px;padding:0 12px;border:1px solid #d1d5db;border-radius:7px;background:#fff;color:#111827;font:inherit;cursor:pointer">
+                        <option value="png" selected>PNG</option>
+                        <option value="jpg">JPG</option>
+                    </select>
+                </div>
                 <button class="sf-submit" id="cutoutSubmit">开始白底抠图</button>
                 <div class="cutout-auto-hint">无需审核，提交后立即发送处理；完成后会通过钉钉通知。</div>
                 <div id="cutoutStatus" class="studio-status" style="margin-top:10px"></div>
@@ -2082,6 +2089,7 @@ async function submitTask(mode, payload, statusEl, btn, onSuccess) {
         if (payload.colorHex) submitPayload.colorHex = payload.colorHex;
         if (payload.resizeTarget) submitPayload.resizeTarget = payload.resizeTarget;
         if (payload.resizeReflow !== undefined) submitPayload.resizeReflow = payload.resizeReflow === true;
+        if (payload.cutoutOutputFormat) submitPayload.cutoutOutputFormat = payload.cutoutOutputFormat;
 
         const res = await fetch('/api/studio-submit', {
             method: 'POST',
@@ -2485,16 +2493,19 @@ function submitRetouch() {
 
 function submitCutout() {
     const status = document.getElementById('cutoutStatus');
+    const cutoutOutputFormat = document.getElementById('cutoutOutputFormat')?.value === 'jpg' ? 'jpg' : 'png';
     if (!uploads.cutoutImage) {
         showStudioFieldError(status, '请上传待处理图片', document.getElementById('cutoutDropZone'));
         return;
     }
     submitTask('cutout', {
-        refImages: [uploads.cutoutImage]
+        refImages: [uploads.cutoutImage],
+        cutoutOutputFormat
     }, status, document.getElementById('cutoutSubmit'), task => {
+        const formatLabel = cutoutOutputFormat.toUpperCase();
         const message = task.autoSent
-            ? '白底抠图已发送处理，完成后会通过钉钉通知'
-            : '任务已保存，系统会自动重试发送，无需审核';
+            ? `白底抠图已发送处理，将导出 ${formatLabel}，完成后会通过钉钉通知`
+            : `任务已保存，将导出 ${formatLabel}，系统会自动重试发送，无需审核`;
         showSuccessModal(task, message);
     });
 }

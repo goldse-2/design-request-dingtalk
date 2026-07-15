@@ -21,7 +21,11 @@ export async function onRequestPut(context) {
 
     const taskResult = await getStudioTask(env, taskId);
     if (taskResult.error) return taskResult.error;
-    return Response.json({ ok: true, mode: taskResult.task.mode || '' }, {
+    return Response.json({
+        ok: true,
+        mode: taskResult.task.mode || '',
+        outputFormat: cutoutOutputFormat(taskResult.task)
+    }, {
         headers: { 'Cache-Control': 'no-store' }
     });
 }
@@ -52,10 +56,14 @@ export async function onRequestPost(context) {
     if (!files.length) return Response.json({ ok: false, error: '请上传成品图' }, { status: 400 });
 
     const preparedFiles = [];
+    const outputFormat = cutoutOutputFormat(task);
     for (const file of files) {
         const bytes = await file.arrayBuffer();
-        if (task.mode === 'cutout' && !hasPngSignature(bytes)) {
-            return Response.json({ ok: false, error: '白底抠图成品必须上传 PNG 文件' }, { status: 400 });
+        if (task.mode === 'cutout' && outputFormat === 'png' && !hasPngSignature(bytes)) {
+            return Response.json({ ok: false, error: '当前白底抠图任务需要上传 PNG 文件' }, { status: 400 });
+        }
+        if (task.mode === 'cutout' && outputFormat === 'jpg' && !hasJpegSignature(bytes)) {
+            return Response.json({ ok: false, error: '当前白底抠图任务需要上传 JPG 文件' }, { status: 400 });
         }
         preparedFiles.push({ file, bytes });
     }
@@ -64,12 +72,12 @@ export async function onRequestPost(context) {
     const baseName = resultBaseName(task);
     for (let i = 0; i < preparedFiles.length; i++) {
         const { file, bytes } = preparedFiles[i];
-        const ext = task.mode === 'cutout' ? 'png' : resultExtension(file);
+        const ext = task.mode === 'cutout' ? outputFormat : resultExtension(file);
         const suffix = preparedFiles.length > 1 ? `-${i + 1}` : '';
         const name = `${baseName}${suffix}.${ext}`;
         const key = `studio-results/${taskId}/${Date.now()}-${i + 1}-${name}`;
         await env.SUBMISSION_FILES.put(key, bytes, {
-            httpMetadata: { contentType: task.mode === 'cutout' ? 'image/png' : (file.type || guessContentType(name)) }
+            httpMetadata: { contentType: task.mode === 'cutout' ? (outputFormat === 'jpg' ? 'image/jpeg' : 'image/png') : (file.type || guessContentType(name)) }
         });
         uploaded.push({ key, name });
     }
@@ -117,6 +125,16 @@ function hasPngSignature(bytes) {
     const signature = new Uint8Array(bytes, 0, Math.min(bytes.byteLength, 8));
     const expected = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
     return signature.length === expected.length && expected.every((value, index) => signature[index] === value);
+}
+
+function hasJpegSignature(bytes) {
+    const signature = new Uint8Array(bytes, 0, Math.min(bytes.byteLength, 3));
+    return signature.length === 3 && signature[0] === 0xff && signature[1] === 0xd8 && signature[2] === 0xff;
+}
+
+function cutoutOutputFormat(task) {
+    if (task?.mode !== 'cutout') return '';
+    return task.cutoutOutputFormat === 'jpg' ? 'jpg' : 'png';
 }
 
 function sanitizeName(name) {

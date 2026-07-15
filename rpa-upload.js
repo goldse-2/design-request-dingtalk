@@ -54,25 +54,47 @@ async function getUploadTaskMode(taskId, password) {
     });
     const json = await res.json();
     if (!res.ok || !json.ok) throw new Error(json.error || res.status);
-    return json.mode;
+    return {
+        mode: json.mode,
+        outputFormat: json.outputFormat || (json.mode === 'cutout' ? 'png' : '')
+    };
 }
 
-async function normalizeUploadFile(file, mode) {
-    if (mode === 'cutout') return file;
-    if (file.type !== 'image/png' && !/\.png$/i.test(file.name || '')) return file;
+function isPngFile(file) {
+    return file.type === 'image/png' || /\.png$/i.test(file.name || '');
+}
+
+function isJpegFile(file) {
+    return file.type === 'image/jpeg' || /\.jpe?g$/i.test(file.name || '');
+}
+
+async function convertImageFile(file, mimeType, extension, fillWhite) {
     const dataUrl = await readFileAsDataUrl(file);
     const image = await loadImage(dataUrl);
     const canvas = document.createElement('canvas');
     canvas.width = image.naturalWidth || image.width;
     canvas.height = image.naturalHeight || image.height;
     const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if (fillWhite) {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
     ctx.drawImage(image, 0, 0);
-    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92));
-    if (!blob) throw new Error('PNG 转 JPG 失败：' + file.name);
-    const jpgName = String(file.name || 'result.png').replace(/\.png$/i, '') + '.jpg';
-    return new File([blob], jpgName, { type: 'image/jpeg', lastModified: Date.now() });
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, mimeType, mimeType === 'image/jpeg' ? 0.92 : undefined));
+    if (!blob) throw new Error(`图片转 ${extension.toUpperCase()} 失败：${file.name}`);
+    const baseName = String(file.name || 'result').replace(/\.[^.]+$/, '') || 'result';
+    return new File([blob], `${baseName}.${extension}`, { type: mimeType, lastModified: Date.now() });
+}
+
+async function normalizeUploadFile(file, taskInfo) {
+    if (taskInfo.mode === 'cutout') {
+        if (taskInfo.outputFormat === 'jpg') {
+            return isJpegFile(file) ? file : convertImageFile(file, 'image/jpeg', 'jpg', true);
+        }
+        return isPngFile(file) ? file : convertImageFile(file, 'image/png', 'png', false);
+    }
+    if (!isPngFile(file)) return file;
+    return convertImageFile(file, 'image/jpeg', 'jpg', true);
 }
 
 function readFileAsDataUrl(file) {
@@ -119,9 +141,9 @@ uploadBtn.addEventListener('click', async () => {
     setStatus('正在读取任务类型...', null);
 
     try {
-        const mode = await getUploadTaskMode(taskId, password);
-        if (mode === 'cutout') {
-            setStatus('白底抠图任务将保留 PNG 格式，正在上传...', null);
+        const taskInfo = await getUploadTaskMode(taskId, password);
+        if (taskInfo.mode === 'cutout') {
+            setStatus(`白底抠图任务将导出 ${taskInfo.outputFormat.toUpperCase()}，正在处理...`, null);
         } else {
             setStatus('正在处理图片，PNG 将自动转换为 JPG...', null);
         }
@@ -131,7 +153,7 @@ uploadBtn.addEventListener('click', async () => {
         form.append('taskId', taskId);
         const uploadFiles = [];
         for (const file of pendingFiles) {
-            uploadFiles.push(await normalizeUploadFile(file, mode));
+            uploadFiles.push(await normalizeUploadFile(file, taskInfo));
         }
         uploadFiles.forEach(file => form.append('files', file, file.name));
 
