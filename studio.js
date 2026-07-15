@@ -501,18 +501,10 @@ const RETOUCH_FORM = `
             <div id="retouchStatus" class="studio-status" style="margin-top:10px"></div>
         </div>
         <div class="studio-preview retouch-preview">
-            <div class="studio-preview-tab">精修图片对比</div>
+            <div class="studio-preview-tab retouch-queue-head"><span>精修队列</span><a href="studio-tasks.html">查看全部</a></div>
             <div class="studio-preview-body">
-                <div class="retouch-compare">
-                    <div class="retouch-compare-item">
-                        <div class="retouch-compare-label">精修前</div>
-                        <div class="retouch-compare-frame" id="retouchBeforeFrame"><span>上传图片后显示</span></div>
-                    </div>
-                    <div class="retouch-compare-item">
-                        <div class="retouch-compare-label">精修后</div>
-                        <div class="retouch-compare-frame" id="retouchAfterFrame"><span>示例图片待补充</span></div>
-                    </div>
-                </div>
+                <div class="retouch-queue-summary" id="retouchQueueSummary"></div>
+                <div class="retouch-queue-list" id="retouchQueueList"><div class="retouch-queue-empty">正在加载精修队列...</div></div>
             </div>
         </div>
     </div>`;
@@ -773,26 +765,94 @@ function initRetouchMode() {
     });
     removeButton.addEventListener('click', clearRetouchSelection);
     document.getElementById('retouchSubmit').addEventListener('click', submitRetouch);
+    loadRetouchQueue();
 }
 
 function renderRetouchSelection() {
     const selected = document.getElementById('retouchSelected');
     const image = document.getElementById('retouchSelectedImage');
     const name = document.getElementById('retouchSelectedName');
-    const beforeFrame = document.getElementById('retouchBeforeFrame');
     const picked = uploads.retouchImage;
-    if (!selected || !image || !name || !beforeFrame) return;
+    if (!selected || !image || !name) return;
 
     selected.classList.toggle('visible', Boolean(picked));
     if (!picked) {
         image.removeAttribute('src');
         name.textContent = '';
-        beforeFrame.innerHTML = '<span>上传图片后显示</span>';
         return;
     }
     image.src = picked.dataUrl;
     name.textContent = picked.name || '上次图片';
-    beforeFrame.innerHTML = '<img src="' + picked.dataUrl + '" alt="精修前">';
+}
+
+async function loadRetouchQueue() {
+    const list = document.getElementById('retouchQueueList');
+    const summary = document.getElementById('retouchQueueSummary');
+    if (!list || !summary) return;
+    if (!currentUser?.unionId) {
+        summary.innerHTML = '';
+        list.innerHTML = '<div class="retouch-queue-empty">登录后查看精修队列</div>';
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/studio-tasks?unionId=' + encodeURIComponent(currentUser.unionId) + '&mode=retouch&limit=8');
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.error || '加载失败');
+        renderRetouchQueue(Array.isArray(data.tasks) ? data.tasks : [], list, summary);
+    } catch {
+        summary.innerHTML = '';
+        list.innerHTML = '<div class="retouch-queue-empty">精修队列加载失败，请稍后再试</div>';
+    }
+}
+
+function renderRetouchQueue(tasks, list, summary) {
+    const pending = tasks.filter(task => task.status === 'pending').length;
+    const processing = tasks.filter(task => task.status === 'processing').length;
+    const done = tasks.filter(task => task.status === 'done').length;
+    summary.innerHTML = '<span>待处理 ' + pending + '</span><span>处理中 ' + processing + '</span><span>已完成 ' + done + '</span>';
+    list.innerHTML = '';
+    if (!tasks.length) {
+        list.innerHTML = '<div class="retouch-queue-empty">暂无精修任务</div>';
+        return;
+    }
+
+    const statusMap = {
+        pending: ['待处理', '#b45309', '#fef3c7'],
+        processing: ['处理中', '#1d4ed8', '#dbeafe'],
+        done: ['已完成', '#047857', '#d1fae5'],
+        rejected: ['已驳回', '#b91c1c', '#fee2e2']
+    };
+    tasks.forEach(task => {
+        const row = document.createElement('div');
+        row.className = 'retouch-queue-row';
+        const source = Array.isArray(task.refKeys) ? task.refKeys[0] : null;
+        const thumb = document.createElement('img');
+        thumb.className = 'retouch-queue-thumb';
+        thumb.alt = '';
+        if (source?.key) thumb.src = '/api/library-file/' + encodeURIComponent(source.key);
+
+        const detail = document.createElement('div');
+        detail.style.minWidth = '0';
+        const taskName = String(task.imageName || source?.name || '精修图片').replace(/^[^-]+-/, '');
+        const time = new Date(task.timestamp || task.createdAt).toLocaleString('zh-CN', { timeZone:'Asia/Shanghai', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+        const name = document.createElement('div');
+        name.className = 'retouch-queue-name';
+        name.textContent = taskName;
+        const meta = document.createElement('div');
+        meta.className = 'retouch-queue-meta';
+        meta.textContent = time;
+        detail.append(name, meta);
+
+        const state = statusMap[task.status] || statusMap.pending;
+        const badge = document.createElement('span');
+        badge.className = 'retouch-queue-status';
+        badge.textContent = state[0];
+        badge.style.color = state[1];
+        badge.style.background = state[2];
+        row.append(thumb, detail, badge);
+        list.appendChild(row);
+    });
 }
 
 function clearRetouchSelection() {
@@ -1766,6 +1826,7 @@ async function submitTask(mode, payload, statusEl, btn, onSuccess) {
         if (payload.colorName) submitPayload.colorName = payload.colorName;
         if (payload.colorHex) submitPayload.colorHex = payload.colorHex;
         if (payload.resizeTarget) submitPayload.resizeTarget = payload.resizeTarget;
+        if (payload.resizeReflow !== undefined) submitPayload.resizeReflow = payload.resizeReflow === true;
 
         const res = await fetch('/api/studio-submit', {
             method: 'POST',

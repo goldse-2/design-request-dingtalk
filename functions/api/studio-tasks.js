@@ -65,6 +65,11 @@ export async function onRequestGet(context) {
     const all = url.searchParams.get('all') === '1';
     const active = url.searchParams.get('active') === '1';
     const history = url.searchParams.get('history') === '1';
+    const mode = String(url.searchParams.get('mode') || '').trim();
+    const requestedLimit = Number(url.searchParams.get('limit'));
+    const taskLimit = Number.isFinite(requestedLimit) && requestedLimit > 0
+        ? Math.min(100, Math.floor(requestedLimit))
+        : 1000;
 
     try {
         if (id) {
@@ -84,6 +89,7 @@ export async function onRequestGet(context) {
         const keys = list.keys
             .filter(k => (k.metadata || {}).kind === 'studio')
             .filter(k => all || !unionId || k.metadata?.unionId === unionId)
+            .filter(k => !mode || k.metadata?.mode === mode)
             .filter(k => {
                 const meta = k.metadata || {};
                 if (active) {
@@ -95,6 +101,8 @@ export async function onRequestGet(context) {
                 if (history) return meta.status === 'done';
                 return true;
             })
+            .sort((a, b) => Number(b.metadata?.timestamp || 0) - Number(a.metadata?.timestamp || 0))
+            .slice(0, taskLimit)
             .map(k => k.name);
         const results = await Promise.all(keys.map(k => syncedTasks.has(k)
             ? JSON.stringify(syncedTasks.get(k))
@@ -108,6 +116,7 @@ export async function onRequestGet(context) {
         if (!all && unionId) {
             tasks = tasks.filter(t => t.submitter?.unionId === unionId);
         }
+        if (mode) tasks = tasks.filter(t => t.mode === mode);
         if (active) {
             tasks = tasks.filter(t => {
                 if (t.status === 'rejected') return false;

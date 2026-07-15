@@ -72,11 +72,17 @@
         .retouch-selected img { width: 58px; height: 58px; object-fit: cover; border-radius: 6px; border: 1px solid #e5e7eb; }
         .retouch-selected-name { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #374151; font-size: .78rem; }
         .retouch-selected-remove { width: 28px; height: 28px; border: none; border-radius: 6px; background: #fee2e2; color: #b91c1c; font-size: 1rem; cursor: pointer; }
-        .retouch-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; min-height: 520px; }
-        .retouch-compare-item { display: flex; min-width: 0; flex-direction: column; }
-        .retouch-compare-label { margin-bottom: 8px; color: #374151; font-size: .8rem; font-weight: 700; }
-        .retouch-compare-frame { flex: 1; min-height: 440px; display: grid; place-items: center; overflow: hidden; border: 1px solid #e5e7eb; border-radius: 7px; background: #f3f4f6; color: #9ca3af; font-size: .82rem; text-align: center; }
-        .retouch-compare-frame img { width: 100%; height: 100%; max-height: 620px; object-fit: contain; background: #fff; }
+        .retouch-queue-head { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+        .retouch-queue-head a { color:#4338ca; font-size:.76rem; font-weight:700; text-decoration:none; }
+        .retouch-queue-summary { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px; color:#6b7280; font-size:.76rem; }
+        .retouch-queue-summary span { padding:5px 8px; border-radius:6px; background:#f3f4f6; }
+        .retouch-queue-list { display:flex; flex-direction:column; min-height:420px; }
+        .retouch-queue-row { display:grid; grid-template-columns:68px minmax(0,1fr) auto; gap:12px; align-items:center; padding:14px 2px; border-bottom:1px solid #eef0f3; }
+        .retouch-queue-thumb { width:68px; height:68px; border-radius:7px; object-fit:cover; background:#f3f4f6; border:1px solid #e5e7eb; }
+        .retouch-queue-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#111827; font-size:.84rem; font-weight:700; }
+        .retouch-queue-meta { margin-top:5px; color:#9ca3af; font-size:.72rem; }
+        .retouch-queue-status { padding:5px 9px; border-radius:6px; font-size:.72rem; font-weight:700; white-space:nowrap; }
+        .retouch-queue-empty { flex:1; display:grid; place-items:center; color:#9ca3af; font-size:.84rem; text-align:center; }
         .variant-upload-box { width: 100%; min-height: 150px; }
         .variant-scope { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
         .variant-scope button { min-height: 42px; border: 1px solid #d1d5db; border-radius: 7px; background: #fff; color: #374151; font-size: .86rem; font-weight: 700; cursor: pointer; }
@@ -102,8 +108,9 @@
             .studio-panel, .studio-preview { width: 100% !important; min-width: 0; }
             .resize-preview-body { min-height: 340px; }
             .resize-canvas-wrap { min-height: 280px; }
-            .retouch-compare { grid-template-columns: 1fr; min-height: 0; }
-            .retouch-compare-frame { min-height: 280px; }
+            .retouch-queue-list { min-height:280px; }
+            .retouch-queue-row { grid-template-columns:58px minmax(0,1fr) auto; gap:10px; }
+            .retouch-queue-thumb { width:58px; height:58px; }
             .variant-palette { grid-template-columns: repeat(4, minmax(0, 1fr)); }
         }
     </style>
@@ -279,6 +286,6 @@
     帮助中心
 </button>
 
-<script src="studio.js?v=20260714-resize-reflow"></script>
+<script src="studio.js?v=20260715-retouch-queue"></script>
 </body>
 </html>
