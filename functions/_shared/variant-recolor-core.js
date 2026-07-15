@@ -6,7 +6,7 @@ export async function recolorImage({ env, scope, colorName, colorHex, mimeType, 
     const apiKey = env.APIKEYFUN_API_KEY || env.AI_IMAGE_API_KEY;
     if (!apiKey) throw new Error('改色服务尚未配置');
 
-    const safeScope = scope === 'background' ? 'background' : 'product';
+    const safeScope = ['product', 'background', 'style'].includes(scope) ? scope : 'product';
     const safeColorName = String(colorName || '').trim().slice(0, 40);
     const safeColorHex = String(colorHex || '').trim().slice(0, 20);
     const safeMimeType = String(mimeType || 'image/png');
@@ -78,6 +78,15 @@ async function callResponsesApi({ apiBase, apiKey, model, prompt, mimeType, base
 
 function buildPrompt(scope, colorName, colorHex) {
     const color = [colorName, colorHex].filter(Boolean).join(' ');
+    if (scope === 'style') {
+        return [
+            `将整张图片的视觉风格和主色氛围调整为 ${color} 色系。`,
+            '将目标色系自然应用到背景、场景氛围、装饰元素、光线色调和整体视觉语言。',
+            '严格保持产品主体完全不变，包括产品颜色、材质、纹理、形状、结构、文字、logo、角度、比例、位置和所有细节。',
+            '不要重绘、替换、增删或改变产品，只调整产品以外的画面风格，使结果协调统一并适合电商展示。',
+            '输出默认 2K 高清图片，不要添加水印、边框或额外文字。'
+        ].join('\n');
+    }
     if (scope === 'background') {
         return [
             `将图片背景改成 ${color}。`,

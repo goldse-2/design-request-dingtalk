@@ -84,6 +84,7 @@
         .variant-scope { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
         .variant-scope button { min-height: 42px; border: 1px solid #d1d5db; border-radius: 7px; background: #fff; color: #374151; font-size: .86rem; font-weight: 700; cursor: pointer; }
         .variant-scope button.active { border-color: #111827; background: #111827; color: #fff; }
+        .variant-scope button[data-scope="style"] { grid-column: 1 / -1; }
         .variant-palette { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
         .variant-swatch { height: 34px; border: 2px solid #fff; border-radius: 7px; box-shadow: 0 0 0 1px #d1d5db; cursor: pointer; }
         .variant-swatch.active { box-shadow: 0 0 0 2px #111827; }

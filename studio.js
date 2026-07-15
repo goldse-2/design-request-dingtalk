@@ -512,6 +512,7 @@ const VARIANT_FORM = `
                 <div class="variant-scope" id="variantScope">
                     <button type="button" class="active" data-scope="product">修改产品</button>
                     <button type="button" data-scope="background">修改背景（不改产品）</button>
+                    <button type="button" data-scope="style">修改风格（不改产品）</button>
                 </div>
             </div>
             <div class="sf-section">
@@ -2236,7 +2237,9 @@ async function submitVariant() {
     const scope = document.querySelector('#variantScope button.active')?.dataset.scope || 'product';
     const colorHex = document.getElementById('variantCustomColor')?.value || '#f8f5ef';
     const colorName = (document.getElementById('variantColorName')?.value || colorHex).trim();
-    const desc = `${scope === 'background' ? '修改背景' : '修改产品'}为 ${colorName || colorHex}`;
+    const desc = scope === 'style'
+        ? `将整体风格调整为 ${colorName || colorHex} 色系（不改产品）`
+        : `${scope === 'background' ? '修改背景' : '修改产品'}为 ${colorName || colorHex}`;
     submitTask('variant', {
         desc,
         size: '2K 自动识别',

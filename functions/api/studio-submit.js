@@ -47,7 +47,7 @@ export async function onRequestPost(context) {
         title: title || '',
         subtitle: subtitle || '',
         otherText: otherText || '',
-        variantScope: variantScope === 'background' ? 'background' : variantScope === 'product' ? 'product' : '',
+        variantScope: ['product', 'background', 'style'].includes(variantScope) ? variantScope : '',
         colorName: colorName || '',
         colorHex: colorHex || '',
         resizeTarget: resizeTarget || '',
