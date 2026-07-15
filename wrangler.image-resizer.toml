@@ -1,0 +1,7 @@
+name = "design-request-image-resizer"
+main = "workers/exact-image-resizer.js"
+compatibility_date = "2026-06-12"
+workers_dev = false
+
+[images]
+binding = "IMAGES"

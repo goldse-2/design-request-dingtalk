@@ -450,6 +450,22 @@ async function storeResizeAiResult(env, task, result, sourceName, target) {
 }
 
 export async function transformToExactJpeg(env, image, target) {
+    if (env.IMAGE_RESIZER?.fetch) {
+        const url = `https://image-resizer.internal/resize?width=${target.width}&height=${target.height}`;
+        const response = await env.IMAGE_RESIZER.fetch(new Request(url, {
+            method: 'POST',
+            headers: { 'Content-Type': image.mimeType },
+            body: image.bytes
+        }));
+        if (!response.ok) throw new Error(`Exact image resize failed: HTTP ${response.status}`);
+        const width = Number(response.headers.get('X-Image-Width'));
+        const height = Number(response.headers.get('X-Image-Height'));
+        if (width !== target.width || height !== target.height) {
+            throw new Error(`Exact image resize mismatch: ${width}x${height}`);
+        }
+        return { bytes: await response.arrayBuffer(), mimeType: 'image/jpeg' };
+    }
+
     if (!env.IMAGES?.input || !env.IMAGES?.info) {
         throw new Error('Exact image resizing is not configured');
     }
