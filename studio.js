@@ -796,7 +796,7 @@ async function loadRetouchQueue() {
     }
 
     try {
-        const response = await fetch('/api/studio-tasks?retouchQueue=1&limit=12');
+        const response = await fetch('/api/studio-tasks?retouchQueue=1&limit=12&format=names-v1');
         const data = await response.json();
         if (!response.ok || !data.ok) throw new Error(data.error || '加载失败');
         renderRetouchQueue(Array.isArray(data.tasks) ? data.tasks : [], list, summary);
