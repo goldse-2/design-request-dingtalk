@@ -1376,6 +1376,14 @@ function renderStudioTask(task) {
         automaticLabel.textContent = task.mode === 'cutout' ? 'RPA 自动处理，无需审批' : 'AI 自动处理，无需审批';
         automaticLabel.style.cssText = 'font-size:0.82rem;color:#047857;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:7px;padding:7px 12px;font-weight:600';
         actions.append(automaticLabel);
+        if (task.mode === 'cutout' && task.status !== 'done') {
+            const resendBtn = document.createElement('button');
+            resendBtn.type = 'button';
+            resendBtn.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 6v5h-5"/><path d="M20 11a8 8 0 1 0 2 5"/></svg><span>重新发送</span>';
+            resendBtn.style.cssText = 'display:inline-flex;align-items:center;gap:6px;font-size:0.82rem;color:#fff;background:#f59e0b;border:none;border-radius:7px;padding:7px 14px;cursor:pointer;font-weight:600';
+            resendBtn.onclick = () => sendToRpa(task.id, resendBtn, card, task);
+            actions.append(resendBtn);
+        }
         if (task.mode === 'resize_ai' && task.status !== 'done') {
             const retryBtn = document.createElement('button');
             retryBtn.type = 'button';
@@ -1584,7 +1592,7 @@ function openFeedbackModal(taskId, submitterName) {
 async function sendToRpa(taskId, btn, card, knownTask) {
     const task = knownTask || (await fetch(`/api/studio-tasks?id=${encodeURIComponent(taskId)}`).then(r => r.json()).catch(() => null))?.task;
     const mode = task?.mode || 'free';
-    if (!['free', 'program', 'retouch'].includes(mode)) {
+    if (!['free', 'program', 'retouch', 'cutout'].includes(mode)) {
         alert('这个任务由后台自动处理，不需要发送 RPA');
         return;
     }
@@ -1592,7 +1600,8 @@ async function sendToRpa(taskId, btn, card, knownTask) {
     const programWebhook = 'https://api-rpa.bazhuayu.com/api/v1/bots/webhooks/6a3a40ac622e84b667229fde/invoke';
     const freeWebhook = 'https://api-rpa.bazhuayu.com/api/v1/bots/webhooks/6a31134a622e84b6672263ee/invoke';
     const retouchWebhook = 'https://api-rpa.bazhuayu.com/api/v1/bots/webhooks/6a543c91645904b3178e096b/invoke';
-    const url = mode === 'program' ? programWebhook : mode === 'retouch' ? retouchWebhook : freeWebhook;
+    const cutoutWebhook = 'https://api-rpa.bazhuayu.com/api/v1/bots/webhooks/6a573bbfc272480ce63d81d4/invoke';
+    const url = mode === 'program' ? programWebhook : mode === 'retouch' ? retouchWebhook : mode === 'cutout' ? cutoutWebhook : freeWebhook;
     
     const wasResend = task?.sentToRpa;
     if (wasResend && !confirm('该任务已经发送过RPA了，确认要重新发送吗？')) return;
