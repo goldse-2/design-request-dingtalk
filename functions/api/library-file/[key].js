@@ -9,16 +9,26 @@
     const url = new URL(request.url);
     const isDownload = url.searchParams.get('dl') === '1';
     // key segments are URL-encoded, so decode the last segment to get the real filename
-    const fileName = decodeURIComponent(key.split('/').pop());
-    const ext = fileName.split('.').pop().toLowerCase();
+    const storedName = decodeURIComponent(key.split('/').pop());
+    const fileName = sanitizeFileName(url.searchParams.get('name') || storedName);
+    const ext = storedName.split('.').pop().toLowerCase();
     const mimeMap = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', pdf: 'application/pdf', zip: 'application/zip' };
     const contentType = mimeMap[ext] || 'application/octet-stream';
 
-    const headers = { 'Content-Type': contentType, 'Cache-Control': 'public, max-age=3600' };
+    const headers = {
+        'Content-Type': contentType,
+        'Cache-Control': 'public, max-age=3600',
+        'X-Content-Type-Options': 'nosniff'
+    };
     if (isDownload) {
         // RFC 5987: filename*=UTF-8''<percent-encoded> for non-ASCII filenames
-        headers['Content-Disposition'] = "attachment; filename*=UTF-8''" + encodeURIComponent(fileName);
+        const asciiName = fileName.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
+        headers['Content-Disposition'] = `attachment; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`;
     }
 
     return new Response(obj.body, { headers });
+}
+
+function sanitizeFileName(name) {
+    return String(name || 'image.jpg').replace(/[\\/:*?"<>|\r\n]/g, '_').slice(0, 160) || 'image.jpg';
 }

@@ -468,7 +468,11 @@ export async function transformToExactJpeg(env, image, target) {
         if (width !== target.width || height !== target.height) {
             throw new Error(`Exact image resize mismatch: ${width}x${height}`);
         }
-        return { bytes: await response.arrayBuffer(), mimeType: 'image/jpeg' };
+        const bytes = await response.arrayBuffer();
+        if (detectImageMimeType(bytes, '') !== 'image/jpeg') {
+            throw new Error('Exact image resize did not return JPEG bytes');
+        }
+        return { bytes, mimeType: 'image/jpeg' };
     }
 
     if (!env.IMAGES?.input || !env.IMAGES?.info) {
@@ -483,6 +487,9 @@ export async function transformToExactJpeg(env, image, target) {
     if (!response.ok) throw new Error(`Exact image resize failed: HTTP ${response.status}`);
 
     const bytes = await response.arrayBuffer();
+    if (detectImageMimeType(bytes, '') !== 'image/jpeg') {
+        throw new Error('Exact image resize did not return JPEG bytes');
+    }
     const info = await env.IMAGES.info(new Blob([bytes], { type: 'image/jpeg' }).stream());
     if (info.width !== target.width || info.height !== target.height) {
         throw new Error(`Exact image resize mismatch: ${info.width}x${info.height}`);

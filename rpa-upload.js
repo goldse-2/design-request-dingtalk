@@ -45,7 +45,20 @@ function escapeHtml(s) {
     return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-async function normalizeUploadFile(file) {
+async function getUploadTaskMode(taskId, password) {
+    const res = await fetch('/api/studio-result-upload', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskId, password }),
+        cache: 'no-store'
+    });
+    const json = await res.json();
+    if (!res.ok || !json.ok) throw new Error(json.error || res.status);
+    return json.mode;
+}
+
+async function normalizeUploadFile(file, mode) {
+    if (mode === 'cutout') return file;
     if (file.type !== 'image/png' && !/\.png$/i.test(file.name || '')) return file;
     const dataUrl = await readFileAsDataUrl(file);
     const image = await loadImage(dataUrl);
@@ -103,15 +116,22 @@ uploadBtn.addEventListener('click', async () => {
 
     uploadBtn.disabled = true;
     uploadBtn.textContent = '上传中...';
-    setStatus('正在处理图片，PNG 将自动转换为 JPG...', null);
+    setStatus('正在读取任务类型...', null);
 
     try {
+        const mode = await getUploadTaskMode(taskId, password);
+        if (mode === 'cutout') {
+            setStatus('白底抠图任务将保留 PNG 格式，正在上传...', null);
+        } else {
+            setStatus('正在处理图片，PNG 将自动转换为 JPG...', null);
+        }
+
         const form = new FormData();
         form.append('password', password);
         form.append('taskId', taskId);
         const uploadFiles = [];
         for (const file of pendingFiles) {
-            uploadFiles.push(await normalizeUploadFile(file));
+            uploadFiles.push(await normalizeUploadFile(file, mode));
         }
         uploadFiles.forEach(file => form.append('files', file, file.name));
 

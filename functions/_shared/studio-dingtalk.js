@@ -9,7 +9,9 @@ export async function sendStudioResultImages(env, accessToken, staffId, task, or
     const imageMarkdown = resultKeys.map((item, index) => {
         const fileName = safeDisplayName(item.name || `成品图-${index + 1}.jpg`);
         const imageUrl = `${origin}/api/public-image/${encodeKeyToken(item.key)}`;
-        const downloadUrl = `${imageUrl}?download=1&name=${encodeURIComponent(fileName)}`;
+        const downloadUrl = task.mode === 'resize_ai'
+            ? `${origin}/api/library-file/${encodeURIComponent(item.key)}?dl=1&name=${encodeURIComponent(fileName)}`
+            : `${imageUrl}?download=1&name=${encodeURIComponent(fileName)}`;
         return `**${fileName}**\n\n![${fileName}](${imageUrl})\n\n[按原文件名下载](${downloadUrl})`;
     }).join('\n\n');
 
