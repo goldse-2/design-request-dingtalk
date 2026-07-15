@@ -6,40 +6,54 @@ export async function sendStudioResultImages(env, accessToken, staffId, task, or
         : [];
     if (!resultKeys.length) return { sent: false, count: 0 };
 
-    const imageMarkdown = resultKeys.map((item, index) => {
+    let sentCount = 0;
+    const errors = [];
+    for (let index = 0; index < resultKeys.length; index++) {
+        const item = resultKeys[index];
         const fileName = safeDisplayName(item.name || `成品图-${index + 1}.jpg`);
         const imageUrl = `${origin}/api/public-image/${encodeKeyToken(item.key)}`;
         const downloadUrl = task.mode === 'resize_ai'
             ? `${origin}/api/library-file/${encodeURIComponent(item.key)}?dl=1&name=${encodeURIComponent(fileName)}`
             : `${imageUrl}?download=1&name=${encodeURIComponent(fileName)}`;
-        return `**${fileName}**\n\n![${fileName}](${imageUrl})\n\n[按原文件名下载](${downloadUrl})`;
-    }).join('\n\n');
+        const position = `${index + 1}/${resultKeys.length}`;
+        const imageMarkdown = `**${fileName}**\n\n![${fileName}](${imageUrl})\n\n[按原文件名下载](${downloadUrl})`;
+        try {
+            const response = await fetch('https://api.dingtalk.com/v1.0/robot/oToMessages/batchSend', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-acs-dingtalk-access-token': accessToken
+                },
+                body: JSON.stringify({
+                    robotCode: env.DINGTALK_APPKEY,
+                    userIds: [staffId],
+                    msgKey: 'sampleMarkdown',
+                    msgParam: JSON.stringify({
+                        title: `图片制作完成 ${position}`,
+                        text: `图片制作完成 ${position}\n\n${imageMarkdown}`
+                    })
+                })
+            });
 
-    const response = await fetch('https://api.dingtalk.com/v1.0/robot/oToMessages/batchSend', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'x-acs-dingtalk-access-token': accessToken
-        },
-        body: JSON.stringify({
-            robotCode: env.DINGTALK_APPKEY,
-            userIds: [staffId],
-            msgKey: 'sampleMarkdown',
-            msgParam: JSON.stringify({
-                title: '图片制作完成',
-                text: `图片制作完成，共 ${resultKeys.length} 张\n\n${imageMarkdown}`
-            })
-        })
-    });
-
-    if (!response.ok) {
-        const detail = await response.text().catch(() => '');
-        const error = `DingTalk image message failed: ${response.status} ${detail}`.trim();
-        console.error(error);
-        return { sent: false, count: 0, error };
+            if (response.ok) {
+                sentCount++;
+            } else {
+                const detail = await response.text().catch(() => '');
+                throw new Error(`HTTP ${response.status} ${detail}`.trim());
+            }
+        } catch (cause) {
+            const error = `DingTalk image message ${position} failed: ${cause.message || cause}`;
+            console.error(error);
+            errors.push(error);
+        }
     }
 
-    return { sent: true, count: resultKeys.length };
+    return {
+        sent: sentCount === resultKeys.length,
+        count: sentCount,
+        requested: resultKeys.length,
+        errors
+    };
 }
 
 function safeDisplayName(name) {
