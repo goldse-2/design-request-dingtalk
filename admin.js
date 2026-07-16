@@ -911,10 +911,10 @@ function renderAdminDetail(product, files, detailPanel, groups, renderFolders) {
     detailPanel.innerHTML = '';
 
     const header = document.createElement('div');
-    header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:14px';
+    header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px';
 
     const left = document.createElement('div');
-    left.style.cssText = 'display:flex;align-items:center;gap:10px';
+    left.style.cssText = 'display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0';
 
     const collapseBtn = document.createElement('button');
     collapseBtn.textContent = '← 收起';
@@ -966,7 +966,30 @@ function renderAdminDetail(product, files, detailPanel, groups, renderFolders) {
     countEl.style.cssText = 'font-size:0.8rem;color:#9ca3af';
     countEl.textContent = files.length + ' 个文件';
 
-    left.append(collapseBtn, titleEl, renameBtn, countEl);
+    const cutoutFiles = files.filter(file => /\.(png|jpe?g|webp)$/i.test(file.name || ''));
+    const cutoutBtn = document.createElement('button');
+    cutoutBtn.type = 'button';
+    cutoutBtn.textContent = '自动去除背景';
+    cutoutBtn.title = '调用图片制作中的白底抠图，逐张处理当前文件夹的图片';
+    cutoutBtn.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;min-height:29px;padding:4px 10px;border:1px solid #a7f3d0;border-radius:7px;background:#ecfdf5;color:#047857;font-size:.76rem;font-weight:700;cursor:pointer;white-space:nowrap';
+    cutoutBtn.disabled = cutoutFiles.length === 0;
+    if (cutoutBtn.disabled) {
+        cutoutBtn.title = '当前文件夹没有可处理的图片';
+        cutoutBtn.style.opacity = '.5';
+        cutoutBtn.style.cursor = 'not-allowed';
+    }
+
+    const cutoutStatus = document.createElement('span');
+    cutoutStatus.style.cssText = 'max-width:360px;color:#6b7280;font-size:.76rem;line-height:1.4';
+    cutoutBtn.onclick = () => submitLibraryCutoutTasks({
+        product,
+        category: currentCat,
+        files: cutoutFiles,
+        button: cutoutBtn,
+        status: cutoutStatus
+    });
+
+    left.append(collapseBtn, titleEl, renameBtn, countEl, cutoutBtn, cutoutStatus);
 
     const appendBtn = document.createElement('button');
     appendBtn.textContent = '+ 追加文件';
@@ -1059,7 +1082,7 @@ function renderAdminDetail(product, files, detailPanel, groups, renderFolders) {
     });
 
     const rightControls = document.createElement('div');
-    rightControls.style.cssText = 'display:flex;align-items:center;gap:8px';
+    rightControls.style.cssText = 'display:flex;align-items:center;gap:8px;flex-wrap:wrap';
     rightControls.append(bigCatWrap, moveSel, appendBtn);
 
     header.append(left, rightControls);
@@ -1101,6 +1124,86 @@ function renderAdminDetail(product, files, detailPanel, groups, renderFolders) {
         grid.appendChild(wrap);
     }
     detailPanel.appendChild(grid);
+}
+
+function readStudioSubmitter() {
+    const values = [];
+    try { values.push(sessionStorage.getItem('dt_user')); } catch {}
+    try { values.push(localStorage.getItem('dt_user')); } catch {}
+    for (const value of values) {
+        if (!value) continue;
+        try {
+            const user = JSON.parse(value);
+            if (user?.unionId) return user;
+        } catch {}
+    }
+    return null;
+}
+
+async function submitLibraryCutoutTasks({ product, category, files, button, status }) {
+    if (button.dataset.loading === '1') return;
+    const submitter = readStudioSubmitter();
+
+    const batch = files.slice(0, 20);
+    if (!batch.length) return;
+    const extraCount = files.length - batch.length;
+    const confirmText = `确认将「${product}」中的 ${batch.length} 张图片提交白底抠图？${extraCount > 0 ? `\n本次最多处理 20 张，另有 ${extraCount} 张不会提交。` : ''}`;
+    if (!confirm(confirmText)) return;
+
+    const originalText = button.textContent;
+    const failures = [];
+    let submitted = 0;
+    button.dataset.loading = '1';
+    button.disabled = true;
+    status.style.color = '#6b7280';
+
+    try {
+        for (let index = 0; index < batch.length; index += 1) {
+            const file = batch[index];
+            button.textContent = `提交中 ${index + 1}/${batch.length}`;
+            status.textContent = `正在提交：${file.name}`;
+            try {
+                const response = await fetch('/api/admin-library-cutout', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        submitter,
+                        productName: product,
+                        category,
+                        files: [{ key: file.key, name: file.name }]
+                    })
+                });
+                const result = await response.json().catch(() => ({}));
+                if (!response.ok || !result.ok) throw new Error(result.error || `提交失败 (${response.status})`);
+                submitted += 1;
+            } catch (error) {
+                failures.push({ file, error: error.message || String(error) });
+            }
+        }
+    } finally {
+        button.dataset.loading = '';
+        button.textContent = originalText;
+    }
+
+    if (!failures.length) {
+        button.textContent = `已提交 ${submitted} 张`;
+        button.style.opacity = '.7';
+        status.textContent = '已发送白底抠图，完成后会通过钉钉通知';
+        status.style.color = '#047857';
+        return;
+    }
+
+    status.textContent = `成功 ${submitted} 张，失败 ${failures.length} 张：${failures[0].file.name}（${failures[0].error}）`;
+    status.style.color = '#b91c1c';
+    button.disabled = false;
+    button.textContent = `重试失败的 ${failures.length} 张`;
+    button.onclick = () => submitLibraryCutoutTasks({
+        product,
+        category,
+        files: failures.map(item => item.file),
+        button,
+        status
+    });
 }
 
 

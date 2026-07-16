@@ -12,6 +12,7 @@ const ADMIN_PATHS = new Set([
     '/api/studio-webhook',
     '/api/studio-complete',
     '/api/admin-optimize-prompt',
+    '/api/admin-library-cutout',
     '/api/retention-cleanup'
 ]);
 
