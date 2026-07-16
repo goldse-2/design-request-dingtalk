@@ -159,13 +159,16 @@ uploadBtn.addEventListener('click', async () => {
 
         setStatus('正在上传并通知用户...', null);
         const res = await fetch('/api/studio-result-upload', { method: 'POST', body: form });
-        const json = await res.json();
+        const json = await res.json().catch(() => ({}));
         if (!res.ok || !json.ok) throw new Error(json.error || res.status);
         setStatus('上传成功，已通知用户，共 ' + json.uploaded.length + ' 张图片', true);
         pendingFiles = [];
         renderPreview();
     } catch (err) {
-        setStatus('上传失败：' + err.message, false);
+        const message = err instanceof TypeError && /fetch/i.test(err.message || '')
+            ? '网络或 Cloudflare 存储连接中断，请稍后再试'
+            : err.message;
+        setStatus('上传失败：' + message, false);
     } finally {
         uploadBtn.disabled = false;
         uploadBtn.textContent = '上传并通知用户';

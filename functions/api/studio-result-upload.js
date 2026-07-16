@@ -76,9 +76,17 @@ export async function onRequestPost(context) {
         const suffix = preparedFiles.length > 1 ? `-${i + 1}` : '';
         const name = `${baseName}${suffix}.${ext}`;
         const key = `studio-results/${taskId}/${Date.now()}-${i + 1}-${name}`;
-        await env.SUBMISSION_FILES.put(key, bytes, {
-            httpMetadata: { contentType: task.mode === 'cutout' ? (outputFormat === 'jpg' ? 'image/jpeg' : 'image/png') : (file.type || guessContentType(name)) }
-        });
+        try {
+            await putResultWithRetry(env.SUBMISSION_FILES, key, bytes, {
+                httpMetadata: { contentType: task.mode === 'cutout' ? (outputFormat === 'jpg' ? 'image/jpeg' : 'image/png') : (file.type || guessContentType(name)) }
+            });
+        } catch (error) {
+            console.error('Studio result R2 upload failed:', taskId, error.message);
+            return Response.json({
+                ok: false,
+                error: 'Cloudflare 存储暂时不可用，系统已自动重试 3 次，请稍后再上传'
+            }, { status: 503 });
+        }
         uploaded.push({ key, name });
     }
 
@@ -98,6 +106,22 @@ export async function onRequestPost(context) {
     }
 
     return Response.json({ ok: true, taskId, uploaded });
+}
+
+async function putResultWithRetry(storage, key, bytes, options) {
+    let lastError;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+            await storage.put(key, bytes, options);
+            return;
+        } catch (error) {
+            lastError = error;
+            if (attempt < 3) {
+                await new Promise(resolve => setTimeout(resolve, attempt * 300));
+            }
+        }
+    }
+    throw lastError || new Error('R2 upload failed');
 }
 
 function uploadPasswordMatches(password, env) {
