@@ -280,6 +280,17 @@ function renderAPlusDoubleLauncher(mode) {
                 </div>`;
 }
 
+function renderShootRequestLauncher() {
+    return `
+                <div class="studio-shoot-request">
+                    <button type="button" class="studio-shoot-request-btn" onclick="openShootModal()">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M14.5 5 13 3h-2L9.5 5H6a3 3 0 0 0-3 3v9a3 3 0 0 0 3 3h12a3 3 0 0 0 3-3V8a3 3 0 0 0-3-3h-3.5Z"/><circle cx="12" cy="12.5" r="3.5"/></svg>
+                        <span>提交拍摄需求</span>
+                    </button>
+                    <div class="studio-shoot-request-copy">需要白底图和角度可以提交拍摄申请，我会立刻拍给你</div>
+                </div>`;
+}
+
 const FREE_FORM = `
     <div class="studio-layout">
         <div class="studio-panel">
@@ -331,6 +342,7 @@ const FREE_FORM = `
                 </div>
                 <div class="prompt-mention-hint">提示：上传图片后，可在提示词中输入 <strong>@</strong> 引用图片，例如 <strong>@参考图1</strong></div>
 ${renderAPlusDoubleLauncher('free')}
+${renderShootRequestLauncher()}
             </div>
             <div class="sf-section">
                 <div class="sf-label">图片 <span class="sf-sub">（可选）</span> <span class="sf-sub" id="freeImgCount">(0/4)</span></div>
@@ -420,6 +432,7 @@ ${renderAPlusDoubleLauncher('program')}
                     </div>
                     <div class="sf-preview-list" id="progProductThumbs"></div>
                 </div>
+${renderShootRequestLauncher()}
             </div>
             <div class="sf-section" id="progSizeSection">
                 <div class="sf-label">尺寸 <span class="sf-req">*</span></div>
@@ -957,6 +970,197 @@ function openAPlusDoubleModal(mode) {
     overlay.addEventListener('click', event => { if (event.target === overlay) close(); });
     document.addEventListener('keydown', onKeydown);
     document.body.appendChild(overlay);
+}
+
+let shootImages = [];
+
+function setShootStatus(message, type = '') {
+    const status = document.getElementById('shootStatus');
+    if (!status) return;
+    status.textContent = message;
+    status.className = 'studio-shoot-status' + (type ? ` ${type}` : '');
+}
+
+function openShootModal() {
+    if (!currentUser) {
+        showLoginModal();
+        return;
+    }
+    shootImages = [];
+    document.getElementById('shootProduct').value = '';
+    document.getElementById('shootDesc').value = '';
+    document.getElementById('shootInput').value = '';
+    document.getElementById('shootThumbs').replaceChildren();
+    document.getElementById('shootSubmit').disabled = false;
+    setShootStatus('');
+    const modal = document.getElementById('shootModal');
+    modal.removeAttribute('hidden');
+    modal.classList.add('modal--visible');
+    document.body.classList.add('shoot-modal-open');
+    document.getElementById('shootProduct').focus();
+}
+
+function closeShootModal() {
+    const modal = document.getElementById('shootModal');
+    if (!modal) return;
+    modal.classList.remove('modal--visible');
+    modal.hidden = true;
+    document.body.classList.remove('shoot-modal-open');
+}
+
+function addShootImages(files) {
+    const candidates = Array.from(files || []);
+    for (const file of candidates) {
+        if (shootImages.length >= 3) {
+            setShootStatus('参考图片最多上传 3 张', 'error');
+            break;
+        }
+        if (!file.type.startsWith('image/')) {
+            setShootStatus(`请上传图片：${file.name}`, 'error');
+            continue;
+        }
+        if (file.size > 8 * 1024 * 1024) {
+            setShootStatus(`单张图片不能超过 8 MB：${file.name}`, 'error');
+            continue;
+        }
+        const reader = new FileReader();
+        reader.onload = event => {
+            if (shootImages.length >= 3) return;
+            shootImages.push({ name: file.name, mimeType: file.type, dataUrl: event.target.result });
+            renderShootThumbs();
+            setShootStatus('');
+        };
+        reader.onerror = () => setShootStatus(`图片读取失败：${file.name}`, 'error');
+        reader.readAsDataURL(file);
+    }
+}
+
+function renderShootThumbs() {
+    const wrap = document.getElementById('shootThumbs');
+    wrap.replaceChildren();
+    shootImages.forEach((image, index) => {
+        const item = document.createElement('div');
+        item.className = 'studio-shoot-thumb';
+        const preview = document.createElement('img');
+        preview.src = image.dataUrl;
+        preview.alt = image.name;
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.setAttribute('aria-label', `移除 ${image.name}`);
+        remove.textContent = '×';
+        remove.addEventListener('click', () => {
+            shootImages.splice(index, 1);
+            renderShootThumbs();
+        });
+        item.append(preview, remove);
+        wrap.appendChild(item);
+    });
+}
+
+function initShootRequest() {
+    const modal = document.getElementById('shootModal');
+    const drop = document.getElementById('shootDrop');
+    const input = document.getElementById('shootInput');
+    if (!modal || !drop || !input) return;
+
+    drop.addEventListener('click', () => input.click());
+    drop.addEventListener('keydown', event => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        input.click();
+    });
+    drop.addEventListener('dragover', event => {
+        event.preventDefault();
+        drop.classList.add('dragover');
+    });
+    drop.addEventListener('dragleave', () => drop.classList.remove('dragover'));
+    drop.addEventListener('drop', event => {
+        event.preventDefault();
+        drop.classList.remove('dragover');
+        addShootImages(event.dataTransfer.files);
+    });
+    drop.addEventListener('paste', event => {
+        const item = Array.from(event.clipboardData.items).find(entry => entry.type.startsWith('image/'));
+        if (!item) return;
+        event.preventDefault();
+        addShootImages([item.getAsFile()]);
+    });
+    input.addEventListener('change', event => {
+        addShootImages(event.target.files);
+        event.target.value = '';
+    });
+    modal.addEventListener('click', event => {
+        if (event.target === modal) closeShootModal();
+    });
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && !modal.hidden) closeShootModal();
+    });
+}
+
+async function submitShoot() {
+    const product = document.getElementById('shootProduct').value.trim();
+    const desc = document.getElementById('shootDesc').value.trim();
+    const button = document.getElementById('shootSubmit');
+    if (!currentUser) {
+        closeShootModal();
+        showLoginModal();
+        return;
+    }
+    if (!product) {
+        setShootStatus('请填写产品名称', 'error');
+        document.getElementById('shootProduct').focus();
+        return;
+    }
+    if (!desc && !shootImages.length) {
+        setShootStatus('请填写需求描述或上传参考图片', 'error');
+        document.getElementById('shootDesc').focus();
+        return;
+    }
+
+    button.disabled = true;
+    try {
+        const photoKeys = [];
+        for (let index = 0; index < shootImages.length; index += 1) {
+            const image = shootImages[index];
+            setShootStatus(`正在上传参考图片 ${index + 1}/${shootImages.length}...`);
+            const formData = new FormData();
+            const blob = await fetch(image.dataUrl).then(response => response.blob());
+            formData.append('file', blob, image.name);
+            formData.append('prefix', 'shoot/ref');
+            const uploadResponse = await fetch('/api/studio-upload', { method: 'POST', body: formData });
+            const uploadResult = await uploadResponse.json();
+            if (!uploadResponse.ok || !uploadResult.ok) throw new Error(uploadResult.error || '图片上传失败');
+            photoKeys.push({ key: uploadResult.key, name: uploadResult.name });
+        }
+
+        setShootStatus('正在提交拍摄需求...');
+        const data = {
+            fileName: '白底拍摄需求',
+            submitTime: new Date().toLocaleString('zh-CN'),
+            basicInfo: { '型号': product, '图片数量': `${shootImages.length} 张` },
+            images: photoKeys.map((image, index) => ({
+                序号: `图${index + 1}`,
+                区域: '拍摄参考',
+                图片要求: desc,
+                photoKey: image.key,
+                photoName: image.name
+            })),
+            directPhotoKeys: photoKeys,
+            directDesc: desc
+        };
+        const response = await fetch('/api/submit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ taskType: '白底拍摄需求', remarks: desc, submitter: currentUser, data })
+        });
+        const result = await response.json();
+        if (!response.ok || !result.ok) throw new Error(result.error || `提交失败 (${response.status})`);
+        setShootStatus('拍摄需求已提交，我会尽快拍给你', 'success');
+        setTimeout(closeShootModal, 1200);
+    } catch (error) {
+        setShootStatus(`提交失败：${error.message}`, 'error');
+        button.disabled = false;
+    }
 }
 
 function toggleModelDropdown() {
@@ -2972,6 +3176,7 @@ document.querySelectorAll('.studio-tab').forEach(tab => {
 
 renderForm();
 initStudioTypewriter();
+initShootRequest();
 
 function showProgramGuide() {
     const modal = document.createElement('div');
