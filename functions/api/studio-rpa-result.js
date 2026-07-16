@@ -1,5 +1,5 @@
 import { markStudioNotificationSent, sendStudioResultImages } from '../_shared/studio-dingtalk.js';
-import { completeSilentLibraryReplacement, isSilentLibraryReplacement, replaceLibraryImage } from '../_shared/studio-library-replacement.js';
+import { completeSilentLibraryReplacement, ensureSilentLibraryReplacement, replaceLibraryImage } from '../_shared/studio-library-replacement.js';
 import { studioTaskPutOptions } from '../_shared/studio-task-storage.js';
 
 export async function onRequestPost(context) {
@@ -21,7 +21,7 @@ export async function onRequestPost(context) {
         if (!raw) return Response.json({ ok: false, error: 'Task not found' }, { status: 404 });
         const task = JSON.parse(raw);
 
-        if (isSilentLibraryReplacement(task)) {
+        if (ensureSilentLibraryReplacement(task)) {
             const result = await firstResultImage(resultImages, imageUrls);
             if (!result) return Response.json({ ok: false, error: 'No images received' }, { status: 400 });
             const stored = await replaceLibraryImage(env, task, result.bytes);

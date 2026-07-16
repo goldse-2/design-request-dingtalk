@@ -1,5 +1,5 @@
 import { markStudioNotificationFailed, markStudioNotificationSent, sendStudioResultImages } from '../_shared/studio-dingtalk.js';
-import { completeSilentLibraryReplacement, isSilentLibraryReplacement, replaceLibraryImage } from '../_shared/studio-library-replacement.js';
+import { completeSilentLibraryReplacement, ensureSilentLibraryReplacement, replaceLibraryImage } from '../_shared/studio-library-replacement.js';
 import { studioTaskPutOptions } from '../_shared/studio-task-storage.js';
 
 export async function onRequestPut(context) {
@@ -76,7 +76,7 @@ export async function onRequestPost(context) {
         preparedFiles.push({ file, bytes });
     }
 
-    const libraryReplacement = isSilentLibraryReplacement(task);
+    const libraryReplacement = ensureSilentLibraryReplacement(task);
     if (libraryReplacement && preparedFiles.length !== 1) {
         return Response.json({ ok: false, error: '资料库替换任务只能上传一张成品图' }, { status: 400 });
     }

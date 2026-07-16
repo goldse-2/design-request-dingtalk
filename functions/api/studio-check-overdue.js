@@ -1,5 +1,6 @@
 import { taskNeedsRpaTranslation, translateForRpa } from '../_shared/ai-translate.js';
 import { markStudioNotificationFailed, markStudioNotificationSent, sendStudioResultImages, studioNotificationLeaseActive } from '../_shared/studio-dingtalk.js';
+import { isAdminLibraryCutoutTask } from '../_shared/studio-library-replacement.js';
 import { recolorImage } from '../_shared/variant-recolor-core.js';
 import { editImageWithPrompt } from '../_shared/image-edit-core.js';
 import { studioTaskPutOptions } from '../_shared/studio-task-storage.js';
@@ -154,7 +155,7 @@ export async function onRequestGet(context) {
 
                     autoSent.push(task.id);
                     nextProcessingQueue.push(task.id);
-                    if (!task.silent && env.DINGTALK_APPKEY && env.DINGTALK_APPSECRET && env.ADMIN_USER_ID) {
+                    if (!isAdminLibraryCutoutTask(task) && !task.silent && env.DINGTALK_APPKEY && env.DINGTALK_APPSECRET && env.ADMIN_USER_ID) {
                         await notifyAutoSent(env, task).catch(e => console.error('Notify auto-sent failed:', e.message));
                     }
                 } catch (e) {
@@ -201,7 +202,7 @@ export async function onRequestGet(context) {
                 continue;
             }
 
-            if (!task.silent && env.DINGTALK_APPKEY && env.DINGTALK_APPSECRET && env.ADMIN_USER_ID) {
+            if (!isAdminLibraryCutoutTask(task) && !task.silent && env.DINGTALK_APPKEY && env.DINGTALK_APPSECRET && env.ADMIN_USER_ID) {
                 const p = notifyOverdue(env, task).then(() => {
                     task.overdueNotified = true;
                     return env.SUBMISSIONS.put(task.id, JSON.stringify(task), studioTaskPutOptions(task));

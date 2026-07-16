@@ -12,6 +12,35 @@ export function isSilentLibraryReplacement(task) {
     return task?.silent === true && Boolean(normalizeLibraryReplacement(task.libraryReplacement));
 }
 
+export function isAdminLibraryCutoutTask(task) {
+    return task?.mode === 'cutout' && task?.category === '资料库自动去除背景';
+}
+
+export function ensureSilentLibraryReplacement(task) {
+    if (isSilentLibraryReplacement(task)) return true;
+    if (!isAdminLibraryCutoutTask(task)) return false;
+    const source = Array.isArray(task.refKeys) ? task.refKeys.find(item => item?.key?.startsWith('library/')) : null;
+    if (!source?.key) return false;
+
+    const sourceName = String(task.imageName || source.name || decodeKeyName(source.key) || '图片.png');
+    const outputFormat = task.cutoutOutputFormat === 'jpg' ? 'jpg' : 'png';
+    const keepsName = outputFormat === 'jpg' ? /\.jpe?g$/i.test(sourceName) : /\.png$/i.test(sourceName);
+    const targetName = keepsName
+        ? sourceName
+        : `${sourceName.replace(/\.[^.]+$/, '') || '图片'}-去背景.${outputFormat}`;
+    const targetKey = keepsName ? source.key : source.key.replace(/[^/]+$/, encodeURIComponent(targetName));
+    task.silent = true;
+    task.libraryReplacement = {
+        sourceKey: source.key,
+        targetKey,
+        targetName,
+        contentType: outputFormat === 'jpg' ? 'image/jpeg' : 'image/png'
+    };
+    task.dingtalkNotified = true;
+    task.r2AutoNotified = true;
+    return true;
+}
+
 export async function replaceLibraryImage(env, task, bytes) {
     if (!env.SUBMISSION_FILES) throw new Error('R2 storage not configured');
     const replacement = normalizeLibraryReplacement(task?.libraryReplacement);
@@ -48,4 +77,9 @@ async function retryStorageOperation(operation) {
         }
     }
     throw lastError || new Error('R2 operation failed');
+}
+
+function decodeKeyName(key) {
+    try { return decodeURIComponent(String(key).split('/').pop() || ''); }
+    catch { return String(key).split('/').pop() || ''; }
 }
