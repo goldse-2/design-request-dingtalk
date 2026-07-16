@@ -46,18 +46,49 @@ function escapeHtml(s) {
 }
 
 async function getUploadTaskMode(taskId, password) {
-    const res = await fetch('/api/studio-result-upload', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ taskId, password }),
-        cache: 'no-store'
+    return retryRequest(async () => {
+        const res = await fetch('/api/studio-result-upload', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ taskId, password }),
+            cache: 'no-store'
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok || !json.ok) throw requestError(json.error || res.status, res.status);
+        return {
+            mode: json.mode,
+            outputFormat: json.outputFormat || (json.mode === 'cutout' ? 'png' : '')
+        };
     });
-    const json = await res.json();
-    if (!res.ok || !json.ok) throw new Error(json.error || res.status);
-    return {
-        mode: json.mode,
-        outputFormat: json.outputFormat || (json.mode === 'cutout' ? 'png' : '')
-    };
+}
+
+function requestError(message, status) {
+    const error = new Error(String(message || 'Failed to fetch'));
+    error.status = Number(status) || 0;
+    return error;
+}
+
+function canRetry(error) {
+    return error instanceof TypeError || !error.status || error.status === 429 || error.status >= 500;
+}
+
+async function retryRequest(request, attempts = 3) {
+    let lastError;
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+        try {
+            return await request();
+        } catch (error) {
+            lastError = error;
+            if (!canRetry(error) || attempt === attempts) throw error;
+            await new Promise(resolve => setTimeout(resolve, attempt * 700));
+        }
+    }
+    throw lastError;
+}
+
+function createUploadId() {
+    if (crypto.randomUUID) return crypto.randomUUID();
+    return Date.now().toString(36) + Math.random().toString(36).slice(2);
 }
 
 function isPngFile(file) {
@@ -148,27 +179,29 @@ uploadBtn.addEventListener('click', async () => {
             setStatus('正在处理图片，PNG 将自动转换为 JPG...', null);
         }
 
-        const form = new FormData();
-        form.append('password', password);
-        form.append('taskId', taskId);
         const uploadFiles = [];
         for (const file of pendingFiles) {
             uploadFiles.push(await normalizeUploadFile(file, taskInfo));
         }
-        uploadFiles.forEach(file => form.append('files', file, file.name));
 
         setStatus('正在上传并通知用户...', null);
-        const res = await fetch('/api/studio-result-upload', { method: 'POST', body: form });
-        const json = await res.json().catch(() => ({}));
-        if (!res.ok || !json.ok) throw new Error(json.error || res.status);
+        const uploadId = createUploadId();
+        const json = await retryRequest(async () => {
+            const form = new FormData();
+            form.append('password', password);
+            form.append('taskId', taskId);
+            form.append('uploadId', uploadId);
+            uploadFiles.forEach(file => form.append('files', file, file.name));
+            const res = await fetch('/api/studio-result-upload', { method: 'POST', body: form });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.ok) throw requestError(data.error || res.status, res.status);
+            return data;
+        });
         setStatus('上传成功，已通知用户，共 ' + json.uploaded.length + ' 张图片', true);
         pendingFiles = [];
         renderPreview();
     } catch (err) {
-        const message = err instanceof TypeError && /fetch/i.test(err.message || '')
-            ? '网络或 Cloudflare 存储连接中断，请稍后再试'
-            : err.message;
-        setStatus('上传失败：' + message, false);
+        setStatus('上传失败：' + err.message, false);
     } finally {
         uploadBtn.disabled = false;
         uploadBtn.textContent = '上传并通知用户';

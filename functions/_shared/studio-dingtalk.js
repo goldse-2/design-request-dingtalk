@@ -18,29 +18,16 @@ export async function sendStudioResultImages(env, accessToken, staffId, task, or
         const position = `${index + 1}/${resultKeys.length}`;
         const imageMarkdown = `**${fileName}**\n\n![${fileName}](${imageUrl})\n\n[按原文件名下载](${downloadUrl})`;
         try {
-            const response = await fetch('https://api.dingtalk.com/v1.0/robot/oToMessages/batchSend', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-acs-dingtalk-access-token': accessToken
-                },
-                body: JSON.stringify({
-                    robotCode: env.DINGTALK_APPKEY,
-                    userIds: [staffId],
-                    msgKey: 'sampleMarkdown',
-                    msgParam: JSON.stringify({
-                        title: `图片制作完成 ${position}`,
-                        text: `图片制作完成 ${position}\n\n${imageMarkdown}`
-                    })
+            await sendDingTalkMessageWithRetry(accessToken, {
+                robotCode: env.DINGTALK_APPKEY,
+                userIds: [staffId],
+                msgKey: 'sampleMarkdown',
+                msgParam: JSON.stringify({
+                    title: `图片制作完成 ${position}`,
+                    text: `图片制作完成 ${position}\n\n${imageMarkdown}`
                 })
             });
-
-            if (response.ok) {
-                sentCount++;
-            } else {
-                const detail = await response.text().catch(() => '');
-                throw new Error(`HTTP ${response.status} ${detail}`.trim());
-            }
+            sentCount++;
         } catch (cause) {
             const error = `DingTalk image message ${position} failed: ${cause.message || cause}`;
             console.error(error);
@@ -48,12 +35,45 @@ export async function sendStudioResultImages(env, accessToken, staffId, task, or
         }
     }
 
+    if (errors.length) {
+        const error = new Error(errors.join('; '));
+        error.result = { sent: false, count: sentCount, requested: resultKeys.length, errors };
+        throw error;
+    }
+
     return {
-        sent: sentCount === resultKeys.length,
+        sent: true,
         count: sentCount,
         requested: resultKeys.length,
-        errors
+        errors: []
     };
+}
+
+async function sendDingTalkMessageWithRetry(accessToken, body) {
+    let lastError;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+            const response = await fetch('https://api.dingtalk.com/v1.0/robot/oToMessages/batchSend', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-acs-dingtalk-access-token': accessToken
+                },
+                body: JSON.stringify(body)
+            });
+            if (response.ok) return;
+            const detail = await response.text().catch(() => '');
+            const error = new Error(`HTTP ${response.status} ${detail}`.trim());
+            error.status = response.status;
+            throw error;
+        } catch (error) {
+            lastError = error;
+            const retryable = !error.status || error.status === 429 || error.status >= 500;
+            if (!retryable || attempt === 2) break;
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+    }
+    throw lastError || new Error('DingTalk message failed');
 }
 
 function safeDisplayName(name) {

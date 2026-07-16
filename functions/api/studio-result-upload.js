@@ -51,6 +51,16 @@ export async function onRequestPost(context) {
     const taskResult = await getStudioTask(env, taskId);
     if (taskResult.error) return taskResult.error;
     const task = taskResult.task;
+    const uploadId = normalizeUploadId(form.get('uploadId'));
+    const previousBatch = Array.isArray(task.resultUploadBatches)
+        ? task.resultUploadBatches.find(batch => batch?.id === uploadId)
+        : null;
+    if (previousBatch) {
+        await appendQueue(env.SUBMISSIONS, 'studio:processingQueue:v2', taskId).catch(error => {
+            console.error('Queue duplicate result notification retry failed:', taskId, error.message);
+        });
+        return Response.json({ ok: true, taskId, uploaded: previousBatch.uploaded || [], duplicate: true });
+    }
 
     const files = form.getAll('files').filter(f => f && typeof f !== 'string');
     if (!files.length) return Response.json({ ok: false, error: '请上传成品图' }, { status: 400 });
@@ -75,7 +85,7 @@ export async function onRequestPost(context) {
         const ext = task.mode === 'cutout' ? outputFormat : resultExtension(file);
         const suffix = preparedFiles.length > 1 ? `-${i + 1}` : '';
         const name = `${baseName}${suffix}.${ext}`;
-        const key = `studio-results/${taskId}/${Date.now()}-${i + 1}-${name}`;
+        const key = `studio-results/${taskId}/upload-${uploadId}-${i + 1}-${name}`;
         try {
             await putResultWithRetry(env.SUBMISSION_FILES, key, bytes, {
                 httpMetadata: { contentType: task.mode === 'cutout' ? (outputFormat === 'jpg' ? 'image/jpeg' : 'image/png') : (file.type || guessContentType(name)) }
@@ -84,18 +94,27 @@ export async function onRequestPost(context) {
             console.error('Studio result R2 upload failed:', taskId, error.message);
             return Response.json({
                 ok: false,
-                error: 'Cloudflare 存储暂时不可用，系统已自动重试 3 次，请稍后再上传'
+                error: 'Failed to fetch'
             }, { status: 503 });
         }
         uploaded.push({ key, name });
     }
 
-    task.resultKeys = [...(task.resultKeys || []), ...uploaded];
+    task.resultKeys = mergeUploadedResults(task.resultKeys, uploaded);
+    task.resultUploadBatches = [
+        ...(Array.isArray(task.resultUploadBatches) ? task.resultUploadBatches : []),
+        { id: uploadId, uploaded, completedAt: new Date().toISOString() }
+    ].slice(-30);
     task.status = 'done';
     task.completedAt = new Date().toISOString();
     task.completeNote = task.completeNote || '成品图已上传';
+    task.dingtalkNotified = false;
+    task.r2AutoNotified = false;
 
     await env.SUBMISSIONS.put(taskId, JSON.stringify(task), studioTaskPutOptions(task));
+    await appendQueue(env.SUBMISSIONS, 'studio:processingQueue:v2', taskId).catch(error => {
+        console.error('Queue result notification retry failed:', taskId, error.message);
+    });
 
     if (task.submitter?.unionId && env.DINGTALK_APPKEY && env.DINGTALK_APPSECRET) {
         const notify = notifyUserDone(env, task, new URL(request.url).origin)
@@ -106,6 +125,30 @@ export async function onRequestPost(context) {
     }
 
     return Response.json({ ok: true, taskId, uploaded });
+}
+
+function normalizeUploadId(value) {
+    const cleaned = String(value || '').trim().replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80);
+    return cleaned || crypto.randomUUID();
+}
+
+function mergeUploadedResults(existing, uploaded) {
+    const byKey = new Map();
+    [...(Array.isArray(existing) ? existing : []), ...uploaded].forEach(item => {
+        if (item?.key) byKey.set(item.key, item);
+    });
+    return [...byKey.values()];
+}
+
+async function appendQueue(kv, key, taskId) {
+    const raw = await kv.get(key).catch(() => null);
+    let ids = [];
+    if (raw) {
+        try { ids = JSON.parse(raw); } catch { ids = []; }
+    }
+    if (!Array.isArray(ids)) ids = [];
+    if (!ids.includes(taskId)) ids.push(taskId);
+    await kv.put(key, JSON.stringify(ids.slice(-500)));
 }
 
 async function putResultWithRetry(storage, key, bytes, options) {

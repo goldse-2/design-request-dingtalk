@@ -170,7 +170,20 @@ export async function onRequestGet(context) {
         }
 
         for (const task of tasks) {
-            if (!task || task.status !== 'processing' || !task.sentToRpa) continue;
+            if (!task) continue;
+            if (task.status === 'done' && !task.dingtalkNotified && !task.r2AutoNotified) {
+                if (task.submitter?.unionId && env.DINGTALK_APPKEY && env.DINGTALK_APPSECRET) {
+                    try {
+                        await notifyUserDone(env, task, new URL(request.url).origin);
+                        await markStudioNotificationSent(env, task.id);
+                    } catch (error) {
+                        console.error('Retry result notification failed:', task.id, error.message);
+                        nextProcessingQueue.push(task.id);
+                    }
+                }
+                continue;
+            }
+            if (task.status !== 'processing' || !task.sentToRpa) continue;
             if (task.overdueNotified) continue;
             const sentAt = task.sentToRpaAt ? new Date(task.sentToRpaAt).getTime() : 0;
             if (!sentAt || (now - sentAt) < overdueThreshold) {
