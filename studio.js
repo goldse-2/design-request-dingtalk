@@ -483,16 +483,12 @@ const RETOUCH_FORM = `
                 <div class="sf-section">
                     <div class="sf-label">待精修图片 <span class="sf-req">*</span></div>
                     <label class="sf-upload-box retouch-upload-box" id="retouchDropZone" for="retouchImageInput">
-                        <input id="retouchImageInput" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+                        <input id="retouchImageInput" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden>
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="26" height="26"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                         <span>上传图片</span>
-                        <small>JPG、PNG、WebP，最大 15 MB</small>
+                        <small id="retouchUploadHint">JPG、PNG、WebP，单张最大 15 MB，最多 20 张</small>
                     </label>
-                    <div class="retouch-selected" id="retouchSelected">
-                        <img id="retouchSelectedImage" alt="待精修图片">
-                        <span class="retouch-selected-name" id="retouchSelectedName"></span>
-                        <button type="button" class="retouch-selected-remove" id="retouchRemoveBtn" title="移除图片">&times;</button>
-                    </div>
+                    <div class="retouch-selected-grid" id="retouchSelected"></div>
                 </div>
                 <button class="sf-submit" id="retouchSubmit">开始精修</button>
                 <div class="retouch-shoot-hint">需要拍摄可以在这里提交<a href="library.html?shoot=1">拍摄需求</a></div>
@@ -500,20 +496,16 @@ const RETOUCH_FORM = `
             </div>
             <div class="studio-panel cutout-panel">
                 <div class="cutout-panel-title">白底抠图</div>
-                <div class="cutout-panel-copy">上传一张图片，自动抠出产品并处理为白底图。</div>
+                <div class="cutout-panel-copy">批量上传图片，自动逐张抠出产品并处理为白底图。</div>
                 <div class="sf-section">
                     <div class="sf-label">待处理图片 <span class="sf-req">*</span></div>
                     <label class="sf-upload-box retouch-upload-box" id="cutoutDropZone" for="cutoutImageInput">
-                        <input id="cutoutImageInput" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+                        <input id="cutoutImageInput" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden>
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="26" height="26"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                         <span>上传图片</span>
-                        <small>JPG、PNG、WebP，最大 15 MB</small>
+                        <small id="cutoutUploadHint">JPG、PNG、WebP，单张最大 15 MB，最多 20 张</small>
                     </label>
-                    <div class="retouch-selected" id="cutoutSelected">
-                        <img id="cutoutSelectedImage" alt="待处理图片">
-                        <span class="retouch-selected-name" id="cutoutSelectedName"></span>
-                        <button type="button" class="retouch-selected-remove" id="cutoutRemoveBtn" title="移除图片">&times;</button>
-                    </div>
+                    <div class="retouch-selected-grid" id="cutoutSelected"></div>
                 </div>
                 <div class="sf-section">
                     <label class="sf-label" for="cutoutOutputFormat">导出格式</label>
@@ -600,12 +592,13 @@ const VARIANT_FORM = `
         </div>
     </div>`;
 
-const uploads = { freeImages: [], freeModel: null, freeScene: null, freeProduct: [], freeProduct1: null, freeProduct2: null, progRef: [], progProduct: [], retouchImage: null, cutoutImage: null, variantImages: [] };
+const uploads = { freeImages: [], freeModel: null, freeScene: null, freeProduct: [], freeProduct1: null, freeProduct2: null, progRef: [], progProduct: [], retouchImages: [], cutoutImages: [], variantImages: [] };
 let resizeToolCleanup = null;
 const MAX_STUDIO_FILE_SIZE = 8 * 1024 * 1024;
 const MAX_RETOUCH_FILE_SIZE = 15 * 1024 * 1024;
 const MAX_VARIANT_FILE_SIZE = 15 * 1024 * 1024;
 const MAX_VARIANT_IMAGES = 20;
+const MAX_RETOUCH_IMAGES = 20;
 
 function validateStudioImage(file) {
     if (!file?.type?.startsWith('image/')) return '请选择图片文件';
@@ -695,6 +688,17 @@ function fillPreset(key) {
 
 let cachedStudioGalleryPreview = null;
 
+function releaseBatchImage(image) {
+    if (image?.objectUrl) URL.revokeObjectURL(image.objectUrl);
+}
+
+function clearRetouchUploads() {
+    uploads.retouchImages.forEach(releaseBatchImage);
+    uploads.cutoutImages.forEach(releaseBatchImage);
+    uploads.retouchImages = [];
+    uploads.cutoutImages = [];
+}
+
 function renderForm() {
     if (resizeToolCleanup) {
         resizeToolCleanup();
@@ -703,7 +707,8 @@ function renderForm() {
     const area = document.getElementById('studioFormArea');
     const attachedGallery = area.querySelector('.studio-gallery-preview');
     if (attachedGallery) cachedStudioGalleryPreview = attachedGallery;
-    uploads.freeImages = []; uploads.freeModel = null; uploads.freeScene = null; uploads.freeProduct = []; uploads.freeProduct1 = null; uploads.freeProduct2 = null; uploads.progRef = []; uploads.progProduct = []; uploads.retouchImage = null; uploads.cutoutImage = null; uploads.variantImages = [];
+    clearRetouchUploads();
+    uploads.freeImages = []; uploads.freeModel = null; uploads.freeScene = null; uploads.freeProduct = []; uploads.freeProduct1 = null; uploads.freeProduct2 = null; uploads.progRef = []; uploads.progProduct = []; uploads.variantImages = [];
     let galleryWasReady = false;
     if (currentMode === 'free') {
         galleryWasReady = renderGenerationMode(area, FREE_FORM);
@@ -762,54 +767,72 @@ function renderGenerationMode(area, formHtml) {
 }
 
 function initRetouchMode() {
-    wireSingleImageUpload({
+    wireBatchImageUpload({
         inputId: 'retouchImageInput',
         dropZoneId: 'retouchDropZone',
-        removeButtonId: 'retouchRemoveBtn',
+        selectedId: 'retouchSelected',
+        hintId: 'retouchUploadHint',
         statusId: 'retouchStatus',
-        uploadKey: 'retouchImage',
-        render: renderRetouchSelection
+        uploadKey: 'retouchImages'
     });
-    wireSingleImageUpload({
+    wireBatchImageUpload({
         inputId: 'cutoutImageInput',
         dropZoneId: 'cutoutDropZone',
-        removeButtonId: 'cutoutRemoveBtn',
+        selectedId: 'cutoutSelected',
+        hintId: 'cutoutUploadHint',
         statusId: 'cutoutStatus',
-        uploadKey: 'cutoutImage',
-        render: renderCutoutSelection
+        uploadKey: 'cutoutImages'
     });
     document.getElementById('retouchSubmit').addEventListener('click', submitRetouch);
     document.getElementById('cutoutSubmit').addEventListener('click', submitCutout);
     loadRetouchQueue();
 }
 
-function wireSingleImageUpload({ inputId, dropZoneId, removeButtonId, statusId, uploadKey, render }) {
+function wireBatchImageUpload({ inputId, dropZoneId, selectedId, hintId, statusId, uploadKey }) {
     const dropZone = document.getElementById(dropZoneId);
-    const removeButton = document.getElementById(removeButtonId);
+    const selected = document.getElementById(selectedId);
     const actualInput = document.getElementById(inputId);
-    if (!actualInput || !dropZone || !removeButton) return;
+    if (!actualInput || !dropZone || !selected) return;
 
-    const selectFile = file => {
-        const validationError = validateStudioImage(file);
-        if (validationError) {
-            showStudioFieldError(document.getElementById(statusId), validationError, dropZone);
+    const addFiles = files => {
+        const incoming = Array.from(files || []);
+        if (!incoming.length) return;
+        const remaining = MAX_RETOUCH_IMAGES - uploads[uploadKey].length;
+        if (remaining <= 0) {
+            showStudioFieldError(document.getElementById(statusId), `最多上传 ${MAX_RETOUCH_IMAGES} 张图片`, dropZone);
             return;
         }
-        const reader = new FileReader();
-        reader.onload = event => {
-            uploads[uploadKey] = {
+
+        let added = 0;
+        let firstError = '';
+        incoming.slice(0, remaining).forEach(file => {
+            const validationError = validateStudioImage(file);
+            if (validationError) {
+                if (!firstError) firstError = validationError;
+                return;
+            }
+            uploads[uploadKey].push({
+                batchId: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
                 name: file.name,
-                base64: event.target.result.split(',')[1],
-                mimeType: file.type,
-                dataUrl: event.target.result
-            };
-            render();
-        };
-        reader.readAsDataURL(file);
+                mimeType: file.type || 'image/jpeg',
+                file,
+                objectUrl: URL.createObjectURL(file)
+            });
+            added += 1;
+        });
+        renderBatchImageSelection(uploadKey, selectedId, hintId);
+        if (incoming.length > remaining) firstError = `最多上传 ${MAX_RETOUCH_IMAGES} 张，已自动保留前 ${MAX_RETOUCH_IMAGES} 张`;
+        const status = document.getElementById(statusId);
+        if (firstError) {
+            showStudioFieldError(status, firstError, dropZone);
+        } else if (added && status) {
+            status.textContent = '';
+            status.className = 'studio-status';
+        }
     };
 
     actualInput.addEventListener('change', () => {
-        if (actualInput.files[0]) selectFile(actualInput.files[0]);
+        addFiles(actualInput.files);
         actualInput.value = '';
     });
     ['dragenter', 'dragover'].forEach(type => dropZone.addEventListener(type, event => {
@@ -821,46 +844,48 @@ function wireSingleImageUpload({ inputId, dropZoneId, removeButtonId, statusId, 
         dropZone.classList.remove('dragover');
     }));
     dropZone.addEventListener('drop', event => {
-        if (event.dataTransfer.files[0]) selectFile(event.dataTransfer.files[0]);
+        addFiles(event.dataTransfer.files);
     });
-    removeButton.addEventListener('click', () => {
-        uploads[uploadKey] = null;
-        render();
+    selected.addEventListener('click', event => {
+        const removeButton = event.target.closest('[data-batch-remove]');
+        if (!removeButton) return;
+        const batchId = removeButton.dataset.batchRemove;
+        const image = uploads[uploadKey].find(item => item.batchId === batchId);
+        releaseBatchImage(image);
+        uploads[uploadKey] = uploads[uploadKey].filter(item => item.batchId !== batchId);
+        renderBatchImageSelection(uploadKey, selectedId, hintId);
     });
+    renderBatchImageSelection(uploadKey, selectedId, hintId);
 }
 
-function renderRetouchSelection() {
-    const selected = document.getElementById('retouchSelected');
-    const image = document.getElementById('retouchSelectedImage');
-    const name = document.getElementById('retouchSelectedName');
-    const picked = uploads.retouchImage;
-    if (!selected || !image || !name) return;
-
-    selected.classList.toggle('visible', Boolean(picked));
-    if (!picked) {
-        image.removeAttribute('src');
-        name.textContent = '';
-        return;
-    }
-    image.src = picked.dataUrl;
-    name.textContent = picked.name || '上次图片';
-}
-
-function renderCutoutSelection() {
-    const selected = document.getElementById('cutoutSelected');
-    const image = document.getElementById('cutoutSelectedImage');
-    const name = document.getElementById('cutoutSelectedName');
-    const picked = uploads.cutoutImage;
-    if (!selected || !image || !name) return;
-
-    selected.classList.toggle('visible', Boolean(picked));
-    if (!picked) {
-        image.removeAttribute('src');
-        name.textContent = '';
-        return;
-    }
-    image.src = picked.dataUrl;
-    name.textContent = picked.name || '待处理图片';
+function renderBatchImageSelection(uploadKey, selectedId, hintId) {
+    const selected = document.getElementById(selectedId);
+    const hint = document.getElementById(hintId);
+    if (!selected) return;
+    const images = uploads[uploadKey] || [];
+    selected.replaceChildren();
+    images.forEach((item, index) => {
+        const card = document.createElement('div');
+        card.className = 'retouch-selected-item';
+        const image = document.createElement('img');
+        image.src = item.objectUrl || item.dataUrl || '';
+        image.alt = item.name || `图片 ${index + 1}`;
+        const name = document.createElement('span');
+        name.className = 'retouch-selected-name';
+        name.textContent = item.name || `图片 ${index + 1}`;
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'retouch-selected-remove';
+        remove.dataset.batchRemove = item.batchId;
+        remove.title = '移除图片';
+        remove.setAttribute('aria-label', `移除 ${name.textContent}`);
+        remove.textContent = '×';
+        card.append(image, name, remove);
+        selected.appendChild(card);
+    });
+    if (hint) hint.textContent = images.length
+        ? `已选择 ${images.length}/${MAX_RETOUCH_IMAGES} 张，单张最大 15 MB`
+        : `JPG、PNG、WebP，单张最大 15 MB，最多 ${MAX_RETOUCH_IMAGES} 张`;
 }
 
 async function loadRetouchQueue() {
@@ -936,11 +961,6 @@ function renderRetouchQueue(tasks, list, summary, emptyText) {
         row.append(name, badge);
         list.appendChild(row);
     });
-}
-
-function clearRetouchSelection() {
-    uploads.retouchImage = null;
-    renderRetouchSelection();
 }
 
 function initVariantMode() {
@@ -2043,7 +2063,7 @@ async function uploadImages(files, prefix) {
     const keys = [];
     for (const f of files) {
         const fd = new FormData();
-        const blob = await fetch('data:' + f.mimeType + ';base64,' + f.base64).then(r => r.blob());
+        const blob = f.file || await fetch('data:' + f.mimeType + ';base64,' + f.base64).then(r => r.blob());
         fd.append('file', blob, f.name);
         fd.append('prefix', prefix);
         const res = await fetch('/api/studio-upload', { method: 'POST', body: fd });
@@ -2482,32 +2502,116 @@ function submitProgram() {
 
 function submitRetouch() {
     const status = document.getElementById('retouchStatus');
-    if (!uploads.retouchImage) {
+    if (!uploads.retouchImages.length) {
         showStudioFieldError(status, '请上传待精修图片', document.getElementById('retouchDropZone'));
         return;
     }
-    submitTask('retouch', {
-        refImages: [uploads.retouchImage]
-    }, status, document.getElementById('retouchSubmit'), task => showSuccessModal(task, '精修图片预计约 30 分钟完成'));
+    submitImageBatch({
+        mode: 'retouch',
+        uploadKey: 'retouchImages',
+        inputId: 'retouchImageInput',
+        selectedId: 'retouchSelected',
+        hintId: 'retouchUploadHint',
+        status,
+        btn: document.getElementById('retouchSubmit')
+    });
 }
 
 function submitCutout() {
     const status = document.getElementById('cutoutStatus');
     const cutoutOutputFormat = document.getElementById('cutoutOutputFormat')?.value === 'jpg' ? 'jpg' : 'png';
-    if (!uploads.cutoutImage) {
+    if (!uploads.cutoutImages.length) {
         showStudioFieldError(status, '请上传待处理图片', document.getElementById('cutoutDropZone'));
         return;
     }
-    submitTask('cutout', {
-        refImages: [uploads.cutoutImage],
-        cutoutOutputFormat
-    }, status, document.getElementById('cutoutSubmit'), task => {
-        const formatLabel = cutoutOutputFormat.toUpperCase();
-        const message = task.autoSent
-            ? `白底抠图已发送处理，将导出 ${formatLabel}，完成后会通过钉钉通知`
-            : `任务已保存，将导出 ${formatLabel}，系统会自动重试发送，无需审核`;
-        showSuccessModal(task, message);
+    submitImageBatch({
+        mode: 'cutout',
+        uploadKey: 'cutoutImages',
+        inputId: 'cutoutImageInput',
+        selectedId: 'cutoutSelected',
+        hintId: 'cutoutUploadHint',
+        status,
+        btn: document.getElementById('cutoutSubmit'),
+        extraPayload: { cutoutOutputFormat }
     });
+}
+
+async function submitImageBatch({ mode, uploadKey, inputId, selectedId, hintId, status, btn, extraPayload = {} }) {
+    if (!currentUser) { showLoginModal(); return; }
+    if (!hasAgreed()) { openGuide(); guideShowPage(2); return; }
+    if (btn.dataset.loading === '1') return;
+
+    const batch = uploads[uploadKey].slice();
+    const successfulIds = new Set();
+    const failures = [];
+    const submittedTasks = [];
+    const originalText = btn.textContent;
+    const input = document.getElementById(inputId);
+    const prefix = mode === 'retouch' ? 'studio/retouch' : 'studio/cutout';
+    btn.dataset.loading = '1';
+    btn.disabled = true;
+    btn.classList.add('is-loading');
+    if (input) input.disabled = true;
+    status.className = 'studio-status';
+
+    try {
+        for (let index = 0; index < batch.length; index += 1) {
+            const item = batch[index];
+            btn.textContent = `提交中 ${index + 1}/${batch.length}`;
+            status.textContent = `正在上传第 ${index + 1}/${batch.length} 张：${item.name}`;
+            try {
+                const refKeys = await uploadImages([item], prefix);
+                status.textContent = `正在创建第 ${index + 1}/${batch.length} 个任务...`;
+                const response = await fetch('/api/studio-submit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        mode,
+                        submitter: currentUser,
+                        productKeys: [],
+                        refKeys,
+                        modelKeys: [],
+                        ...extraPayload
+                    })
+                });
+                const result = await response.json();
+                if (!response.ok || !result.ok) throw new Error(result.error || `提交失败 (${response.status})`);
+                successfulIds.add(item.batchId);
+                submittedTasks.push(result);
+            } catch (error) {
+                failures.push({ item, error: error.message || String(error) });
+            }
+        }
+    } finally {
+        uploads[uploadKey] = uploads[uploadKey].filter(item => {
+            if (!successfulIds.has(item.batchId)) return true;
+            releaseBatchImage(item);
+            return false;
+        });
+        renderBatchImageSelection(uploadKey, selectedId, hintId);
+        btn.disabled = false;
+        btn.classList.remove('is-loading');
+        btn.dataset.loading = '';
+        btn.textContent = originalText;
+        if (input) input.disabled = false;
+    }
+
+    if (failures.length) {
+        const firstFailure = failures[0];
+        status.textContent = `成功 ${submittedTasks.length} 张，失败 ${failures.length} 张；失败图片已保留，可重新提交。${firstFailure.item.name}：${firstFailure.error}`;
+        status.className = 'studio-status err';
+    } else {
+        status.textContent = '';
+    }
+
+    if (submittedTasks.length) {
+        const formatLabel = mode === 'cutout' ? String(extraPayload.cutoutOutputFormat || 'png').toUpperCase() : '';
+        const message = mode === 'retouch'
+            ? `已提交 ${submittedTasks.length} 个精修任务，每张图片独立处理，预计约 30 分钟完成`
+            : `已提交 ${submittedTasks.length} 个白底抠图任务，将逐张处理并导出 ${formatLabel}，完成后会通过钉钉通知`;
+        showSuccessModal(null, failures.length ? `${message}；另有 ${failures.length} 张提交失败，可关闭弹窗后重试` : message);
+        if (mode === 'retouch') loadRetouchQueue();
+    }
 }
 
 async function submitVariant() {
