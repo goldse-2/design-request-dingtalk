@@ -25,7 +25,8 @@ export async function onRequestPut(context) {
     return Response.json({
         ok: true,
         mode: taskResult.task.mode || '',
-        outputFormat: cutoutOutputFormat(taskResult.task)
+        outputFormat: cutoutOutputFormat(taskResult.task),
+        aPlusDouble: taskResult.task.aPlusDouble === true
     }, {
         headers: { 'Cache-Control': 'no-store' }
     });
@@ -62,6 +63,9 @@ export async function onRequestPost(context) {
 
     const files = form.getAll('files').filter(f => f && typeof f !== 'string');
     if (!files.length) return Response.json({ ok: false, error: '请上传成品图' }, { status: 400 });
+    if (task.aPlusDouble === true && files.length !== 2) {
+        return Response.json({ ok: false, error: 'A+ 连续双图需要上传拆分后的上下两张图片' }, { status: 400 });
+    }
 
     const preparedFiles = [];
     const outputFormat = cutoutOutputFormat(task);
@@ -94,7 +98,9 @@ export async function onRequestPost(context) {
         for (let i = 0; i < preparedFiles.length; i++) {
             const { file, bytes } = preparedFiles[i];
             const ext = task.mode === 'cutout' ? outputFormat : resultExtension(file);
-            const suffix = preparedFiles.length > 1 ? `-${i + 1}` : '';
+            const suffix = task.aPlusDouble === true
+                ? (i === 0 ? '-上半部分' : '-下半部分')
+                : (preparedFiles.length > 1 ? `-${i + 1}` : '');
             const name = `${baseName}${suffix}.${ext}`;
             const key = `studio-results/${taskId}/upload-${uploadId}-${i + 1}-${name}`;
             try {

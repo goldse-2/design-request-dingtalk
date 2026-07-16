@@ -57,7 +57,8 @@ async function getUploadTaskMode(taskId, password) {
         if (!res.ok || !json.ok) throw requestError(json.error || res.status, res.status);
         return {
             mode: json.mode,
-            outputFormat: json.outputFormat || (json.mode === 'cutout' ? 'png' : '')
+            outputFormat: json.outputFormat || (json.mode === 'cutout' ? 'png' : ''),
+            aPlusDouble: json.aPlusDouble === true
         };
     });
 }
@@ -128,6 +129,44 @@ async function normalizeUploadFile(file, taskInfo) {
     return convertImageFile(file, 'image/jpeg', 'jpg', true);
 }
 
+async function splitAPlusDoubleFile(file) {
+    const dataUrl = await readFileAsDataUrl(file);
+    const image = await loadImage(dataUrl);
+    const sourceWidth = image.naturalWidth || image.width;
+    const sourceHeight = image.naturalHeight || image.height;
+    if (sourceWidth < 2 || sourceHeight < 2) throw new Error('A+ 连续双图成品无法读取尺寸');
+
+    const sourceHalfHeight = sourceHeight / 2;
+    const baseName = String(file.name || 'A+连续双图').replace(/\.[^.]+$/, '') || 'A+连续双图';
+    const names = [`${baseName}-上半部分.jpg`, `${baseName}-下半部分.jpg`];
+    const results = [];
+    for (let index = 0; index < 2; index++) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 1464;
+        canvas.height = 600;
+        const context = canvas.getContext('2d');
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = 'high';
+        context.fillStyle = '#ffffff';
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        context.drawImage(
+            image,
+            0,
+            index * sourceHalfHeight,
+            sourceWidth,
+            sourceHalfHeight,
+            0,
+            0,
+            canvas.width,
+            canvas.height
+        );
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.94));
+        if (!blob) throw new Error(`A+ ${index === 0 ? '上半部分' : '下半部分'}导出失败`);
+        results.push(new File([blob], names[index], { type: 'image/jpeg', lastModified: Date.now() }));
+    }
+    return results;
+}
+
 function readFileAsDataUrl(file) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -173,15 +212,22 @@ uploadBtn.addEventListener('click', async () => {
 
     try {
         const taskInfo = await getUploadTaskMode(taskId, password);
-        if (taskInfo.mode === 'cutout') {
+        if (taskInfo.aPlusDouble) {
+            if (pendingFiles.length !== 1) throw new Error('A+ 连续双图任务请只上传一张完整成品图');
+            setStatus('正在自动拆分为上下两张 1464 × 600 JPG...', null);
+        } else if (taskInfo.mode === 'cutout') {
             setStatus(`白底抠图任务将导出 ${taskInfo.outputFormat.toUpperCase()}，正在处理...`, null);
         } else {
             setStatus('正在处理图片，PNG 将自动转换为 JPG...', null);
         }
 
         const uploadFiles = [];
-        for (const file of pendingFiles) {
-            uploadFiles.push(await normalizeUploadFile(file, taskInfo));
+        if (taskInfo.aPlusDouble) {
+            uploadFiles.push(...await splitAPlusDoubleFile(pendingFiles[0]));
+        } else {
+            for (const file of pendingFiles) {
+                uploadFiles.push(await normalizeUploadFile(file, taskInfo));
+            }
         }
 
         setStatus('正在上传并通知用户...', null);

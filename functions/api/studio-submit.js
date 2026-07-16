@@ -8,7 +8,7 @@ export async function onRequestPost(context) {
     try { body = await request.json(); }
     catch { return Response.json({ ok: false, error: 'Invalid JSON' }, { status: 400 }); }
 
-    const { mode, submitter, desc, want, note, scene, analyzePrompt, size, imageName, productName, title, subtitle, otherText, productKeys, refKeys, modelKeys, category, variantScope, colorName, colorHex, resizeTarget, resizeReflow, cutoutOutputFormat } = body;
+    const { mode, submitter, desc, want, note, scene, analyzePrompt, size, imageName, productName, title, subtitle, otherText, productKeys, refKeys, modelKeys, category, variantScope, colorName, colorHex, resizeTarget, resizeReflow, cutoutOutputFormat, aPlusDouble } = body;
     if (!mode || !submitter) {
         return Response.json({ ok: false, error: 'Missing required fields' }, { status: 400 });
     }
@@ -26,6 +26,12 @@ export async function onRequestPost(context) {
     }
     if (mode === 'resize_ai' && !isValidResizeTarget(resizeTarget || size)) {
         return Response.json({ ok: false, error: '目标尺寸必须在 100–5000 px 之间' }, { status: 400 });
+    }
+    if (aPlusDouble === true && !['free', 'program'].includes(mode)) {
+        return Response.json({ ok: false, error: 'A+ 连续双图仅支持自由模式和图生图模式' }, { status: 400 });
+    }
+    if (aPlusDouble === true && (!Array.isArray(refKeys) || !refKeys.length)) {
+        return Response.json({ ok: false, error: 'A+ 连续双图缺少合并参考图' }, { status: 400 });
     }
     if (!env.SUBMISSIONS) {
         return Response.json({ ok: false, error: 'Storage not configured' }, { status: 500 });
@@ -47,8 +53,8 @@ export async function onRequestPost(context) {
         note: note || '',
         scene: scene || '',
         analyzePrompt: analyzePrompt || '',
-        size: size || '',
-        imageName: imageName || '',
+        size: aPlusDouble === true ? '1464x1200' : (size || ''),
+        imageName: aPlusDouble === true ? '' : (imageName || ''),
         productName: productName || '',
         title: title || '',
         subtitle: subtitle || '',
@@ -59,6 +65,7 @@ export async function onRequestPost(context) {
         resizeTarget: resizeTarget || '',
         resizeReflow: resizeReflow === true,
         cutoutOutputFormat: mode === 'cutout' && cutoutOutputFormat === 'jpg' ? 'jpg' : (mode === 'cutout' ? 'png' : ''),
+        aPlusDouble: aPlusDouble === true,
         variantNextIndex: 0,
         productKeys: productKeys || [],
         refKeys: refKeys || [],

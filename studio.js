@@ -261,6 +261,25 @@ function renderSizePicker(inputId) {
                 </div>`;
 }
 
+const A_PLUS_DOUBLE_HELP = '放入上下两个1464x600图片会自动合并上传为参考图，并且输出时会导出为两张1464x600自动分割给你';
+
+function renderAPlusDoubleLauncher(mode) {
+    return `
+                <div class="a-plus-double-launcher" id="${mode}APlusDoubleLauncher">
+                    <div class="a-plus-double-action-row">
+                        <button type="button" class="a-plus-double-btn" id="${mode}APlusDoubleBtn" onclick="openAPlusDoubleModal('${mode}')" aria-pressed="false">
+                            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="8" rx="2"/><rect x="3" y="13" width="18" height="8" rx="2"/><path d="M8 7h8M8 17h8"/></svg>
+                            <span>A+ 连续双图（亚马逊A+首图）</span>
+                        </button>
+                        <button type="button" class="a-plus-double-info" onclick="toggleAPlusDoubleHelp(event, '${mode}')" aria-label="查看 A+ 连续双图说明" aria-describedby="${mode}APlusDoubleHelp">
+                            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+                        </button>
+                        <div class="a-plus-double-help" id="${mode}APlusDoubleHelp" role="tooltip">${A_PLUS_DOUBLE_HELP}</div>
+                    </div>
+                    <div class="a-plus-double-ready" id="${mode}APlusDoubleReady" hidden>已合并为 1464 × 1200，输出后自动拆成上下两张</div>
+                </div>`;
+}
+
 const FREE_FORM = `
     <div class="studio-layout">
         <div class="studio-panel">
@@ -311,12 +330,7 @@ const FREE_FORM = `
                     <span class="prompt-quota" id="optimizeQuota">美化 --/30</span>
                 </div>
                 <div class="prompt-mention-hint">提示：上传图片后，可在提示词中输入 <strong>@</strong> 引用图片，例如 <strong>@参考图1</strong></div>
-                <div class="sf-preset-row">
-                    <button type="button" class="sf-preset-btn" data-preset="white" onclick="fillPreset('white')">白底图</button>
-                    <button type="button" class="sf-preset-btn" data-preset="retouch" onclick="fillPreset('retouch')">精修图</button>
-                    <button type="button" class="sf-preset-btn" data-preset="amazon" onclick="fillPreset('amazon')">亚马逊设计图</button>
-                    <button type="button" class="sf-preset-btn" data-preset="detail" onclick="fillPreset('detail')">细节描述</button>
-                </div>
+${renderAPlusDoubleLauncher('free')}
             </div>
             <div class="sf-section">
                 <div class="sf-label">图片 <span class="sf-sub">（可选）</span> <span class="sf-sub" id="freeImgCount">(0/4)</span></div>
@@ -335,11 +349,11 @@ const FREE_FORM = `
                 <div id="freeModelPreview" style="margin-top:10px"></div>
                 <div id="freeScenePreview" style="margin-top:10px"></div>
             </div>
-            <div class="sf-section">
+            <div class="sf-section" id="freeFileNameSection">
                 <div class="sf-label">图片文件命名 <span class="sf-sub">（可选）</span></div>
                 <input class="sf-input" id="freeFileName" type="text" maxlength="80" placeholder="例如：03-dog01">
             </div>
-            <div class="sf-section">
+            <div class="sf-section" id="freeSizeSection">
                 <div class="sf-label">尺寸 <span class="sf-req">*</span></div>
 ${renderSizePicker('freeSizeSelect')}
                 <div class="size-resize-hint" id="freeSizeHint" hidden>生成后可进入 <a href="studio.html?mode=resize&width=1464&height=600">尺寸修改</a> 修改成 1464 × 600</div>
@@ -381,7 +395,7 @@ const PROGRAM_FORM = `
                 <div class="sf-label">其他文案 <span class="sf-sub">（可选，分号间隔）</span></div>
                 <textarea class="sf-textarea" id="progOtherText" rows="3" maxlength="300" placeholder="例如：降噪技术；续航持久；蓝牙5.0"></textarea>
             </div>
-            <div class="sf-section">
+            <div class="sf-section" id="progRefSection">
                 <div class="sf-label">要模仿的图 <span class="sf-req">*</span> <span class="sf-sub">(1张)</span></div>
                 <div class="sf-upload-row">
                     <div class="sf-upload-box" id="progRefDrop" tabindex="-1">
@@ -392,6 +406,7 @@ const PROGRAM_FORM = `
                     </div>
                     <div class="sf-preview-list" id="progRefThumbs"></div>
                 </div>
+${renderAPlusDoubleLauncher('program')}
             </div>
             <div class="sf-section">
                 <div class="sf-label">白底产品图 <span class="sf-req">*</span> <span class="sf-sub">(2张)</span></div>
@@ -406,7 +421,7 @@ const PROGRAM_FORM = `
                     <div class="sf-preview-list" id="progProductThumbs"></div>
                 </div>
             </div>
-            <div class="sf-section">
+            <div class="sf-section" id="progSizeSection">
                 <div class="sf-label">尺寸 <span class="sf-req">*</span></div>
 ${renderSizePicker('progSizeSelect')}
                 <div class="size-resize-hint" id="progSizeHint" hidden>生成后可进入 <a href="studio.html?mode=resize&width=1464&height=600">尺寸修改</a> 修改成 1464 × 600</div>
@@ -599,6 +614,18 @@ const MAX_RETOUCH_FILE_SIZE = 15 * 1024 * 1024;
 const MAX_VARIANT_FILE_SIZE = 15 * 1024 * 1024;
 const MAX_VARIANT_IMAGES = 20;
 const MAX_RETOUCH_IMAGES = 20;
+const A_PLUS_DOUBLE_WIDTH = 1464;
+const A_PLUS_DOUBLE_HALF_HEIGHT = 600;
+const A_PLUS_DOUBLE_SIZE = '1464x1200';
+const aPlusDoubleState = {
+    enabled: false,
+    mode: '',
+    top: null,
+    bottom: null,
+    merged: null,
+    previousSize: '',
+    previousRefs: []
+};
 
 function validateStudioImage(file) {
     if (!file?.type?.startsWith('image/')) return '请选择图片文件';
@@ -630,14 +657,307 @@ function showStudioFieldError(status, message, target) {
     }
 }
 
-const PRESET_PROMPTS = {
-    white: '将背景替换为纯白色背景，保持主体对象完全不变',
-    retouch: '把参考图按照要求修改图片。要求1600x1600像素，纯白背景，中心对焦，高分辨率 Octane渲染器渲染，柔和的影棚布光，极高清晰度，逼真的材质细节，8k分辨率，电商白底图风格',
-    amazon: '以上传的产品图片为参考。创作亚马逊设计图片，以适应亚马逊设计。逼真，高清晰度，高对比度，专业照明，具有真实的阴影和高光效果,根据图片来给我写标题和文案、无模糊、无失真、无低质量、无卡通风格',
-    detail: '58mm定焦镜头，1.4F大光圈，索尼A7M4拍摄'
-};
+function resetAPlusDoubleState() {
+    Object.assign(aPlusDoubleState, {
+        enabled: false,
+        mode: '',
+        top: null,
+        bottom: null,
+        merged: null,
+        previousSize: '',
+        previousRefs: []
+    });
+}
 
-let activePreset = null;
+function isAPlusDoubleActive(mode = currentMode) {
+    return aPlusDoubleState.enabled && aPlusDoubleState.mode === mode;
+}
+
+function toggleAPlusDoubleHelp(event, mode) {
+    event.preventDefault();
+    event.stopPropagation();
+    const help = document.getElementById(mode + 'APlusDoubleHelp');
+    if (!help) return;
+    const shouldOpen = !help.classList.contains('is-open');
+    document.querySelectorAll('.a-plus-double-help.is-open').forEach(item => item.classList.remove('is-open'));
+    help.classList.toggle('is-open', shouldOpen);
+}
+
+document.addEventListener('click', event => {
+    if (event.target.closest('.a-plus-double-info')) return;
+    document.querySelectorAll('.a-plus-double-help.is-open').forEach(item => item.classList.remove('is-open'));
+});
+
+function loadAPlusImage(src) {
+    return new Promise((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = () => reject(new Error('图片解析失败，请重新选择。'));
+        image.src = src;
+    });
+}
+
+async function readAPlusHalf(file, label) {
+    const validationError = validateStudioImage(file);
+    if (validationError) throw new Error(validationError);
+    const upload = await fileToStudioUpload(file);
+    const image = await loadAPlusImage(upload.dataUrl);
+    if (image.naturalWidth !== A_PLUS_DOUBLE_WIDTH || image.naturalHeight !== A_PLUS_DOUBLE_HALF_HEIGHT) {
+        throw new Error(`${label}必须是 1464 × 600，当前是 ${image.naturalWidth} × ${image.naturalHeight}`);
+    }
+    return { ...upload, width: image.naturalWidth, height: image.naturalHeight };
+}
+
+async function mergeAPlusHalves(top, bottom) {
+    const [topImage, bottomImage] = await Promise.all([
+        loadAPlusImage(top.dataUrl),
+        loadAPlusImage(bottom.dataUrl)
+    ]);
+    const canvas = document.createElement('canvas');
+    canvas.width = A_PLUS_DOUBLE_WIDTH;
+    canvas.height = A_PLUS_DOUBLE_HALF_HEIGHT * 2;
+    const context = canvas.getContext('2d');
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = 'high';
+    context.drawImage(topImage, 0, 0, A_PLUS_DOUBLE_WIDTH, A_PLUS_DOUBLE_HALF_HEIGHT);
+    context.drawImage(bottomImage, 0, A_PLUS_DOUBLE_HALF_HEIGHT, A_PLUS_DOUBLE_WIDTH, A_PLUS_DOUBLE_HALF_HEIGHT);
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.96));
+    if (!blob) throw new Error('双图合并失败，请重新选择图片。');
+    const file = new File([blob], 'A+连续双图-参考图.jpg', { type: 'image/jpeg', lastModified: Date.now() });
+    const upload = await fileToStudioUpload(file);
+    return { ...upload, file, width: canvas.width, height: canvas.height, isAPlusDouble: true };
+}
+
+function syncSizePickerValue(inputId, value) {
+    const input = document.getElementById(inputId);
+    const picker = document.getElementById(inputId + 'Picker');
+    if (!input || !picker) return;
+    input.value = value || '';
+    const exactButton = Array.from(picker.querySelectorAll('[data-size-value]')).find(button => button.dataset.sizeValue === value);
+    picker.querySelectorAll('[data-size-value], [data-size-custom]').forEach(button => {
+        button.classList.toggle('active', button === exactButton);
+    });
+    const customRow = picker.querySelector('.size-custom-row');
+    const customMatch = String(value || '').match(/自定义尺寸\s*(\d+)x(\d+)/);
+    if (customRow) customRow.hidden = !customMatch;
+    if (customMatch) {
+        const width = picker.querySelector('[data-size-width]');
+        const height = picker.querySelector('[data-size-height]');
+        if (width) width.value = customMatch[1];
+        if (height) height.value = customMatch[2];
+        picker.querySelectorAll('[data-size-custom]').forEach(button => button.classList.add('active'));
+    }
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+function setAPlusSizeLocked(inputId, locked) {
+    const input = document.getElementById(inputId);
+    const picker = document.getElementById(inputId + 'Picker');
+    if (!input || !picker) return;
+    picker.classList.toggle('is-a-plus-locked', locked);
+    picker.querySelectorAll('button, input:not([type="hidden"])').forEach(control => { control.disabled = locked; });
+    let lockLabel = picker.querySelector('.a-plus-size-lock');
+    if (locked) {
+        input.value = A_PLUS_DOUBLE_SIZE;
+        picker.querySelectorAll('[data-size-value], [data-size-custom]').forEach(button => button.classList.remove('active'));
+        if (!lockLabel) {
+            lockLabel = document.createElement('div');
+            lockLabel.className = 'a-plus-size-lock';
+            lockLabel.textContent = 'A+ 连续双图已固定输出：1464 × 1200';
+            picker.appendChild(lockLabel);
+        }
+    } else {
+        lockLabel?.remove();
+    }
+}
+
+function updateAPlusDoubleUi(mode) {
+    const active = isAPlusDoubleActive(mode);
+    const button = document.getElementById(mode + 'APlusDoubleBtn');
+    const ready = document.getElementById(mode + 'APlusDoubleReady');
+    if (button) {
+        button.classList.toggle('active', active);
+        button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    }
+    if (ready) ready.hidden = !active;
+
+    if (mode === 'free') {
+        const nameSection = document.getElementById('freeFileNameSection');
+        const nameInput = document.getElementById('freeFileName');
+        const sizeSection = document.getElementById('freeSizeSection');
+        nameSection?.classList.toggle('a-plus-control-disabled', active);
+        sizeSection?.classList.toggle('a-plus-control-disabled', active);
+        if (nameInput) nameInput.disabled = active;
+        setAPlusSizeLocked('freeSizeSelect', active);
+    } else if (mode === 'program') {
+        const refSection = document.getElementById('progRefSection');
+        const refInput = document.getElementById('progRefInput');
+        const sizeSection = document.getElementById('progSizeSection');
+        refSection?.classList.toggle('a-plus-control-disabled', active);
+        sizeSection?.classList.toggle('a-plus-control-disabled', active);
+        if (refInput) refInput.disabled = active;
+        setAPlusSizeLocked('progSizeSelect', active);
+    }
+}
+
+function activateAPlusDouble(mode, top, bottom, merged) {
+    if (!isAPlusDoubleActive(mode)) {
+        const sizeInput = document.getElementById(mode === 'free' ? 'freeSizeSelect' : 'progSizeSelect');
+        aPlusDoubleState.previousSize = sizeInput?.value || '2K 自动识别';
+        aPlusDoubleState.previousRefs = mode === 'free' ? [...uploads.freeImages] : [...uploads.progRef];
+    }
+    Object.assign(aPlusDoubleState, { enabled: true, mode, top, bottom, merged });
+    if (mode === 'free') {
+        uploads.freeImages = [merged, ...aPlusDoubleState.previousRefs.filter(item => !item?.isAPlusDouble).slice(0, 3)];
+        renderFreePreview();
+    } else {
+        uploads.progRef = [merged];
+        renderThumbs('progRefThumbs', 'progRef');
+    }
+    updateAPlusDoubleUi(mode);
+}
+
+function deactivateAPlusDouble(mode) {
+    if (!isAPlusDoubleActive(mode)) return;
+    const previousSize = aPlusDoubleState.previousSize || '2K 自动识别';
+    const previousRefs = [...aPlusDoubleState.previousRefs];
+    resetAPlusDoubleState();
+    if (mode === 'free') {
+        uploads.freeImages = previousRefs;
+        renderFreePreview();
+        syncSizePickerValue('freeSizeSelect', previousSize);
+    } else {
+        uploads.progRef = previousRefs;
+        renderThumbs('progRefThumbs', 'progRef');
+        syncSizePickerValue('progSizeSelect', previousSize);
+    }
+    updateAPlusDoubleUi(mode);
+}
+
+function openAPlusDoubleModal(mode) {
+    if (!['free', 'program'].includes(mode) || currentMode !== mode) return;
+    document.getElementById('aPlusDoubleModal')?.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'aPlusDoubleModal';
+    overlay.className = 'a-plus-double-modal';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-labelledby', 'aPlusDoubleModalTitle');
+    overlay.innerHTML = `
+        <div class="a-plus-double-dialog">
+            <div class="a-plus-double-dialog-head">
+                <div><h3 id="aPlusDoubleModalTitle">A+ 连续双图</h3><p>分别上传上下两张 1464 × 600 图片</p></div>
+                <button type="button" class="a-plus-double-close" aria-label="关闭">×</button>
+            </div>
+            <div class="a-plus-double-slot-grid">
+                <div class="a-plus-double-slot-wrap">
+                    <div class="a-plus-double-slot-label"><span>1</span> 上半部分</div>
+                    <button type="button" class="a-plus-double-slot" data-a-plus-slot="top"></button>
+                    <input type="file" accept="image/*" data-a-plus-input="top" hidden>
+                </div>
+                <div class="a-plus-double-slot-wrap">
+                    <div class="a-plus-double-slot-label"><span>2</span> 下半部分</div>
+                    <button type="button" class="a-plus-double-slot" data-a-plus-slot="bottom"></button>
+                    <input type="file" accept="image/*" data-a-plus-input="bottom" hidden>
+                </div>
+            </div>
+            <div class="a-plus-double-modal-status" aria-live="polite"></div>
+            <div class="a-plus-double-dialog-actions">
+                <button type="button" class="a-plus-double-cancel">取消</button>
+                <button type="button" class="a-plus-double-disable" ${isAPlusDoubleActive(mode) ? '' : 'hidden'}>停用连续双图</button>
+                <button type="button" class="a-plus-double-merge">合并并使用</button>
+            </div>
+        </div>`;
+
+    const selected = {
+        top: isAPlusDoubleActive(mode) ? aPlusDoubleState.top : null,
+        bottom: isAPlusDoubleActive(mode) ? aPlusDoubleState.bottom : null
+    };
+    const status = overlay.querySelector('.a-plus-double-modal-status');
+    const mergeButton = overlay.querySelector('.a-plus-double-merge');
+    const close = () => {
+        document.removeEventListener('keydown', onKeydown);
+        overlay.remove();
+    };
+    const setStatus = (message, error = false) => {
+        status.textContent = message;
+        status.classList.toggle('error', error);
+    };
+    const renderSlot = slot => {
+        const button = overlay.querySelector(`[data-a-plus-slot="${slot}"]`);
+        const item = selected[slot];
+        button.replaceChildren();
+        button.classList.toggle('has-image', Boolean(item));
+        if (item) {
+            const image = document.createElement('img');
+            image.src = item.dataUrl;
+            image.alt = slot === 'top' ? '上半部分预览' : '下半部分预览';
+            const copy = document.createElement('span');
+            const name = document.createElement('strong');
+            const dimensions = document.createElement('small');
+            name.textContent = item.name;
+            dimensions.textContent = '1464 × 600 · 点击更换';
+            copy.append(name, dimensions);
+            button.append(image, copy);
+        } else {
+            button.innerHTML = '<svg viewBox="0 0 24 24" width="25" height="25" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5M12 3v12"/></svg><span><strong>选择图片</strong><small>必须为 1464 × 600</small></span>';
+        }
+        mergeButton.disabled = !(selected.top && selected.bottom);
+    };
+    const selectFile = async (slot, file) => {
+        if (!file) return;
+        setStatus(`正在读取${slot === 'top' ? '上半部分' : '下半部分'}...`);
+        try {
+            selected[slot] = await readAPlusHalf(file, slot === 'top' ? '上半部分' : '下半部分');
+            renderSlot(slot);
+            setStatus(selected.top && selected.bottom ? '两张图片尺寸正确，可以合并。' : '图片尺寸正确，请继续上传另一张。');
+        } catch (error) {
+            setStatus(error.message, true);
+        }
+    };
+    ['top', 'bottom'].forEach(slot => {
+        const button = overlay.querySelector(`[data-a-plus-slot="${slot}"]`);
+        const input = overlay.querySelector(`[data-a-plus-input="${slot}"]`);
+        button.addEventListener('click', () => input.click());
+        button.addEventListener('dragover', event => { event.preventDefault(); button.classList.add('dragover'); });
+        button.addEventListener('dragleave', () => button.classList.remove('dragover'));
+        button.addEventListener('drop', event => {
+            event.preventDefault();
+            button.classList.remove('dragover');
+            selectFile(slot, event.dataTransfer.files[0]);
+        });
+        input.addEventListener('change', event => {
+            selectFile(slot, event.target.files[0]);
+            event.target.value = '';
+        });
+        renderSlot(slot);
+    });
+    const onKeydown = event => { if (event.key === 'Escape') close(); };
+    overlay.querySelector('.a-plus-double-close').addEventListener('click', close);
+    overlay.querySelector('.a-plus-double-cancel').addEventListener('click', close);
+    overlay.querySelector('.a-plus-double-disable').addEventListener('click', () => {
+        deactivateAPlusDouble(mode);
+        close();
+    });
+    mergeButton.addEventListener('click', async () => {
+        if (!selected.top || !selected.bottom || mergeButton.disabled) return;
+        mergeButton.disabled = true;
+        mergeButton.textContent = '正在合并...';
+        setStatus('正在合并为 1464 × 1200...');
+        try {
+            const merged = await mergeAPlusHalves(selected.top, selected.bottom);
+            activateAPlusDouble(mode, selected.top, selected.bottom, merged);
+            close();
+        } catch (error) {
+            setStatus(error.message, true);
+            mergeButton.disabled = false;
+            mergeButton.textContent = '合并并使用';
+        }
+    });
+    overlay.addEventListener('click', event => { if (event.target === overlay) close(); });
+    document.addEventListener('keydown', onKeydown);
+    document.body.appendChild(overlay);
+}
 
 function toggleModelDropdown() {
     const dd = document.getElementById('modelDropdown');
@@ -657,34 +977,6 @@ document.addEventListener('click', e => {
     const dd = document.getElementById('modelDropdown');
     if (sel && dd && !dd.hidden && !sel.contains(e.target)) dd.hidden = true;
 });
-
-function fillPreset(key) {
-    const el = document.getElementById('freeDesc');
-    if (!el) return;
-    const text = PRESET_PROMPTS[key];
-    if (!text) return;
-
-    let val = el.value;
-    if (activePreset && PRESET_PROMPTS[activePreset]) {
-        const prev = PRESET_PROMPTS[activePreset];
-        val = val.replace(prev, '').replace(/\n{2,}/g, '\n').trim();
-    }
-
-    if (activePreset === key) {
-        activePreset = null;
-        el.value = val;
-        document.querySelectorAll('.sf-preset-btn').forEach(b => b.classList.remove('active', 'dim'));
-    } else {
-        activePreset = key;
-        el.value = val.trim() ? (val.trim() + '\n' + text) : text;
-        document.querySelectorAll('.sf-preset-btn').forEach(b => {
-            if (b.dataset.preset === key) { b.classList.add('active'); b.classList.remove('dim'); }
-            else { b.classList.add('dim'); b.classList.remove('active'); }
-        });
-    }
-    updateCharCount(el, 'freeDescCount', 8000);
-    el.focus();
-}
 
 let cachedStudioGalleryPreview = null;
 
@@ -708,6 +1000,7 @@ function renderForm() {
     const attachedGallery = area.querySelector('.studio-gallery-preview');
     if (attachedGallery) cachedStudioGalleryPreview = attachedGallery;
     clearRetouchUploads();
+    resetAPlusDoubleState();
     uploads.freeImages = []; uploads.freeModel = null; uploads.freeScene = null; uploads.freeProduct = []; uploads.freeProduct1 = null; uploads.freeProduct2 = null; uploads.progRef = []; uploads.progProduct = []; uploads.variantImages = [];
     let galleryWasReady = false;
     if (currentMode === 'free') {
@@ -2110,6 +2403,7 @@ async function submitTask(mode, payload, statusEl, btn, onSuccess) {
         if (payload.resizeTarget) submitPayload.resizeTarget = payload.resizeTarget;
         if (payload.resizeReflow !== undefined) submitPayload.resizeReflow = payload.resizeReflow === true;
         if (payload.cutoutOutputFormat) submitPayload.cutoutOutputFormat = payload.cutoutOutputFormat;
+        if (payload.aPlusDouble !== undefined) submitPayload.aPlusDouble = payload.aPlusDouble === true;
 
         const res = await fetch('/api/studio-submit', {
             method: 'POST',
@@ -2238,6 +2532,10 @@ function renderFreePreview() {
 }
 
 function removeFreeImage(i) {
+    if (uploads.freeImages[i]?.isAPlusDouble && isAPlusDoubleActive('free')) {
+        deactivateAPlusDouble('free');
+        return;
+    }
     uploads.freeImages.splice(i, 1);
     renderFreePreview();
 }
@@ -2472,32 +2770,35 @@ function sanitizePrompt(text) {
 }
 
 function submitFree() {
+    const aPlusDouble = isAPlusDoubleActive('free');
     const desc = sanitizePrompt(document.getElementById('freeDesc').value.trim());
     const want = '';
     const scene = uploads.freeScene ? uploads.freeScene.name : '';
     const sizeEl = document.getElementById('freeSizeSelect');
-    const size = sizeEl ? sizeEl.value : '';
+    const size = aPlusDouble ? A_PLUS_DOUBLE_SIZE : (sizeEl ? sizeEl.value : '');
     const imageNameEl = document.getElementById('freeFileName');
-    const imageName = imageNameEl ? imageNameEl.value.trim() : '';
+    const imageName = aPlusDouble ? '' : (imageNameEl ? imageNameEl.value.trim() : '');
     const status = document.getElementById('freeStatus');
     if (!desc) { showStudioFieldError(status, '请填写提示词', document.getElementById('freeDesc')); return; }
     if (!size) { showStudioFieldError(status, '请选择或填写尺寸', document.getElementById('freeSizeSelectPicker')); return; }
-    submitTask('free', { desc, want, note: scene ? ('场景：' + scene) : '', scene, size, imageName, refImages: [...(uploads.freeScene ? [uploads.freeScene] : []), ...(uploads.freeImages || [])], modelImages: uploads.freeModel ? [uploads.freeModel] : [], productImages: uploads.freeProduct || [] }, status, document.getElementById('freeSubmit'), showSuccessModal);
+    if (aPlusDouble && !uploads.freeImages.some(item => item?.isAPlusDouble)) { showStudioFieldError(status, '请重新上传 A+ 连续双图', document.getElementById('freeAPlusDoubleBtn')); return; }
+    submitTask('free', { desc, want, note: scene ? ('场景：' + scene) : '', scene, size, imageName, aPlusDouble, refImages: [...(uploads.freeScene ? [uploads.freeScene] : []), ...(uploads.freeImages || [])], modelImages: uploads.freeModel ? [uploads.freeModel] : [], productImages: uploads.freeProduct || [] }, status, document.getElementById('freeSubmit'), showSuccessModal);
 }
 
 function submitProgram() {
+    const aPlusDouble = isAPlusDoubleActive('program');
     const productName = document.getElementById('progProductName').value.trim();
     const title = document.getElementById('progTitle')?.value.trim() || '';
     const subtitle = document.getElementById('progSubtitle')?.value.trim() || '';
     const otherText = document.getElementById('progOtherText')?.value.trim() || '';
     const sizeEl = document.getElementById('progSizeSelect');
-    const size = sizeEl ? sizeEl.value : '';
+    const size = aPlusDouble ? A_PLUS_DOUBLE_SIZE : (sizeEl ? sizeEl.value : '');
     const status = document.getElementById('progStatus');
     if (!productName) { showStudioFieldError(status, '请填写产品名称', document.getElementById('progProductName')); return; }
     if (!size) { showStudioFieldError(status, '请选择或填写尺寸', document.getElementById('progSizeSelectPicker')); return; }
     if (uploads.progRef.length !== 1) { showStudioFieldError(status, '请上传1张要模仿的图', document.getElementById('progRefDrop')); return; }
     if (uploads.progProduct.length !== 2) { showStudioFieldError(status, '请上传2张白底产品图（当前' + uploads.progProduct.length + '张）', document.getElementById('progProductDrop')); return; }
-    submitTask('program', { productName, title, subtitle, otherText, size, analyzePrompt: ANALYZE_PROMPT, refImages: uploads.progRef, productImages: uploads.progProduct }, status, document.getElementById('progSubmit'), showSuccessModal);
+    submitTask('program', { productName, title, subtitle, otherText, size, aPlusDouble, analyzePrompt: ANALYZE_PROMPT, refImages: uploads.progRef, productImages: uploads.progProduct }, status, document.getElementById('progSubmit'), showSuccessModal);
 }
 
 function submitRetouch() {
