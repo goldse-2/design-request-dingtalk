@@ -861,7 +861,7 @@ async function loadLibraryAdmin() {
                 card.style.cssText = 'cursor:pointer;position:relative';
                 card.innerHTML = `
                     <div class="lib-card-img-wrap" style="position:relative">
-                        ${isImg ? `<img src="/api/library-file/${encodeURIComponent(cover.key)}" alt="" loading="lazy">` : `<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" stroke-width="1.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`}
+                        ${isImg ? `<img src="/api/library-file/${encodeURIComponent(cover.key)}?v=${encodeURIComponent(cover.version || cover.size || '')}" alt="" loading="lazy">` : `<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" stroke-width="1.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`}
                         <span style="position:absolute;bottom:6px;right:8px;background:rgba(0,0,0,0.5);color:#fff;font-size:0.7rem;padding:2px 7px;border-radius:10px">${files.length} 个</span>
                     </div>
                     <div class="lib-card-body">
@@ -967,27 +967,76 @@ function renderAdminDetail(product, files, detailPanel, groups, renderFolders) {
     countEl.textContent = files.length + ' 个文件';
 
     const cutoutFiles = files.filter(file => /\.(png|jpe?g|webp)$/i.test(file.name || ''));
+    const cutoutSelection = new Set();
+    const cutoutControls = new Map();
     const cutoutBtn = document.createElement('button');
     cutoutBtn.type = 'button';
     cutoutBtn.textContent = '自动去除背景';
-    cutoutBtn.title = '调用图片制作中的白底抠图，逐张处理当前文件夹的图片';
+    cutoutBtn.title = '调用图片制作中的白底抠图，逐张处理选中的图片';
     cutoutBtn.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;min-height:29px;padding:4px 10px;border:1px solid #a7f3d0;border-radius:7px;background:#ecfdf5;color:#047857;font-size:.76rem;font-weight:700;cursor:pointer;white-space:nowrap';
-    cutoutBtn.disabled = cutoutFiles.length === 0;
+    cutoutBtn.disabled = true;
     if (cutoutBtn.disabled) {
-        cutoutBtn.title = '当前文件夹没有可处理的图片';
+        cutoutBtn.title = cutoutFiles.length ? '请先勾选要处理的图片' : '当前文件夹没有可处理的图片';
         cutoutBtn.style.opacity = '.5';
         cutoutBtn.style.cursor = 'not-allowed';
     }
 
     const cutoutStatus = document.createElement('span');
     cutoutStatus.style.cssText = 'max-width:360px;color:#6b7280;font-size:.76rem;line-height:1.4';
-    cutoutBtn.onclick = () => submitLibraryCutoutTasks({
-        product,
-        category: currentCat,
-        files: cutoutFiles,
-        button: cutoutBtn,
-        status: cutoutStatus
-    });
+    cutoutStatus.textContent = cutoutFiles.length ? '勾选需要去除背景的图片' : '';
+
+    function updateCutoutSelection() {
+        if (cutoutBtn.dataset.loading === '1') return;
+        const count = cutoutSelection.size;
+        cutoutBtn.disabled = count === 0;
+        cutoutBtn.textContent = count ? `自动去除背景（${count}张）` : '自动去除背景';
+        cutoutBtn.title = count ? `仅处理已选择的 ${count} 张图片` : (cutoutFiles.length ? '请先勾选要处理的图片' : '当前文件夹没有可处理的图片');
+        cutoutBtn.style.opacity = count ? '1' : '.5';
+        cutoutBtn.style.cursor = count ? 'pointer' : 'not-allowed';
+    }
+
+    function setCutoutSelected(file, selected) {
+        const control = cutoutControls.get(file.key);
+        if (selected && !cutoutSelection.has(file.key) && cutoutSelection.size >= 20) {
+            if (control) control.checkbox.checked = false;
+            cutoutStatus.textContent = '一次最多选择 20 张图片';
+            cutoutStatus.style.color = '#b45309';
+            return;
+        }
+        if (selected) cutoutSelection.add(file.key);
+        else cutoutSelection.delete(file.key);
+        if (control) {
+            control.checkbox.checked = selected;
+            control.wrap.style.boxShadow = selected ? '0 0 0 2px #10b981' : '';
+            control.wrap.style.borderRadius = selected ? '8px' : '';
+        }
+        cutoutStatus.textContent = cutoutSelection.size ? `已选择 ${cutoutSelection.size} 张` : '勾选需要去除背景的图片';
+        cutoutStatus.style.color = '#6b7280';
+        updateCutoutSelection();
+    }
+
+    cutoutBtn.onclick = async () => {
+        const selectedFiles = cutoutFiles.filter(file => cutoutSelection.has(file.key));
+        const result = await submitLibraryCutoutTasks({
+            product,
+            category: currentCat,
+            files: selectedFiles,
+            button: cutoutBtn,
+            status: cutoutStatus
+        });
+        if (!result) return;
+        for (const file of result.submittedFiles) {
+            cutoutSelection.delete(file.key);
+            const control = cutoutControls.get(file.key);
+            if (control) {
+                control.checkbox.checked = false;
+                control.checkbox.disabled = true;
+                control.wrap.style.boxShadow = '';
+                control.wrap.style.opacity = '.72';
+            }
+        }
+        updateCutoutSelection();
+    };
 
     left.append(collapseBtn, titleEl, renameBtn, countEl, cutoutBtn, cutoutStatus);
 
@@ -1093,12 +1142,13 @@ function renderAdminDetail(product, files, detailPanel, groups, renderFolders) {
 
     for (const file of files) {
         const isImg = /\.(png|jpg|jpeg|webp|gif)$/i.test(file.name);
+        const isCutoutImg = /\.(png|jpe?g|webp)$/i.test(file.name);
         const wrap = document.createElement('div');
         wrap.className = 'lib-upload-thumb';
 
         if (isImg) {
             const img = document.createElement('img');
-            img.src = '/api/library-file/' + encodeURIComponent(file.key);
+            img.src = '/api/library-file/' + encodeURIComponent(file.key) + '?v=' + encodeURIComponent(file.version || file.size || '');
             img.alt = '';
             img.loading = 'lazy';
             img.style.cssText = 'width:100%;aspect-ratio:1;object-fit:contain;border-radius:8px;border:1px solid #e5e7eb;background:#f9fafb';
@@ -1113,8 +1163,37 @@ function renderAdminDetail(product, files, detailPanel, groups, renderFolders) {
         const delBtn = document.createElement('button');
         delBtn.textContent = '×';
         delBtn.style.cssText = 'position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.5);color:#fff;border:none;border-radius:50%;width:18px;height:18px;cursor:pointer;font-size:12px;line-height:1;padding:0';
-        delBtn.onclick = () => deleteLibFile(file.key, wrap);
+        delBtn.onclick = async event => {
+            event.stopPropagation();
+            const deleted = await deleteLibFile(file.key, wrap);
+            if (deleted && isCutoutImg) {
+                cutoutSelection.delete(file.key);
+                cutoutControls.delete(file.key);
+                updateCutoutSelection();
+            }
+        };
         wrap.appendChild(delBtn);
+
+        if (isCutoutImg) {
+            const selectLabel = document.createElement('label');
+            selectLabel.style.cssText = 'position:absolute;top:4px;left:4px;z-index:3;display:inline-flex;align-items:center;gap:4px;padding:3px 6px;border:1px solid #d1fae5;border-radius:6px;background:rgba(255,255,255,.94);color:#047857;font-size:.7rem;font-weight:700;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.08)';
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.setAttribute('aria-label', `选择 ${file.name} 去除背景`);
+            checkbox.style.cssText = 'width:14px;height:14px;margin:0;accent-color:#10b981;cursor:pointer';
+            const selectText = document.createElement('span');
+            selectText.textContent = '选择';
+            selectLabel.append(checkbox, selectText);
+            selectLabel.onclick = event => event.stopPropagation();
+            checkbox.onchange = () => setCutoutSelected(file, checkbox.checked);
+            wrap.appendChild(selectLabel);
+            wrap.style.cursor = 'pointer';
+            wrap.onclick = event => {
+                if (event.target.closest('button, label')) return;
+                if (!checkbox.disabled) setCutoutSelected(file, !checkbox.checked);
+            };
+            cutoutControls.set(file.key, { checkbox, wrap });
+        }
 
         const nameEl = document.createElement('div');
         nameEl.className = 'lib-upload-name';
@@ -1126,33 +1205,18 @@ function renderAdminDetail(product, files, detailPanel, groups, renderFolders) {
     detailPanel.appendChild(grid);
 }
 
-function readStudioSubmitter() {
-    const values = [];
-    try { values.push(sessionStorage.getItem('dt_user')); } catch {}
-    try { values.push(localStorage.getItem('dt_user')); } catch {}
-    for (const value of values) {
-        if (!value) continue;
-        try {
-            const user = JSON.parse(value);
-            if (user?.unionId) return user;
-        } catch {}
-    }
-    return null;
-}
-
 async function submitLibraryCutoutTasks({ product, category, files, button, status }) {
     if (button.dataset.loading === '1') return;
-    const submitter = readStudioSubmitter();
 
     const batch = files.slice(0, 20);
     if (!batch.length) return;
     const extraCount = files.length - batch.length;
-    const confirmText = `确认将「${product}」中的 ${batch.length} 张图片提交白底抠图？${extraCount > 0 ? `\n本次最多处理 20 张，另有 ${extraCount} 张不会提交。` : ''}`;
+    const confirmText = `确认将「${product}」中选定的 ${batch.length} 张图片静默提交白底抠图？\n完成后将自动替换资料库原图。${extraCount > 0 ? `\n本次最多处理 20 张，另有 ${extraCount} 张不会提交。` : ''}`;
     if (!confirm(confirmText)) return;
 
     const originalText = button.textContent;
     const failures = [];
-    let submitted = 0;
+    const submittedFiles = [];
     button.dataset.loading = '1';
     button.disabled = true;
     status.style.color = '#6b7280';
@@ -1167,7 +1231,6 @@ async function submitLibraryCutoutTasks({ product, category, files, button, stat
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        submitter,
                         productName: product,
                         category,
                         files: [{ key: file.key, name: file.name }]
@@ -1175,7 +1238,7 @@ async function submitLibraryCutoutTasks({ product, category, files, button, stat
                 });
                 const result = await response.json().catch(() => ({}));
                 if (!response.ok || !result.ok) throw new Error(result.error || `提交失败 (${response.status})`);
-                submitted += 1;
+                submittedFiles.push(file);
             } catch (error) {
                 failures.push({ file, error: error.message || String(error) });
             }
@@ -1186,29 +1249,19 @@ async function submitLibraryCutoutTasks({ product, category, files, button, stat
     }
 
     if (!failures.length) {
-        button.textContent = `已提交 ${submitted} 张`;
-        button.style.opacity = '.7';
-        status.textContent = '已发送白底抠图，完成后会通过钉钉通知';
+        status.textContent = `已静默提交 ${submittedFiles.length} 张，完成后自动替换原图`;
         status.style.color = '#047857';
-        return;
+        return { submittedFiles, failures };
     }
 
-    status.textContent = `成功 ${submitted} 张，失败 ${failures.length} 张：${failures[0].file.name}（${failures[0].error}）`;
+    status.textContent = `成功 ${submittedFiles.length} 张，失败 ${failures.length} 张：${failures[0].file.name}（${failures[0].error}）`;
     status.style.color = '#b91c1c';
-    button.disabled = false;
-    button.textContent = `重试失败的 ${failures.length} 张`;
-    button.onclick = () => submitLibraryCutoutTasks({
-        product,
-        category,
-        files: failures.map(item => item.file),
-        button,
-        status
-    });
+    return { submittedFiles, failures };
 }
 
 
 async function deleteLibFile(key, el) {
-    if (!confirm('确认删除此文件？')) return;
+    if (!confirm('确认删除此文件？')) return false;
     try {
         const res = await fetch('/api/library-upload', {
             method: 'DELETE',
@@ -1216,9 +1269,13 @@ async function deleteLibFile(key, el) {
             body: JSON.stringify({ key })
         });
         const json = await res.json();
-        if (res.ok && json.ok) { el.remove(); }
-        else alert('删除失败：' + (json.error || res.status));
-    } catch (e) { alert('网络错误：' + e.message); }
+        if (res.ok && json.ok) { el.remove(); return true; }
+        alert('删除失败：' + (json.error || res.status));
+        return false;
+    } catch (e) {
+        alert('网络错误：' + e.message);
+        return false;
+    }
 }
 
 function doLibUploadToProduct(product, category, btn) {

@@ -26,7 +26,12 @@ export async function onRequestGet(context) {
 
             if (!categories[category]) categories[category] = {};
             if (!categories[category][product]) categories[category][product] = [];
-            categories[category][product].push({ key: obj.key, name: fileName, size: obj.size });
+            categories[category][product].push({
+                key: obj.key,
+                name: fileName,
+                size: obj.size,
+                version: obj.etag || (obj.uploaded ? new Date(obj.uploaded).getTime() : obj.size)
+            });
         }
 
         for (const cat of Object.values(categories)) {

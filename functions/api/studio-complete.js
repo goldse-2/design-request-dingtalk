@@ -1,4 +1,5 @@
 import { markStudioNotificationSent, sendStudioResultImages } from '../_shared/studio-dingtalk.js';
+import { completeSilentLibraryReplacement, isSilentLibraryReplacement, replaceLibraryImage } from '../_shared/studio-library-replacement.js';
 import { studioTaskPutOptions } from '../_shared/studio-task-storage.js';
 
 export async function onRequestPost(context) {
@@ -30,29 +31,36 @@ export async function onRequestPost(context) {
             task.rejectReason = message || '';
             task.rejectedAt = new Date().toISOString();
         } else {
-            const resultKeys = [];
-            if (resultImages && resultImages.length) {
-                for (let i = 0; i < resultImages.length; i++) {
-                    const img = resultImages[i];
-                    if (!img.base64) continue;
-                    const ext = (img.name || 'result.png').split('.').pop();
-                    const key = `studio/${taskId}/result-${i}.${ext}`;
-                    const bytes = base64ToBytes(img.base64);
-                    await env.SUBMISSION_FILES.put(key, bytes, {
-                        httpMetadata: { contentType: img.mimeType || 'image/png' }
-                    });
-                    resultKeys.push({ key, name: img.name || `result-${i}.${ext}` });
+            if (isSilentLibraryReplacement(task)) {
+                const image = Array.isArray(resultImages) ? resultImages.find(item => item?.base64) : null;
+                if (!image) return Response.json({ ok: false, error: 'No images received' }, { status: 400 });
+                const stored = await replaceLibraryImage(env, task, base64ToBytes(image.base64));
+                completeSilentLibraryReplacement(task, stored);
+            } else {
+                const resultKeys = [];
+                if (resultImages && resultImages.length) {
+                    for (let i = 0; i < resultImages.length; i++) {
+                        const img = resultImages[i];
+                        if (!img.base64) continue;
+                        const ext = (img.name || 'result.png').split('.').pop();
+                        const key = `studio/${taskId}/result-${i}.${ext}`;
+                        const bytes = base64ToBytes(img.base64);
+                        await env.SUBMISSION_FILES.put(key, bytes, {
+                            httpMetadata: { contentType: img.mimeType || 'image/png' }
+                        });
+                        resultKeys.push({ key, name: img.name || `result-${i}.${ext}` });
+                    }
                 }
+                task.resultKeys = resultKeys;
+                task.status = 'done';
+                task.completedAt = new Date().toISOString();
             }
-            task.resultKeys = resultKeys;
-            task.status = 'done';
-            task.completedAt = new Date().toISOString();
             if (message) task.completeNote = message;
         }
 
         await env.SUBMISSIONS.put(taskId, JSON.stringify(task), studioTaskPutOptions(task));
 
-        if (task.submitter?.unionId && env.DINGTALK_APPKEY && env.DINGTALK_APPSECRET) {
+        if (!task.silent && task.submitter?.unionId && env.DINGTALK_APPKEY && env.DINGTALK_APPSECRET) {
             const origin = new URL(request.url).origin;
             const p = notifyUser(env, task, action, message, origin)
                 .then(() => {

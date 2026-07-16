@@ -1,7 +1,8 @@
 import { studioTaskPutOptions } from '../_shared/studio-task-storage.js';
+import { normalizeLibraryReplacement } from '../_shared/studio-library-replacement.js';
 
 export async function onRequestPost(context) {
-    const { request, env, waitUntil } = context;
+    const { request, env, waitUntil, internalTaskOptions } = context;
 
     let body;
     try { body = await request.json(); }
@@ -33,6 +34,8 @@ export async function onRequestPost(context) {
     const taskId = 'studio-' + crypto.randomUUID();
     const timestamp = Date.now();
 
+    const silent = internalTaskOptions?.silent === true;
+    const libraryReplacement = normalizeLibraryReplacement(internalTaskOptions?.libraryReplacement);
     const task = {
         id: taskId,
         kind: 'studio',
@@ -61,6 +64,10 @@ export async function onRequestPost(context) {
         refKeys: refKeys || [],
         modelKeys: modelKeys || [],
         resultKeys: [],
+        silent,
+        libraryReplacement,
+        dingtalkNotified: silent,
+        r2AutoNotified: silent,
         status: 'pending',
         timestamp,
         createdAt: new Date(timestamp).toISOString()
@@ -118,7 +125,7 @@ export async function onRequestPost(context) {
     }
 
     // 发送钉钉通知给提交人（显示排队情况）
-    if (env.DINGTALK_APPKEY && env.DINGTALK_APPSECRET && submitter.unionId) {
+    if (!task.silent && env.DINGTALK_APPKEY && env.DINGTALK_APPSECRET && submitter.unionId) {
         const origin = new URL(request.url).origin;
         const p2 = (async () => {
             const token = await getAccessToken(env).catch(() => null);

@@ -1,4 +1,5 @@
 import { markStudioNotificationFailed, markStudioNotificationSent, sendStudioResultImages } from '../_shared/studio-dingtalk.js';
+import { completeSilentLibraryReplacement, isSilentLibraryReplacement, replaceLibraryImage } from '../_shared/studio-library-replacement.js';
 import { studioTaskPutOptions } from '../_shared/studio-task-storage.js';
 
 export async function onRequestPut(context) {
@@ -75,45 +76,65 @@ export async function onRequestPost(context) {
         preparedFiles.push({ file, bytes });
     }
 
-    const uploaded = [];
-    const baseName = resultBaseName(task);
-    for (let i = 0; i < preparedFiles.length; i++) {
-        const { file, bytes } = preparedFiles[i];
-        const ext = task.mode === 'cutout' ? outputFormat : resultExtension(file);
-        const suffix = preparedFiles.length > 1 ? `-${i + 1}` : '';
-        const name = `${baseName}${suffix}.${ext}`;
-        const key = `studio-results/${taskId}/upload-${uploadId}-${i + 1}-${name}`;
-        try {
-            await putResultWithRetry(env.SUBMISSION_FILES, key, bytes, {
-                httpMetadata: { contentType: task.mode === 'cutout' ? (outputFormat === 'jpg' ? 'image/jpeg' : 'image/png') : (file.type || guessContentType(name)) }
-            });
-        } catch (error) {
-            console.error('Studio result R2 upload failed:', taskId, error.message);
-            return Response.json({
-                ok: false,
-                error: 'Failed to fetch'
-            }, { status: 503 });
-        }
-        uploaded.push({ key, name });
+    const libraryReplacement = isSilentLibraryReplacement(task);
+    if (libraryReplacement && preparedFiles.length !== 1) {
+        return Response.json({ ok: false, error: '资料库替换任务只能上传一张成品图' }, { status: 400 });
     }
 
-    task.resultKeys = mergeUploadedResults(task.resultKeys, uploaded);
+    const uploaded = [];
+    if (libraryReplacement) {
+        try {
+            uploaded.push(await replaceLibraryImage(env, task, preparedFiles[0].bytes));
+        } catch (error) {
+            console.error('Library replacement R2 upload failed:', taskId, error.message);
+            return Response.json({ ok: false, error: 'Failed to fetch' }, { status: 503 });
+        }
+    } else {
+        const baseName = resultBaseName(task);
+        for (let i = 0; i < preparedFiles.length; i++) {
+            const { file, bytes } = preparedFiles[i];
+            const ext = task.mode === 'cutout' ? outputFormat : resultExtension(file);
+            const suffix = preparedFiles.length > 1 ? `-${i + 1}` : '';
+            const name = `${baseName}${suffix}.${ext}`;
+            const key = `studio-results/${taskId}/upload-${uploadId}-${i + 1}-${name}`;
+            try {
+                await putResultWithRetry(env.SUBMISSION_FILES, key, bytes, {
+                    httpMetadata: { contentType: task.mode === 'cutout' ? (outputFormat === 'jpg' ? 'image/jpeg' : 'image/png') : (file.type || guessContentType(name)) }
+                });
+            } catch (error) {
+                console.error('Studio result R2 upload failed:', taskId, error.message);
+                return Response.json({
+                    ok: false,
+                    error: 'Failed to fetch'
+                }, { status: 503 });
+            }
+            uploaded.push({ key, name });
+        }
+    }
+
+    task.resultKeys = libraryReplacement ? uploaded : mergeUploadedResults(task.resultKeys, uploaded);
     task.resultUploadBatches = [
         ...(Array.isArray(task.resultUploadBatches) ? task.resultUploadBatches : []),
         { id: uploadId, uploaded, completedAt: new Date().toISOString() }
     ].slice(-30);
-    task.status = 'done';
-    task.completedAt = new Date().toISOString();
-    task.completeNote = task.completeNote || '成品图已上传';
-    task.dingtalkNotified = false;
-    task.r2AutoNotified = false;
+    if (libraryReplacement) {
+        completeSilentLibraryReplacement(task, uploaded[0]);
+    } else {
+        task.status = 'done';
+        task.completedAt = new Date().toISOString();
+        task.completeNote = task.completeNote || '成品图已上传';
+        task.dingtalkNotified = false;
+        task.r2AutoNotified = false;
+    }
     const canNotify = Boolean(task.submitter?.unionId && env.DINGTALK_APPKEY && env.DINGTALK_APPSECRET);
-    task.dingtalkNotificationState = canNotify ? 'sending' : 'pending';
-    task.dingtalkNotificationStartedAt = canNotify ? new Date().toISOString() : '';
+    if (!libraryReplacement) {
+        task.dingtalkNotificationState = canNotify ? 'sending' : 'pending';
+        task.dingtalkNotificationStartedAt = canNotify ? new Date().toISOString() : '';
+    }
 
     await env.SUBMISSIONS.put(taskId, JSON.stringify(task), studioTaskPutOptions(task));
 
-    if (canNotify) {
+    if (!libraryReplacement && canNotify) {
         const notify = notifyUserDone(env, task, new URL(request.url).origin)
             .then(() => markStudioNotificationSent(env, taskId))
             .catch(async error => {
@@ -127,7 +148,7 @@ export async function onRequestPost(context) {
             });
         if (waitUntil) waitUntil(notify);
         else await notify;
-    } else if (task.submitter?.unionId) {
+    } else if (!libraryReplacement && task.submitter?.unionId) {
         await appendQueue(env.SUBMISSIONS, 'studio:processingQueue:v2', taskId).catch(error => {
             console.error('Queue result notification retry failed:', taskId, error.message);
         });

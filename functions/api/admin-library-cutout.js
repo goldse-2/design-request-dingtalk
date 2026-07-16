@@ -1,7 +1,7 @@
 import { onRequestPost as submitStudioRequest } from './studio-submit.js';
 
 export async function onRequestPost(context) {
-    const { request, env } = context;
+    const { request } = context;
     let body;
     try { body = await request.json(); }
     catch { return Response.json({ ok: false, error: '请求格式错误' }, { status: 400 }); }
@@ -13,24 +13,16 @@ export async function onRequestPost(context) {
         return Response.json({ ok: false, error: '缺少产品名称或图片' }, { status: 400 });
     }
 
-    const submitter = validSubmitter(body.submitter)
-        ? body.submitter
-        : env.ADMIN_UNION_ID
-            ? { name: '资料库管理员', unionId: env.ADMIN_UNION_ID }
-            : null;
-    if (!submitter) {
-        return Response.json({ ok: false, error: '请先在图片制作页面登录一次，再返回管理台操作' }, { status: 400 });
-    }
-
     const tasks = [];
     const failures = [];
     for (const file of files) {
+        const libraryReplacement = buildLibraryReplacement(file);
         const studioRequest = new Request(new URL('/api/studio-submit', request.url), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 mode: 'cutout',
-                submitter,
+                submitter: { name: '资料库管理员' },
                 category: '资料库自动去除背景',
                 note: `资料库：${category || '未分类'}/${productName}`,
                 productName,
@@ -38,11 +30,15 @@ export async function onRequestPost(context) {
                 productKeys: [],
                 refKeys: [{ key: file.key, name: file.name }],
                 modelKeys: [],
-                cutoutOutputFormat: 'png'
+                cutoutOutputFormat: libraryReplacement.contentType === 'image/jpeg' ? 'jpg' : 'png'
             })
         });
         try {
-            const response = await submitStudioRequest({ ...context, request: studioRequest });
+            const response = await submitStudioRequest({
+                ...context,
+                request: studioRequest,
+                internalTaskOptions: { silent: true, libraryReplacement }
+            });
             const result = await response.json().catch(() => ({}));
             if (!response.ok || !result.ok) throw new Error(result.error || `提交失败 (${response.status})`);
             tasks.push({ file: file.name, id: result.id, autoSent: result.autoSent === true });
@@ -65,6 +61,17 @@ function validLibraryImage(file) {
         && /\.(png|jpe?g|webp)$/i.test(file.name);
 }
 
-function validSubmitter(submitter) {
-    return submitter && typeof submitter === 'object' && typeof submitter.unionId === 'string' && submitter.unionId.trim();
+function buildLibraryReplacement(file) {
+    const isJpeg = /\.jpe?g$/i.test(file.name);
+    const isWebp = /\.webp$/i.test(file.name);
+    const targetName = isWebp ? file.name.replace(/\.webp$/i, '-去背景.png') : file.name;
+    const targetKey = isWebp
+        ? file.key.replace(/[^/]+$/, encodeURIComponent(targetName))
+        : file.key;
+    return {
+        sourceKey: file.key,
+        targetKey,
+        targetName,
+        contentType: isJpeg ? 'image/jpeg' : 'image/png'
+    };
 }
