@@ -1,4 +1,4 @@
-import { markStudioNotificationSent, sendStudioResultImages } from '../_shared/studio-dingtalk.js';
+import { markStudioNotificationFailed, markStudioNotificationSent, sendStudioResultImages } from '../_shared/studio-dingtalk.js';
 import { studioTaskPutOptions } from '../_shared/studio-task-storage.js';
 
 export async function onRequestPut(context) {
@@ -56,9 +56,6 @@ export async function onRequestPost(context) {
         ? task.resultUploadBatches.find(batch => batch?.id === uploadId)
         : null;
     if (previousBatch) {
-        await appendQueue(env.SUBMISSIONS, 'studio:processingQueue:v2', taskId).catch(error => {
-            console.error('Queue duplicate result notification retry failed:', taskId, error.message);
-        });
         return Response.json({ ok: true, taskId, uploaded: previousBatch.uploaded || [], duplicate: true });
     }
 
@@ -110,18 +107,30 @@ export async function onRequestPost(context) {
     task.completeNote = task.completeNote || '成品图已上传';
     task.dingtalkNotified = false;
     task.r2AutoNotified = false;
+    const canNotify = Boolean(task.submitter?.unionId && env.DINGTALK_APPKEY && env.DINGTALK_APPSECRET);
+    task.dingtalkNotificationState = canNotify ? 'sending' : 'pending';
+    task.dingtalkNotificationStartedAt = canNotify ? new Date().toISOString() : '';
 
     await env.SUBMISSIONS.put(taskId, JSON.stringify(task), studioTaskPutOptions(task));
-    await appendQueue(env.SUBMISSIONS, 'studio:processingQueue:v2', taskId).catch(error => {
-        console.error('Queue result notification retry failed:', taskId, error.message);
-    });
 
-    if (task.submitter?.unionId && env.DINGTALK_APPKEY && env.DINGTALK_APPSECRET) {
+    if (canNotify) {
         const notify = notifyUserDone(env, task, new URL(request.url).origin)
             .then(() => markStudioNotificationSent(env, taskId))
-            .catch(e => console.error('Notify failed:', e.message));
+            .catch(async error => {
+                console.error('Notify failed:', error.message);
+                await markStudioNotificationFailed(env, taskId, error).catch(markError => {
+                    console.error('Mark notification failure failed:', taskId, markError.message);
+                });
+                await appendQueue(env.SUBMISSIONS, 'studio:processingQueue:v2', taskId).catch(queueError => {
+                    console.error('Queue result notification retry failed:', taskId, queueError.message);
+                });
+            });
         if (waitUntil) waitUntil(notify);
         else await notify;
+    } else if (task.submitter?.unionId) {
+        await appendQueue(env.SUBMISSIONS, 'studio:processingQueue:v2', taskId).catch(error => {
+            console.error('Queue result notification retry failed:', taskId, error.message);
+        });
     }
 
     return Response.json({ ok: true, taskId, uploaded });

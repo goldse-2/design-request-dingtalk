@@ -34,6 +34,8 @@ export function studioTaskMetadata(task) {
         overdueNotified: Boolean(task.overdueNotified),
         dingtalkNotified: Boolean(task.dingtalkNotified),
         r2AutoNotified: Boolean(task.r2AutoNotified),
+        dingtalkNotificationState: task.dingtalkNotificationState || '',
+        dingtalkNotificationStartedAt: task.dingtalkNotificationStartedAt || '',
         completedAt: task.completedAt || task.rejectedAt || ''
     };
 }

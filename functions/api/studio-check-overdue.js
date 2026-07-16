@@ -1,5 +1,5 @@
 import { taskNeedsRpaTranslation, translateForRpa } from '../_shared/ai-translate.js';
-import { markStudioNotificationSent, sendStudioResultImages } from '../_shared/studio-dingtalk.js';
+import { markStudioNotificationFailed, markStudioNotificationSent, sendStudioResultImages, studioNotificationLeaseActive } from '../_shared/studio-dingtalk.js';
 import { recolorImage } from '../_shared/variant-recolor-core.js';
 import { editImageWithPrompt } from '../_shared/image-edit-core.js';
 import { studioTaskPutOptions } from '../_shared/studio-task-storage.js';
@@ -172,12 +172,22 @@ export async function onRequestGet(context) {
         for (const task of tasks) {
             if (!task) continue;
             if (task.status === 'done' && !task.dingtalkNotified && !task.r2AutoNotified) {
+                if (studioNotificationLeaseActive(task, now)) {
+                    nextProcessingQueue.push(task.id);
+                    continue;
+                }
                 if (task.submitter?.unionId && env.DINGTALK_APPKEY && env.DINGTALK_APPSECRET) {
+                    task.dingtalkNotificationState = 'sending';
+                    task.dingtalkNotificationStartedAt = new Date().toISOString();
+                    await env.SUBMISSIONS.put(task.id, JSON.stringify(task), studioTaskPutOptions(task));
                     try {
                         await notifyUserDone(env, task, new URL(request.url).origin);
                         await markStudioNotificationSent(env, task.id);
                     } catch (error) {
                         console.error('Retry result notification failed:', task.id, error.message);
+                        await markStudioNotificationFailed(env, task.id, error).catch(markError => {
+                            console.error('Mark retry notification failure failed:', task.id, markError.message);
+                        });
                         nextProcessingQueue.push(task.id);
                     }
                 }

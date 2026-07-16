@@ -18,7 +18,7 @@ export async function sendStudioResultImages(env, accessToken, staffId, task, or
         const position = `${index + 1}/${resultKeys.length}`;
         const imageMarkdown = `**${fileName}**\n\n![${fileName}](${imageUrl})\n\n[按原文件名下载](${downloadUrl})`;
         try {
-            await sendDingTalkMessageWithRetry(accessToken, {
+            await sendDingTalkMessage(accessToken, {
                 robotCode: env.DINGTALK_APPKEY,
                 userIds: [staffId],
                 msgKey: 'sampleMarkdown',
@@ -49,31 +49,18 @@ export async function sendStudioResultImages(env, accessToken, staffId, task, or
     };
 }
 
-async function sendDingTalkMessageWithRetry(accessToken, body) {
-    let lastError;
-    for (let attempt = 1; attempt <= 2; attempt++) {
-        try {
-            const response = await fetch('https://api.dingtalk.com/v1.0/robot/oToMessages/batchSend', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-acs-dingtalk-access-token': accessToken
-                },
-                body: JSON.stringify(body)
-            });
-            if (response.ok) return;
-            const detail = await response.text().catch(() => '');
-            const error = new Error(`HTTP ${response.status} ${detail}`.trim());
-            error.status = response.status;
-            throw error;
-        } catch (error) {
-            lastError = error;
-            const retryable = !error.status || error.status === 429 || error.status >= 500;
-            if (!retryable || attempt === 2) break;
-            await new Promise(resolve => setTimeout(resolve, 500));
-        }
-    }
-    throw lastError || new Error('DingTalk message failed');
+async function sendDingTalkMessage(accessToken, body) {
+    const response = await fetch('https://api.dingtalk.com/v1.0/robot/oToMessages/batchSend', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'x-acs-dingtalk-access-token': accessToken
+        },
+        body: JSON.stringify(body)
+    });
+    if (response.ok) return;
+    const detail = await response.text().catch(() => '');
+    throw new Error(`HTTP ${response.status} ${detail}`.trim());
 }
 
 function safeDisplayName(name) {
@@ -81,16 +68,50 @@ function safeDisplayName(name) {
 }
 
 export async function markStudioNotificationSent(env, taskId, field = 'dingtalkNotified') {
-    const raw = await env.SUBMISSIONS.get(taskId);
-    if (!raw) throw new Error('Studio task not found while marking notification');
+    return updateStudioNotificationWithRetry(env, taskId, latestTask => {
+        const notifiedAt = new Date().toISOString();
+        latestTask[field] = true;
+        latestTask[field === 'r2AutoNotified' ? 'r2AutoNotifiedAt' : 'dingtalkNotifiedAt'] = notifiedAt;
+        latestTask.dingtalkNotificationState = 'sent';
+        latestTask.dingtalkNotificationStartedAt = '';
+        return latestTask;
+    }, 'Studio task not found while marking notification');
+}
 
-    const latestTask = JSON.parse(raw);
-    const notifiedAt = new Date().toISOString();
-    latestTask[field] = true;
-    latestTask[field === 'r2AutoNotified' ? 'r2AutoNotifiedAt' : 'dingtalkNotifiedAt'] = notifiedAt;
+export async function markStudioNotificationFailed(env, taskId, cause) {
+    return updateStudioNotificationWithRetry(env, taskId, latestTask => {
+        if (latestTask.dingtalkNotified || latestTask.r2AutoNotified) return null;
+        latestTask.dingtalkNotificationState = 'pending';
+        latestTask.dingtalkNotificationStartedAt = '';
+        latestTask.dingtalkNotificationLastError = String(cause?.message || cause || '').slice(0, 300);
+        latestTask.dingtalkNotificationLastAttemptAt = new Date().toISOString();
+        return latestTask;
+    }, 'Studio task not found while marking notification failure');
+}
 
-    await env.SUBMISSIONS.put(taskId, JSON.stringify(latestTask), studioTaskPutOptions(latestTask));
-    return latestTask;
+export function studioNotificationLeaseActive(task, now = Date.now()) {
+    if (task?.dingtalkNotificationState !== 'sending') return false;
+    const startedAt = Date.parse(task.dingtalkNotificationStartedAt || '');
+    return Number.isFinite(startedAt) && now - startedAt < 5 * 60 * 1000;
+}
+
+async function updateStudioNotificationWithRetry(env, taskId, update, notFoundMessage) {
+    let lastError;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+            const raw = await env.SUBMISSIONS.get(taskId);
+            if (!raw) throw new Error(notFoundMessage);
+            const latestTask = JSON.parse(raw);
+            const updatedTask = update(latestTask);
+            if (!updatedTask) return latestTask;
+            await env.SUBMISSIONS.put(taskId, JSON.stringify(updatedTask), studioTaskPutOptions(updatedTask));
+            return updatedTask;
+        } catch (error) {
+            lastError = error;
+            if (attempt < 3) await new Promise(resolve => setTimeout(resolve, attempt * 150));
+        }
+    }
+    throw lastError || new Error('Failed to update studio notification state');
 }
 
 function encodeKeyToken(key) {
