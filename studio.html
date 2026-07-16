@@ -48,9 +48,8 @@
         .a-plus-double-help { position: absolute; z-index: 30; top: calc(100% + 7px); right: 0; width: min(330px, calc(100vw - 48px)); padding: 10px 12px; border: 1px solid #dbe2ea; border-radius: 7px; background: #111827; color: #fff; box-shadow: 0 10px 24px rgba(15,23,42,.18); font-size: .75rem; line-height: 1.65; visibility: hidden; opacity: 0; transform: translateY(-3px); transition: opacity .12s, transform .12s, visibility .12s; }
         .a-plus-double-info:hover + .a-plus-double-help, .a-plus-double-info:focus-visible + .a-plus-double-help, .a-plus-double-help.is-open { visibility: visible; opacity: 1; transform: translateY(0); }
         .a-plus-double-ready { margin-top: 7px; padding: 7px 9px; border-left: 3px solid #10b981; border-radius: 0 6px 6px 0; background: #ecfdf5; color: #047857; font-size: .73rem; font-weight: 700; line-height: 1.5; }
-        .a-plus-control-disabled > .sf-label, #progRefSection.a-plus-control-disabled > .sf-upload-row { opacity: .42; }
-        #progRefSection.a-plus-control-disabled > .sf-upload-row { pointer-events: none; filter: grayscale(1); }
-        #freeFileNameSection.a-plus-control-disabled .sf-input { background: #f3f4f6; color: #9ca3af; cursor: not-allowed; }
+        #progRefSection.a-plus-source-hidden > .sf-label,
+        #progRefSection.a-plus-source-hidden > .sf-upload-row { display: none; }
         .size-visual-picker.is-a-plus-locked { border-color: #d1d5db; background: #f3f4f6; }
         .size-visual-picker.is-a-plus-locked > :not(.a-plus-size-lock) { opacity: .38; filter: grayscale(1); }
         .size-visual-picker.is-a-plus-locked button { cursor: not-allowed; }
@@ -347,6 +346,6 @@
     帮助中心
 </button>
 
-    <script src="studio.js?v=20260716-aplus-double"></script>
+    <script src="studio.js?v=20260716-aplus-hide-controls"></script>
 </body>
 </html>

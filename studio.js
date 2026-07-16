@@ -785,16 +785,16 @@ function updateAPlusDoubleUi(mode) {
         const nameSection = document.getElementById('freeFileNameSection');
         const nameInput = document.getElementById('freeFileName');
         const sizeSection = document.getElementById('freeSizeSection');
-        nameSection?.classList.toggle('a-plus-control-disabled', active);
-        sizeSection?.classList.toggle('a-plus-control-disabled', active);
+        if (nameSection) nameSection.hidden = active;
+        if (sizeSection) sizeSection.hidden = active;
         if (nameInput) nameInput.disabled = active;
         setAPlusSizeLocked('freeSizeSelect', active);
     } else if (mode === 'program') {
         const refSection = document.getElementById('progRefSection');
         const refInput = document.getElementById('progRefInput');
         const sizeSection = document.getElementById('progSizeSection');
-        refSection?.classList.toggle('a-plus-control-disabled', active);
-        sizeSection?.classList.toggle('a-plus-control-disabled', active);
+        refSection?.classList.toggle('a-plus-source-hidden', active);
+        if (sizeSection) sizeSection.hidden = active;
         if (refInput) refInput.disabled = active;
         setAPlusSizeLocked('progSizeSelect', active);
     }
