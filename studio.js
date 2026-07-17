@@ -338,7 +338,6 @@ const FREE_FORM = `
                         <span>AI 美化提示词</span>
                     </button>
                     <span class="prompt-optimize-status" id="optimizePromptStatus"></span>
-                    <span class="prompt-quota" id="optimizeQuota">美化 --/30</span>
                 </div>
                 <div class="prompt-mention-hint">提示：上传图片后，可在提示词中输入 <strong>@</strong> 引用图片，例如 <strong>@参考图1</strong></div>
 ${renderAPlusDoubleLauncher('free')}
@@ -2875,18 +2874,12 @@ async function loadPromptQuota() {
 }
 
 function updatePromptQuota(remaining) {
-    const limit = 30;
-    const quota = document.getElementById('optimizeQuota');
-    if (!quota) return;
     const hasRemaining = remaining !== null && remaining !== undefined && remaining !== '' && Number.isFinite(Number(remaining));
     promptQuotaRemaining.optimize = hasRemaining ? Number(remaining) : null;
-    quota.textContent = hasRemaining
-        ? `美化 ${remaining}/${limit}`
-        : `美化 --/${limit}`;
     const button = document.getElementById('optimizePromptBtn');
-    if (hasRemaining && Number(remaining) <= 0) {
+    if (button && hasRemaining && Number(remaining) <= 0) {
         button.disabled = true;
-        button.title = '今日美化次数已用完，请明天再试';
+        button.title = 'AI 美化暂时不可用，请稍后再试';
     }
 }
 

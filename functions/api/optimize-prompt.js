@@ -62,7 +62,7 @@ export async function onRequestPost({ request, env }) {
     if (!quota.allowed) {
         return Response.json({
             ok: false,
-            error: '今日 AI 使用次数已用完，请明天再试',
+            error: 'AI 功能暂时不可用，请稍后再试',
             action,
             limit: actionLimit,
             remaining: 0

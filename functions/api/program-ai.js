@@ -40,7 +40,7 @@ export async function onRequestPost({ request, env }) {
             });
             const productName = sanitizeProductName(raw);
             if (!productName) throw new Error('AI 没有识别出有效产品名称');
-            return Response.json({ ok: true, productName });
+            return Response.json({ ok: true, productName, remaining: quota.remaining, limit: DAILY_LIMIT });
         }
 
         const productName = cleanText(body.productName, 100) || '图中的产品';
@@ -54,7 +54,7 @@ export async function onRequestPost({ request, env }) {
         });
         const copy = parseProgramCopy(raw);
         if (!copy.title && !copy.subtitle && !copy.otherText) throw new Error('AI 没有返回有效文案');
-        return Response.json({ ok: true, ...copy });
+        return Response.json({ ok: true, ...copy, remaining: quota.remaining, limit: DAILY_LIMIT });
     } catch (error) {
         await restoreDailyQuota(env.SUBMISSIONS, quota);
         console.error('Program AI error', error?.status || '', error?.message || '');
