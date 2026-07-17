@@ -467,6 +467,7 @@ const SHEET_SELF_FORM = `
                 </div>
                 <div class="sheet-self-save" id="sheetSelfSaveStatus">等待编辑</div>
             </div>
+            <div class="sheet-self-table-head" aria-hidden="true"><span>图片</span><span>产品信息</span><span>文案信息</span><span>素材图片</span><span>设置</span></div>
             <div class="sheet-self-grid" id="sheetSelfGrid"></div>
             <div class="sheet-self-actions">
                 <p>开启“由摄影师决定”后，该图片位无需上传白底图；提交后由摄影师补传两张原图，系统自动完成精修、抠图和图生图。</p>
@@ -1392,8 +1393,10 @@ function renderSheetSelfSlot(slot, slotIndex) {
             <div class="sheet-self-slot-title"><span class="sheet-self-slot-number">${slotIndex + 1}</span><span>第 ${slotIndex + 1} 张图片</span></div>
             <span class="sheet-self-fixed-size">1600 × 1600</span>
         </div>
+        <div class="sheet-self-product">
+            <div class="sheet-self-field"><label>产品名称 *</label><input data-sheet-field="productName" data-slot-index="${slotIndex}" maxlength="100" value="${sheetSelfEsc(slot.productName)}" placeholder="例如：S10 电池款"></div>
+        </div>
         <div class="sheet-self-fields">
-            <div class="sheet-self-field full"><label>产品名称 *</label><input data-sheet-field="productName" data-slot-index="${slotIndex}" maxlength="100" value="${sheetSelfEsc(slot.productName)}" placeholder="例如：S10 电池款"></div>
             <div class="sheet-self-field"><label>标题</label><input data-sheet-field="title" data-slot-index="${slotIndex}" maxlength="100" value="${sheetSelfEsc(slot.title)}" placeholder="可选"></div>
             <div class="sheet-self-field"><label>副标题</label><input data-sheet-field="subtitle" data-slot-index="${slotIndex}" maxlength="100" value="${sheetSelfEsc(slot.subtitle)}" placeholder="可选"></div>
             <div class="sheet-self-field full"><label>其他文案</label><textarea data-sheet-field="otherText" data-slot-index="${slotIndex}" maxlength="300" placeholder="可选，多个卖点可用分号分隔">${sheetSelfEsc(slot.otherText)}</textarea></div>
@@ -1405,6 +1408,8 @@ function renderSheetSelfSlot(slot, slotIndex) {
             </div>
             <input type="file" accept="image/*" data-sheet-upload="reference" data-slot-index="${slotIndex}" id="sheetRefInput-${slotIndex}" hidden${uploadDisabled}>
             <input type="file" accept="image/*" data-sheet-upload="product" data-slot-index="${slotIndex}" id="sheetProductInput-${slotIndex}" multiple hidden${uploadDisabled}>
+        </div>
+        <div class="sheet-self-setting">
             <div class="sheet-self-photo-row">
                 <div class="sheet-self-photo-copy"><strong>由摄影师决定</strong><small>开启后，此图片位暂时不需要用户上传两张白底图</small></div>
                 <label class="sheet-self-switch" title="由摄影师提供两张拍摄原图"><input type="checkbox" data-sheet-photographer data-slot-index="${slotIndex}"${slot.photographer ? ' checked' : ''}><span></span></label>
