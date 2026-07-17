@@ -403,15 +403,15 @@ const PROGRAM_FORM = `
                 <div class="program-ai-status" id="progProductAiStatus">上传白底产品图后自动识别</div>
             </div>
             <div class="sf-section">
-                <div class="sf-label">标题 <span class="sf-sub">（可选）</span></div>
+                <div class="sf-label">标题 <span class="sf-sub">（可选，输入中文会自动翻译成英语，英语默认）</span></div>
                 <input class="sf-input" id="progTitle" type="text" maxlength="100" placeholder="例如：高品质蓝牙耳机">
             </div>
             <div class="sf-section">
-                <div class="sf-label">副标题 <span class="sf-sub">（可选）</span></div>
+                <div class="sf-label">副标题 <span class="sf-sub">（可选，输入中文会自动翻译成英语，英语默认）</span></div>
                 <input class="sf-input" id="progSubtitle" type="text" maxlength="100" placeholder="例如：震撼音质，舒适佩戴">
             </div>
             <div class="sf-section">
-                <div class="sf-label">其他文案 <span class="sf-sub">（可选，分号间隔）</span></div>
+                <div class="sf-label">其他文案 <span class="sf-sub">（可选，输入中文会自动翻译成英语，英语默认）</span></div>
                 <textarea class="sf-textarea" id="progOtherText" rows="3" maxlength="300" placeholder="例如：降噪技术；续航持久；蓝牙5.0"></textarea>
             </div>
             <div class="sf-section" id="progRefSection">
