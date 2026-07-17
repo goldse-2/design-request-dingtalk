@@ -1,6 +1,6 @@
 import { generateAiText } from '../_shared/ai-text.js';
 
-const DAILY_LIMIT = 30;
+const DAILY_LIMIT = 80;
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
 export async function onRequestPost({ request, env }) {
@@ -25,7 +25,7 @@ export async function onRequestPost({ request, env }) {
 
     const quota = await consumeDailyQuota(env.SUBMISSIONS, userId);
     if (!quota.allowed) {
-        return Response.json({ ok: false, error: '今日程序模式 AI 使用次数已用完，请明天再试', remaining: 0, limit: DAILY_LIMIT }, { status: 429 });
+        return Response.json({ ok: false, error: 'AI 功能暂时不可用，请稍后再试' }, { status: 429 });
     }
 
     try {
@@ -40,7 +40,7 @@ export async function onRequestPost({ request, env }) {
             });
             const productName = sanitizeProductName(raw);
             if (!productName) throw new Error('AI 没有识别出有效产品名称');
-            return Response.json({ ok: true, productName, remaining: quota.remaining, limit: DAILY_LIMIT });
+            return Response.json({ ok: true, productName });
         }
 
         const productName = cleanText(body.productName, 100) || '图中的产品';
@@ -54,7 +54,7 @@ export async function onRequestPost({ request, env }) {
         });
         const copy = parseProgramCopy(raw);
         if (!copy.title && !copy.subtitle && !copy.otherText) throw new Error('AI 没有返回有效文案');
-        return Response.json({ ok: true, ...copy, remaining: quota.remaining, limit: DAILY_LIMIT });
+        return Response.json({ ok: true, ...copy });
     } catch (error) {
         await restoreDailyQuota(env.SUBMISSIONS, quota);
         console.error('Program AI error', error?.status || '', error?.message || '');
@@ -65,7 +65,7 @@ export async function onRequestPost({ request, env }) {
                 : error?.status
                     ? 'AI 服务请求失败，请检查接口余额或模型权限'
                     : String(error?.message || 'AI 识别失败，请稍后重试').slice(0, 100);
-        return jsonError(message, 503, quota.previousRemaining);
+        return jsonError(message, 503);
     }
 }
 
@@ -193,6 +193,6 @@ function cleanText(value, maxLength) {
     return String(value || '').replace(/[\r\n]+/g, ' ').replace(/\s{2,}/g, ' ').trim().slice(0, maxLength);
 }
 
-function jsonError(error, status, remaining) {
-    return Response.json({ ok: false, error, ...(remaining === undefined ? {} : { remaining }) }, { status });
+function jsonError(error, status) {
+    return Response.json({ ok: false, error }, { status });
 }

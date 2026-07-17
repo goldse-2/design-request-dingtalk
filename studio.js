@@ -1657,7 +1657,7 @@ async function runSheetSelfProductRecognition(force) {
         input.value = data.productName;
         input.dataset.aiGenerated = 'true';
         persistSheetSelfDraft(300);
-        setProgramAiStatus(status, `已识别：${data.productName}（今日剩余 ${data.remaining} 次）`, 'success');
+        setProgramAiStatus(status, `已识别：${data.productName}`, 'success');
     } catch (error) {
         if (requestId === sheetSelfProductAiRequestId) setProgramAiStatus(status, error.message || 'AI 识别失败，请重试', 'error');
     } finally {
@@ -1687,7 +1687,7 @@ async function runSheetSelfCopyGeneration(slotIndex) {
         slot.title = data.title || '';
         slot.subtitle = data.subtitle || '';
         slot.otherText = data.otherText || '';
-        slot.copyAiStatus = `标题和文案已生成（今日剩余 ${data.remaining} 次）`;
+        slot.copyAiStatus = '标题和文案已生成';
         slot.copyAiState = 'success';
         persistSheetSelfDraft(300);
     } catch (error) {
@@ -3274,7 +3274,7 @@ async function runProgramProductRecognition(force) {
         }
         input.value = data.productName;
         input.dataset.aiGenerated = 'true';
-        setProgramAiStatus(status, `已识别：${data.productName}（今日剩余 ${data.remaining} 次）`, 'success');
+        setProgramAiStatus(status, `已识别：${data.productName}`, 'success');
     } catch (error) {
         if (requestId === programProductAiRequestId) setProgramAiStatus(status, error.message || 'AI 识别失败，请重试', 'error');
     } finally {
@@ -3307,7 +3307,7 @@ async function runProgramCopyGeneration() {
         document.getElementById('progTitle').value = data.title || '';
         document.getElementById('progSubtitle').value = data.subtitle || '';
         document.getElementById('progOtherText').value = data.otherText || '';
-        setProgramAiStatus(status, `标题和文案已生成（今日剩余 ${data.remaining} 次）`, 'success');
+        setProgramAiStatus(status, '标题和文案已生成', 'success');
     } catch (error) {
         setProgramAiStatus(status, error.message || 'AI 文案生成失败，请重试', 'error');
     } finally {
