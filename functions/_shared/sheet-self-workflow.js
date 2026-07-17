@@ -100,6 +100,7 @@ export async function advanceSheetSelfWorkflow({ env, task, origin }) {
     const parentRaw = await env.SUBMISSIONS.get(workflow.parentId);
     if (!parentRaw) return { advanced: false, error: 'Parent task not found' };
     const parent = JSON.parse(parentRaw);
+    if (parent.status === 'rejected') return { advanced: false, cancelled: true };
     const slot = await getSheetSelfSlot(env, workflow.parentId, workflow.slotIndex);
     if (!slot) return { advanced: false, error: 'Workflow slot not found' };
 

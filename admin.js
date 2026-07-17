@@ -1582,13 +1582,14 @@ function startCountdownTimer(taskId, createdAt) {
 }
 
 function renderSheetSelfAdminTask(task) {
+    ensureSheetSelfAdminStyles();
     const slots = Array.isArray(task.workflowSlots) ? task.workflowSlots.filter(Boolean) : [];
     const completedCount = slots.filter(slot => slot.stage === 'done' && slot.resultNotified).length;
     const failedCount = slots.filter(slot => slot.stage === 'error' || (slot.stage === 'done' && !slot.resultNotified)).length;
     const time = new Date(task.timestamp).toLocaleString('zh-CN', { timeZone:'Asia/Shanghai', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
     const card = document.createElement('div');
     card.id = 'studio-card-' + task.id;
-    card.style.cssText = 'background:#fff;border-radius:10px;padding:18px 20px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.07);border-left:4px solid #111827';
+    card.style.cssText = 'position:relative;background:#fff;border-radius:10px;padding:18px 48px 18px 20px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.07);border-left:4px solid #111827';
     card.innerHTML = `<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:14px">
         <div>
             <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
@@ -1602,6 +1603,17 @@ function renderSheetSelfAdminTask(task) {
         <span style="color:#9ca3af;font-size:.75rem;white-space:nowrap">${time}</span>
     </div>`;
 
+    const deleteButton = document.createElement('button');
+    deleteButton.type = 'button';
+    deleteButton.title = '删除任务';
+    deleteButton.setAttribute('aria-label', '删除表格自助任务');
+    deleteButton.textContent = '×';
+    deleteButton.style.cssText = 'position:absolute;top:14px;right:14px;width:26px;height:26px;display:grid;place-items:center;border:0;border-radius:5px;background:transparent;color:#cbd5e1;font-size:1.15rem;line-height:1;cursor:pointer';
+    deleteButton.onmouseover = () => { deleteButton.style.color = '#dc2626'; deleteButton.style.background = '#fef2f2'; };
+    deleteButton.onmouseout = () => { deleteButton.style.color = '#cbd5e1'; deleteButton.style.background = 'transparent'; };
+    deleteButton.onclick = () => deleteStudioTask(task.id, card, true);
+    card.appendChild(deleteButton);
+
     const list = document.createElement('div');
     list.style.cssText = 'display:flex;flex-direction:column;border-top:1px solid #eef0f3';
     if (!slots.length) {
@@ -1613,18 +1625,19 @@ function renderSheetSelfAdminTask(task) {
 }
 
 function renderSheetSelfAdminSlot(task, slot) {
-    const statusInfo = sheetSelfAdminStatus(slot);
     const row = document.createElement('div');
-    row.style.cssText = 'display:grid;grid-template-columns:minmax(150px,1fr) minmax(160px,1.5fr) auto;gap:14px;align-items:center;padding:12px 0;border-bottom:1px solid #eef0f3';
+    row.className = 'sheet-self-admin-slot';
+    row.style.cssText = 'display:grid;grid-template-columns:minmax(140px,.8fr) minmax(240px,2fr) auto;gap:18px;align-items:center;padding:14px 0;border-bottom:1px solid #eef0f3';
     const displayNumber = Number(slot.displayIndex ?? slot.index) + 1;
     const referenceUrl = slot.referenceKey?.key ? '/api/library-file/' + encodeURIComponent(slot.referenceKey.key) : '';
-    row.innerHTML = `<div style="display:flex;align-items:center;gap:10px;min-width:0">
+    row.innerHTML = `<div class="sheet-self-admin-product" style="display:flex;align-items:center;gap:10px;min-width:0">
         ${referenceUrl ? `<img src="${referenceUrl}" alt="" style="width:44px;height:44px;object-fit:cover;border:1px solid #e5e7eb;border-radius:6px;background:#f9fafb" loading="lazy">` : ''}
         <div style="min-width:0"><strong style="display:block;color:#111827;font-size:.82rem">第 ${displayNumber} 张</strong><span style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#6b7280;font-size:.72rem">${esc(slot.productName || '未命名产品')}</span></div>
     </div>
-    <div style="min-width:0"><span style="display:inline-block;padding:4px 8px;border-radius:6px;background:${statusInfo.bg};color:${statusInfo.color};font-size:.73rem;font-weight:700">${statusInfo.text}</span>${slot.error || slot.notificationError ? `<div style="margin-top:5px;color:#b91c1c;font-size:.7rem;line-height:1.4;word-break:break-word">${esc(slot.error || slot.notificationError)}</div>` : ''}</div>`;
+    <div class="sheet-self-admin-progress-cell" style="min-width:0">${renderSheetSelfProgress(slot)}${slot.error || slot.notificationError ? `<div style="margin-top:7px;color:#b91c1c;font-size:.7rem;line-height:1.4;word-break:break-word">${esc(slot.error || slot.notificationError)}</div>` : ''}</div>`;
 
     const actions = document.createElement('div');
+    actions.className = 'sheet-self-admin-actions';
     actions.style.cssText = 'display:flex;align-items:center;gap:7px;justify-content:flex-end;flex-wrap:wrap';
     if (slot.stage === 'waiting_photos') {
         const uploadButton = document.createElement('button');
@@ -1634,12 +1647,15 @@ function renderSheetSelfAdminSlot(task, slot) {
         uploadButton.onclick = () => uploadSheetSelfPhotos(task.id, slot.index, uploadButton);
         actions.appendChild(uploadButton);
     }
-    if (slot.stage === 'error' || (slot.stage === 'done' && !slot.resultNotified)) {
+    const failed = slot.stage === 'error' || (slot.stage === 'done' && !slot.resultNotified);
+    const canRetry = failed || ['queued', 'retouch', 'cutout', 'program'].includes(slot.stage);
+    if (canRetry) {
         const retryButton = document.createElement('button');
         retryButton.type = 'button';
-        retryButton.textContent = slot.stage === 'done' ? '重发给用户' : '重试当前环节';
+        retryButton.textContent = slot.stage === 'done' ? '重发给用户' : '手动重试';
+        retryButton.title = slot.stage === 'done' ? '重新把成品发送给用户' : '只重新发送当前未完成的处理环节';
         retryButton.style.cssText = 'border:1px solid #f59e0b;border-radius:6px;background:#fff;color:#b45309;padding:7px 11px;font-size:.74rem;font-weight:700;cursor:pointer;white-space:nowrap';
-        retryButton.onclick = () => retrySheetSelfAdminSlot(task.id, slot.index, retryButton);
+        retryButton.onclick = () => retrySheetSelfAdminSlot(task.id, slot.index, retryButton, !failed);
         actions.appendChild(retryButton);
     }
     if (!actions.childNodes.length) {
@@ -1652,18 +1668,70 @@ function renderSheetSelfAdminSlot(task, slot) {
     return row;
 }
 
-function sheetSelfAdminStatus(slot) {
-    if (slot.stage === 'waiting_photos') return { text: '等待你上传拍摄原图', color: '#92400e', bg: '#fffbeb' };
-    if (slot.stage === 'retouch') return { text: '精修中', color: '#1d4ed8', bg: '#eff6ff' };
-    if (slot.stage === 'cutout') return { text: '白底抠图中', color: '#0369a1', bg: '#f0f9ff' };
-    if (slot.stage === 'program' || slot.stage === 'queued') return { text: '图生图中', color: '#6d28d9', bg: '#f5f3ff' };
-    if (slot.stage === 'done' && slot.resultNotified) return { text: '已完成并发给用户', color: '#047857', bg: '#ecfdf5' };
-    if (slot.stage === 'done') return { text: '图片已完成，钉钉发送失败', color: '#b91c1c', bg: '#fef2f2' };
-    if (slot.stage === 'error') {
-        const stage = { retouch: '精修', cutout: '白底抠图', program: '图生图', notify: '钉钉发送' }[slot.failedStage] || '当前环节';
-        return { text: stage + '失败', color: '#b91c1c', bg: '#fef2f2' };
-    }
-    return { text: '准备中', color: '#4b5563', bg: '#f3f4f6' };
+function ensureSheetSelfAdminStyles() {
+    if (document.getElementById('sheetSelfAdminStyles')) return;
+    const style = document.createElement('style');
+    style.id = 'sheetSelfAdminStyles';
+    style.textContent = `
+        @media (max-width: 800px) {
+            .sheet-self-admin-slot { grid-template-columns:minmax(0,1fr) auto !important; gap:12px !important; }
+            .sheet-self-admin-progress-cell { grid-column:1 / -1; grid-row:2; }
+            .sheet-self-admin-actions { grid-column:2; grid-row:1; }
+        }
+        @media (max-width: 520px) {
+            .sheet-self-admin-slot { grid-template-columns:minmax(0,1fr) !important; }
+            .sheet-self-admin-product { grid-column:1; grid-row:1; }
+            .sheet-self-admin-progress-cell { grid-column:1; grid-row:2; }
+            .sheet-self-admin-actions { grid-column:1; grid-row:3; justify-content:flex-start !important; }
+        }
+    `;
+    document.head.appendChild(style);
+}
+
+function renderSheetSelfProgress(slot) {
+    const usesFullWorkflow = slot.photographer === true && slot.processingSkipped !== true;
+    const steps = usesFullWorkflow
+        ? [
+            { key: 'waiting_photos', label: '等待原图' },
+            { key: 'retouch', label: '精修' },
+            { key: 'cutout', label: '白底抠图' },
+            { key: 'program', label: '图生图' },
+            { key: 'done', label: slot.stage === 'done' && slot.resultNotified ? '已发送' : '发给用户' }
+        ]
+        : [
+            { key: 'queued', label: '排队' },
+            { key: 'program', label: '图生图' },
+            { key: 'done', label: slot.stage === 'done' && slot.resultNotified ? '已发送' : '发给用户' }
+        ];
+    const failed = slot.stage === 'error' || (slot.stage === 'done' && !slot.resultNotified);
+    const stageKey = slot.stage === 'error'
+        ? (slot.failedStage === 'notify' ? 'done' : slot.failedStage)
+        : slot.stage;
+    let currentIndex = steps.findIndex(step => step.key === stageKey);
+    if (currentIndex < 0) currentIndex = 0;
+    const progress = steps.length > 1 ? (currentIndex / (steps.length - 1)) * 100 : 100;
+    const fillColor = failed ? '#ef4444' : '#2f9cf4';
+    const labels = steps.map((step, index) => {
+        const active = index === currentIndex;
+        const completed = index < currentIndex || (index === currentIndex && step.key === 'done' && !failed);
+        const color = active && failed ? '#dc2626' : (active || completed ? '#1d4ed8' : '#9ca3af');
+        const weight = active ? 700 : 500;
+        const align = index === 0 ? 'left' : (index === steps.length - 1 ? 'right' : 'center');
+        return `<span style="min-width:0;color:${color};font-size:.68rem;font-weight:${weight};text-align:${align};white-space:nowrap">${step.label}</span>`;
+    }).join('');
+    const markers = steps.map((step, index) => {
+        const left = steps.length > 1 ? (index / (steps.length - 1)) * 100 : 100;
+        const reached = index <= currentIndex;
+        const markerColor = index === currentIndex && failed ? '#ef4444' : (reached ? '#2f9cf4' : '#d1d5db');
+        return `<i style="position:absolute;top:50%;left:${left}%;width:8px;height:8px;border:2px solid #fff;border-radius:50%;background:${markerColor};box-shadow:0 0 0 1px ${markerColor};transform:translate(-50%,-50%)"></i>`;
+    }).join('');
+    return `<div role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(progress)}" style="width:100%;padding:2px 3px">
+        <div style="display:grid;grid-template-columns:repeat(${steps.length},minmax(0,1fr));align-items:end;gap:3px">${labels}</div>
+        <div style="position:relative;height:7px;margin:9px 4px 1px;border-radius:999px;background:#e5e7eb">
+            <div style="position:absolute;inset:0 auto 0 0;width:${progress}%;border-radius:999px;background:${fillColor};transition:width .25s ease"></div>
+            ${markers}
+        </div>
+    </div>`;
 }
 
 function uploadSheetSelfPhotos(parentId, slotIndex, button) {
@@ -1739,7 +1807,8 @@ function uploadSheetSelfPhotos(parentId, slotIndex, button) {
     };
 }
 
-async function retrySheetSelfAdminSlot(parentId, slotIndex, button) {
+async function retrySheetSelfAdminSlot(parentId, slotIndex, button, confirmActive = false) {
+    if (confirmActive && !confirm('确认手动重试当前环节吗？任务仍在运行时重试，可能会重复处理。')) return;
     const original = button.textContent;
     button.disabled = true;
     button.textContent = '重试中...';
@@ -2237,13 +2306,15 @@ async function openManualUpload(taskId, card) {
     };
 }
 
-async function deleteStudioTask(id, card) {
-    
+async function deleteStudioTask(id, card, requireConfirm = false) {
+    if (requireConfirm && !confirm('确认删除这个表格自助任务吗？删除后不会再继续处理。')) return;
     try {
         const res = await fetch('/api/studio-complete', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ taskId: id, action: 'reject', message: '管理员删除' })
         });
+        const result = await res.json().catch(() => ({}));
+        if (!res.ok || !result.ok) throw new Error(result.error || `删除失败 (${res.status})`);
         if (res.ok) {
             if (card) card.remove();
             const cont = document.getElementById('studioAdminContent');
