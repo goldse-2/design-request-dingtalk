@@ -246,7 +246,7 @@
         .sheet-self-field input:focus, .sheet-self-field textarea:focus { border-color:#6366f1; box-shadow:0 0 0 3px rgba(99,102,241,.1); }
         .sheet-self-media { display:flex; flex-direction:column; min-width:0; }
         .sheet-self-images { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; }
-        .sheet-self-images.is-photographer { grid-template-columns:minmax(120px,180px); }
+        .sheet-self-images.is-photographer { grid-template-columns:minmax(120px,180px) minmax(220px,1fr); }
         .sheet-self-a-plus-note { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:7px; color:#047857; font-size:.65rem; line-height:1.4; }
         .sheet-self-a-plus-note button { flex-shrink:0; padding:3px 6px; border:1px solid #a7f3d0; border-radius:5px; background:#ecfdf5; color:#047857; font-size:.63rem; font-weight:800; cursor:pointer; }
         .sheet-self-image-slot { position:relative; min-width:0; height:112px; border:1px dashed #cbd5e1; border-radius:6px; overflow:hidden; background:#f8fafc; }
@@ -261,6 +261,18 @@
         .sheet-self-image-badge { position:absolute; z-index:2; left:4px; bottom:4px; max-width:calc(100% - 8px); padding:2px 5px; border-radius:4px; background:rgba(17,24,39,.78); color:#fff; font-size:.62rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; pointer-events:none; }
         .sheet-self-image-remove { position:absolute; z-index:3; top:4px; right:4px; display:grid; place-items:center; width:23px; height:23px; padding:0; border:0; border-radius:50%; background:rgba(17,24,39,.82); color:#fff; font-size:15px; cursor:pointer; }
         .sheet-self-image-slot.is-loading { opacity:.58; pointer-events:none; }
+        .sheet-self-photography-brief { display:grid; grid-template-columns:minmax(108px,.78fr) minmax(120px,1.22fr); gap:8px; min-width:0; }
+        .sheet-self-photography-example { position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; min-width:0; height:112px; padding:7px; overflow:hidden; border:1px dashed #93c5fd; border-radius:6px; background:#f6faff; color:#1d4ed8; font-size:.62rem; line-height:1.35; text-align:center; cursor:pointer; }
+        .sheet-self-photography-example:hover { border-color:#3b82f6; background:#eff6ff; color:#1e40af; }
+        .sheet-self-photography-example strong { font-size:.66rem; }
+        .sheet-self-photography-example small { color:#64748b; font-size:.58rem; line-height:1.35; }
+        .sheet-self-photography-example.has-image { display:block; padding:0; border-style:solid; background:#f8fafc; }
+        .sheet-self-photography-example img { display:block; width:100%; height:100%; object-fit:cover; }
+        .sheet-self-photography-note { display:flex; flex-direction:column; min-width:0; }
+        .sheet-self-photography-note label { display:flex; align-items:baseline; justify-content:space-between; gap:6px; margin-bottom:5px; color:#4b5563; font-size:.68rem; font-weight:800; }
+        .sheet-self-photography-note label span { color:#9ca3af; font-size:.58rem; font-weight:500; }
+        .sheet-self-photography-note textarea { width:100%; min-height:88px; flex:1; padding:8px; resize:vertical; border:1px solid #d8dde5; border-radius:6px; background:#fbfcfe; color:#111827; font-size:.68rem; line-height:1.4; outline:none; }
+        .sheet-self-photography-note textarea:focus { border-color:#3b82f6; box-shadow:0 0 0 3px rgba(59,130,246,.1); }
         .sheet-image-preview-overlay { position:fixed; inset:0; z-index:14000; display:grid; place-items:center; padding:24px; background:rgba(15,23,42,.78); backdrop-filter:blur(2px); }
         .sheet-image-preview-dialog { display:grid; grid-template-rows:auto minmax(0,1fr); width:min(1120px,94vw); height:min(820px,90vh); overflow:hidden; border-radius:8px; background:#fff; box-shadow:0 24px 70px rgba(0,0,0,.35); }
         .sheet-image-preview-head { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:12px 14px 12px 18px; border-bottom:1px solid #e5e7eb; }
@@ -318,6 +330,8 @@
             .sheet-self-media { grid-column:3; grid-row:1; }
             .sheet-self-setting { grid-column:3; grid-row:2; padding:10px 0 0; border-left:0; border-top:1px solid #edf0f4; }
             .sheet-self-photo-row { flex-direction:row; align-items:center; justify-content:space-between; }
+            .sheet-self-images.is-photographer { grid-template-columns:minmax(88px,.6fr) minmax(160px,1.4fr); }
+            .sheet-self-photography-brief { grid-template-columns:minmax(0,1fr); }
         }
         @media (max-width: 860px) {
             .studio-layout { grid-template-columns: minmax(0, 1fr) !important; gap: 16px !important; }
@@ -349,6 +363,8 @@
             .sheet-self-copy-tools { grid-column:auto; align-items:flex-start; flex-direction:column; }
             .sheet-self-copy-tools .program-ai-btn { width:100%; }
             .sheet-self-image-slot { height:auto; aspect-ratio:1; }
+            .sheet-self-images.is-photographer { grid-template-columns:minmax(0,1fr); }
+            .sheet-self-photography-brief { grid-template-columns:minmax(0,1fr) minmax(0,1fr); }
             .sheet-self-submit { width:100%; }
         }
     </style>
@@ -553,6 +569,6 @@
     帮助中心
 </button>
 
-    <script src="studio.js?v=20260717-clear-retouch-toggle"></script>
+    <script src="studio.js?v=20260717-photography-brief"></script>
 </body>
 </html>

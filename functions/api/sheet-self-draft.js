@@ -70,6 +70,9 @@ function normalizeDraft(value) {
         return {
             index,
             photographer: draftSlotHasContent(slot) ? slot.photographer === true : true,
+            skipRetouch: slot.skipRetouch === true,
+            photographyExampleKey: normalizeFileKey(slot.photographyExampleKey),
+            photographyNote: cleanText(slot.photographyNote, 300),
             size: aPlusDouble ? '1464x1200' : requestedSize,
             aPlusDouble,
             title: cleanText(slot.title, 100),
@@ -80,7 +83,7 @@ function normalizeDraft(value) {
         };
     });
     return {
-        version: 2,
+        version: 4,
         productName: cleanText(value?.productName || legacyProductName, 100),
         visibleSlotCount,
         slots,
@@ -98,9 +101,11 @@ function draftSlotHasContent(slot) {
         || cleanText(slot?.title, 100)
         || cleanText(slot?.subtitle, 100)
         || cleanText(slot?.otherText, 300)
+        || cleanText(slot?.photographyNote, 300)
         || normalizeSize(slot?.size) !== '1600x1600'
         || slot?.aPlusDouble === true
         || slot?.referenceKey?.key
+        || slot?.photographyExampleKey?.key
         || (Array.isArray(slot?.productKeys) && slot.productKeys.some(item => item?.key)));
 }
 
@@ -114,6 +119,7 @@ function collectKeys(draft) {
     const keys = new Set();
     (draft?.slots || []).forEach(slot => {
         if (slot?.referenceKey?.key) keys.add(slot.referenceKey.key);
+        if (slot?.photographyExampleKey?.key) keys.add(slot.photographyExampleKey.key);
         (slot?.productKeys || []).forEach(item => { if (item?.key) keys.add(item.key); });
     });
     return keys;

@@ -91,6 +91,7 @@ function normalizeSlot(value, index) {
     const referenceKey = normalizeFileKey(slot.referenceKey);
     const productKeys = Array.isArray(slot.productKeys) ? slot.productKeys.slice(0, 2).map(normalizeFileKey).filter(Boolean) : [];
     const photographer = slot.photographer === true;
+    const photographyExampleKey = photographer ? normalizeFileKey(slot.photographyExampleKey) : null;
     const requestedSize = normalizeSize(slot.size);
     const aPlusDouble = slot.aPlusDouble === true || requestedSize === '1464x1200';
     const normalized = {
@@ -98,6 +99,8 @@ function normalizeSlot(value, index) {
         displayIndex: Number.isInteger(Number(slot.index)) && Number(slot.index) >= 0 && Number(slot.index) < SHEET_SELF_SLOT_COUNT ? Number(slot.index) : index,
         photographer,
         skipRetouch: slot.skipRetouch === true,
+        photographyExampleKey,
+        photographyNote: photographer ? cleanText(slot.photographyNote, 300) : '',
         size: aPlusDouble ? '1464x1200' : requestedSize,
         aPlusDouble,
         productName: cleanText(slot.productName, 100),

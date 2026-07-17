@@ -2093,14 +2093,23 @@ function renderSheetSelfAdminSlot(task, slot) {
     row.style.cssText = 'display:grid;grid-template-columns:minmax(140px,.8fr) minmax(240px,2fr) auto;gap:18px;align-items:center;padding:14px 0;border-bottom:1px solid #eef0f3';
     const displayNumber = Number(slot.displayIndex ?? slot.index) + 1;
     const referenceUrl = slot.referenceKey?.key ? '/api/library-file/' + encodeURIComponent(slot.referenceKey.key) : '';
+    const photographyExampleUrl = slot.photographyExampleKey?.key ? '/api/library-file/' + encodeURIComponent(slot.photographyExampleKey.key) : '';
+    const photographyBrief = slot.photographer === true
+        ? `<span style="display:block;margin-top:3px;color:${photographyExampleUrl ? '#2563eb' : '#64748b'};font-size:.68rem">${photographyExampleUrl ? '已提供拍摄案例图' : '拍摄案例：按参考图'}</span>${slot.photographyNote ? `<span style="display:block;margin-top:3px;overflow:hidden;color:#4b5563;font-size:.68rem;line-height:1.35;text-overflow:ellipsis" title="${esc(slot.photographyNote)}">备注：${esc(slot.photographyNote)}</span>` : ''}`
+        : '';
     row.innerHTML = `<div class="sheet-self-admin-product" style="display:flex;align-items:center;gap:10px;min-width:0">
-        ${referenceUrl ? `<button type="button" class="sheet-self-admin-preview" data-sheet-reference-preview title="点击放大查看"><img src="${referenceUrl}" alt="第 ${displayNumber} 张参考图" loading="lazy"></button>` : ''}
-        <div style="min-width:0"><strong style="display:block;color:#111827;font-size:.82rem">第 ${displayNumber} 张</strong><span style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#6b7280;font-size:.72rem">${esc(slot.productName || '未命名产品')}</span></div>
+        <div style="display:flex;align-items:center;gap:5px;flex-shrink:0">
+            ${referenceUrl ? `<button type="button" class="sheet-self-admin-preview" data-sheet-reference-preview title="查看参考图"><img src="${referenceUrl}" alt="第 ${displayNumber} 张参考图" loading="lazy"></button>` : ''}
+            ${photographyExampleUrl ? `<button type="button" class="sheet-self-admin-preview is-photography" data-sheet-photography-preview title="查看拍摄案例图"><img src="${photographyExampleUrl}" alt="第 ${displayNumber} 张拍摄案例图" loading="lazy"></button>` : ''}
+        </div>
+        <div style="min-width:0"><strong style="display:block;color:#111827;font-size:.82rem">第 ${displayNumber} 张</strong><span style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#6b7280;font-size:.72rem">${esc(slot.productName || '未命名产品')}</span>${photographyBrief}</div>
     </div>
     <div class="sheet-self-admin-progress-cell" style="min-width:0">${renderSheetSelfProgress(slot)}${slot.error || slot.notificationError ? `<div style="margin-top:7px;color:#b91c1c;font-size:.7rem;line-height:1.4;word-break:break-word">${esc(slot.error || slot.notificationError)}</div>` : ''}</div>`;
 
     const previewButton = row.querySelector('[data-sheet-reference-preview]');
     if (previewButton) previewButton.onclick = () => openAdminImagePreview(referenceUrl, `第 ${displayNumber} 张参考图`);
+    const photographyPreviewButton = row.querySelector('[data-sheet-photography-preview]');
+    if (photographyPreviewButton) photographyPreviewButton.onclick = () => openAdminImagePreview(photographyExampleUrl, `第 ${displayNumber} 张拍摄案例图`);
 
     const actions = document.createElement('div');
     actions.className = 'sheet-self-admin-actions';
@@ -2141,6 +2150,7 @@ function ensureSheetSelfAdminStyles() {
     style.textContent = `
         .sheet-self-admin-preview { width:44px; height:44px; flex:0 0 44px; padding:0; overflow:hidden; border:1px solid #e5e7eb; border-radius:6px; background:#f9fafb; cursor:zoom-in; }
         .sheet-self-admin-preview:hover { border-color:#64748b; box-shadow:0 0 0 2px rgba(100,116,139,.12); }
+        .sheet-self-admin-preview.is-photography { border-color:#93c5fd; }
         .sheet-self-admin-preview:focus-visible { outline:2px solid #2563eb; outline-offset:2px; }
         .sheet-self-admin-preview img { display:block; width:100%; height:100%; object-fit:cover; }
         .admin-image-preview { position:fixed; inset:0; z-index:15000; display:grid; place-items:center; padding:24px; background:rgba(15,23,42,.78); backdrop-filter:blur(2px); }
