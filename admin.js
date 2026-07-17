@@ -193,6 +193,12 @@ function renderShootRequests(requests) {
     const container = document.getElementById('shootAdminContent');
     if (!container) return;
     const list = Array.isArray(requests) ? requests : [];
+    if (!list.length) {
+        container.hidden = true;
+        container.innerHTML = '';
+        return;
+    }
+    container.hidden = false;
     const cards = list.map(submission => {
         const info = submission.data?.basicInfo || {};
         const references = getShootReferenceImages(submission);
@@ -220,7 +226,7 @@ function renderShootRequests(requests) {
     }).join('');
     container.innerHTML = `<section class="shoot-admin-panel">
         <div class="shoot-admin-panel-head"><div class="shoot-admin-panel-title">白底拍摄需求</div><div class="shoot-admin-panel-count">${list.length} 个待处理</div></div>
-        <div class="shoot-admin-list">${cards || '<div class="shoot-admin-empty">暂无待处理的白底拍摄需求</div>'}</div>
+        <div class="shoot-admin-list">${cards}</div>
     </section>`;
 }
 
