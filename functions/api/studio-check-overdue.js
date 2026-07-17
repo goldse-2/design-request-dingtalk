@@ -4,6 +4,7 @@ import { isAdminLibraryCutoutTask } from '../_shared/studio-library-replacement.
 import { recolorImage } from '../_shared/variant-recolor-core.js';
 import { editImageWithPrompt } from '../_shared/image-edit-core.js';
 import { studioTaskPutOptions } from '../_shared/studio-task-storage.js';
+import { advanceSheetSelfWorkflow, retrySheetSelfChildAfterTimeout } from '../_shared/sheet-self-workflow.js';
 
 export async function onRequestGet(context) {
     const { env, request, waitUntil } = context;
@@ -172,6 +173,11 @@ export async function onRequestGet(context) {
 
         for (const task of tasks) {
             if (!task) continue;
+            if (task.status === 'done' && task.workflow?.type === 'sheet_self') {
+                const advanceResult = await advanceSheetSelfWorkflow({ env, task, origin: new URL(request.url).origin });
+                nextProcessingQueue.push(...(advanceResult.nextTaskIds || []));
+                continue;
+            }
             if (task.status === 'done' && !task.dingtalkNotified && !task.r2AutoNotified) {
                 if (studioNotificationLeaseActive(task, now)) {
                     nextProcessingQueue.push(task.id);
@@ -197,8 +203,19 @@ export async function onRequestGet(context) {
             if (task.status !== 'processing' || !task.sentToRpa) continue;
             if (task.overdueNotified) continue;
             const sentAt = task.sentToRpaAt ? new Date(task.sentToRpaAt).getTime() : 0;
-            if (!sentAt || (now - sentAt) < overdueThreshold) {
+            const workflowOverdueThreshold = task.workflow?.type === 'sheet_self'
+                ? (task.workflow.stage === 'retouch' ? 40 * 60 * 1000 : 20 * 60 * 1000)
+                : overdueThreshold;
+            if (!sentAt || (now - sentAt) < workflowOverdueThreshold) {
                 nextProcessingQueue.push(task.id);
+                continue;
+            }
+
+            if (task.workflow?.type === 'sheet_self') {
+                const retryResult = await retrySheetSelfChildAfterTimeout(env, task, new URL(request.url).origin);
+                if (retryResult.retried) nextProcessingQueue.push(task.id);
+                if (retryResult.retried) autoSent.push(task.id);
+                if (retryResult.error) autoErrors.push({ id: task.id, error: retryResult.error });
                 continue;
             }
 

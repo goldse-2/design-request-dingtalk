@@ -142,7 +142,7 @@ function renderTask(task) {
     const card = document.createElement('div');
     card.style.cssText = 'background:#fff;border-radius:12px;padding:18px 20px;box-shadow:0 1px 4px rgba(0,0,0,0.07)';
 
-    const modeText = task.mode === 'retouch' ? '精修图片' : task.mode === 'cutout' ? '白底抠图' : task.mode === 'variant' ? '变体改色' : task.mode === 'resize_ai' ? '尺寸修改' : task.mode === 'free' ? '自由模式' : '程序模式';
+    const modeText = task.mode === 'sheet_self' ? '表格自助' : task.mode === 'retouch' ? '精修图片' : task.mode === 'cutout' ? '白底抠图' : task.mode === 'variant' ? '变体改色' : task.mode === 'resize_ai' ? '尺寸修改' : task.mode === 'free' ? '自由模式' : '程序模式';
     const time = new Date(task.timestamp).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
     
     const displayTitle = task.imageName ? task.imageName.replace(/^[^-]+-/, '') : '';
@@ -192,7 +192,7 @@ function renderTask(task) {
                         <span style="font-size:0.75rem;color:${step3 ? '#16a34a' : '#9ca3af'};font-weight:${step3 ? '600' : '400'}">已完成</span>
                     </div>
                 </div>
-                ${task.status === 'processing' ? '<div style="font-size:0.72rem;color:#3b82f6;text-align:center;margin-top:6px">' + (task.mode === 'retouch' ? '⏱ 图片正在精修中，预计约 30 分钟完成...' : task.mode === 'cutout' ? '⏱ 正在进行白底抠图，完成后会通过钉钉通知...' : '⏱ AI 正在生成中，预计还需 4-8 分钟...') + '</div>' : ''}
+                ${task.status === 'processing' ? '<div style="font-size:0.72rem;color:#3b82f6;text-align:center;margin-top:6px">' + (task.mode === 'sheet_self' ? `已完成 ${Number(task.sheetSelfCompletedCount || 0)}/${Number(task.sheetSelfSlotCount || 0)} 张，每完成一张就会发到钉钉` : task.mode === 'retouch' ? '⏱ 图片正在精修中，预计约 30 分钟完成...' : task.mode === 'cutout' ? '⏱ 正在进行白底抠图，完成后会通过钉钉通知...' : '⏱ AI 正在生成中，预计还需 4-8 分钟...') + '</div>' : ''}
                 ${task.status === 'pending' && !task.sentToRpa ? '<div style="font-size:0.72rem;color:#f59e0b;text-align:center;margin-top:6px">📋 任务已提交，等待自动发送到 RPA...</div>' : ''}
             </div>`;
     }
@@ -220,10 +220,10 @@ function renderTask(task) {
     }
 
     // result images
-    if (task.status === 'done' && task.resultKeys && task.resultKeys.length) {
+    if ((task.status === 'done' || task.mode === 'sheet_self') && task.resultKeys && task.resultKeys.length) {
         const label = document.createElement('div');
         label.style.cssText = 'font-size:0.82rem;color:#16a34a;font-weight:600;margin:14px 0 6px';
-        label.textContent = '✓ 成品图（点击下载）';
+        label.textContent = task.status === 'done' ? '✓ 成品图（点击下载）' : `✓ 已完成 ${task.resultKeys.length} 张（点击下载）`;
         card.appendChild(label);
         card.appendChild(buildThumbRow(task.resultKeys, true));
     }

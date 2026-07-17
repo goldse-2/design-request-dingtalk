@@ -23,7 +23,7 @@ function initStudioTypewriter() {
 
 let currentUser = null;
 const requestedMode = new URLSearchParams(window.location.search).get('mode');
-let currentMode = ['free', 'program', 'retouch', 'variant', 'resize'].includes(requestedMode) ? requestedMode : 'free';
+let currentMode = ['free', 'program', 'sheet', 'retouch', 'variant', 'resize'].includes(requestedMode) ? requestedMode : 'free';
 
 const ANALYZE_PROMPT = `# 角色设定
 你是一位拥有十年经验的亚马逊资深视觉拆解专家。你的任务是对用户上传的电商图片进行"逆向工程"，将其拆解为 1:1 像素级复刻的"图层蓝图"，并生成精准包含"人物互动"的素材生图提示词。
@@ -131,7 +131,7 @@ function onAgreeChange(checked) {
 }
 function applyAgreementGate() {
     const agreed = hasAgreed();
-    document.querySelectorAll('.studio-submit-btn, #freeSubmit, #progSubmit, #retouchSubmit, #cutoutSubmit, #variantSubmit').forEach(btn => {
+    document.querySelectorAll('.studio-submit-btn, #freeSubmit, #progSubmit, #sheetSelfSubmit, #retouchSubmit, #cutoutSubmit, #variantSubmit').forEach(btn => {
         if (!btn) return;
         if (agreed) {
             btn.classList.remove('is-gated');
@@ -457,6 +457,25 @@ ${renderSizePicker('progSizeSelect')}
         </div>
     </div>`;
 
+const SHEET_SELF_FORM = `
+    <div class="sheet-self-layout">
+        <div class="studio-panel sheet-self-panel">
+            <div class="sheet-self-head">
+                <div>
+                    <h2>表格自助 · 最多六张</h2>
+                    <p>填写 1–6 个图片位，每个图片位按图生图模式生成一张，固定输出 1600 × 1600。内容和已上传图片会自动保存。</p>
+                </div>
+                <div class="sheet-self-save" id="sheetSelfSaveStatus">等待编辑</div>
+            </div>
+            <div class="sheet-self-grid" id="sheetSelfGrid"></div>
+            <div class="sheet-self-actions">
+                <p>开启“由摄影师决定”后，该图片位无需上传白底图；提交后由摄影师补传两张原图，系统自动完成精修、抠图和图生图。</p>
+                <button class="sf-submit sheet-self-submit" id="sheetSelfSubmit">提交已填写图片</button>
+            </div>
+            <div id="sheetSelfStatus" class="studio-status" style="margin-top:10px"></div>
+        </div>
+    </div>`;
+
 const RESIZE_FORM = `
     <div class="studio-layout resize-layout">
         <div class="studio-panel">
@@ -621,6 +640,15 @@ const VARIANT_FORM = `
     </div>`;
 
 const uploads = { freeImages: [], freeModel: null, freeScene: null, freeProduct: [], freeProduct1: null, freeProduct2: null, progRef: [], progProduct: [], retouchImages: [], cutoutImages: [], variantImages: [] };
+const SHEET_SELF_SLOT_COUNT = 6;
+const SHEET_SELF_LOCAL_PREFIX = 'sheet_self_draft_v1:';
+let sheetSelfState = createEmptySheetSelfState();
+let sheetSelfLoadedUnionId = '';
+let sheetSelfSaveTimer = null;
+let sheetSelfSaving = false;
+let sheetSelfDirty = false;
+let sheetSelfServerLoadedUnionId = '';
+let sheetSelfPagehideWired = false;
 let resizeToolCleanup = null;
 const MAX_STUDIO_FILE_SIZE = 8 * 1024 * 1024;
 const MAX_RETOUCH_FILE_SIZE = 15 * 1024 * 1024;
@@ -639,6 +667,25 @@ const aPlusDoubleState = {
     previousSize: '',
     previousRefs: []
 };
+
+function createEmptySheetSelfState() {
+    return {
+        version: 1,
+        savedAt: '',
+        slots: Array.from({ length: SHEET_SELF_SLOT_COUNT }, (_, index) => ({
+            index,
+            photographer: false,
+            productName: '',
+            title: '',
+            subtitle: '',
+            otherText: '',
+            referenceKey: null,
+            productKeys: [],
+            uploading: false,
+            status: ''
+        }))
+    };
+}
 
 function validateStudioImage(file) {
     if (!file?.type?.startsWith('image/')) return '请选择图片文件';
@@ -1221,6 +1268,10 @@ function renderForm() {
         wireDrop('progProductDrop', 'progProductInput', 'progProductThumbs', 'progProduct');
         initSizePicker('progSizeSelect', 'progSizeHint');
         document.getElementById('progSubmit').addEventListener('click', submitProgram);
+    } else if (currentMode === 'sheet') {
+        if (attachedGallery) attachedGallery.remove();
+        area.innerHTML = SHEET_SELF_FORM;
+        initSheetSelfMode();
     } else if (currentMode === 'retouch') {
         if (attachedGallery) attachedGallery.remove();
         area.innerHTML = RETOUCH_FORM;
@@ -1234,7 +1285,7 @@ function renderForm() {
         area.innerHTML = RESIZE_FORM;
         initResizeTool();
     }
-    if (currentMode !== 'resize' && currentMode !== 'retouch' && currentMode !== 'variant' && !galleryWasReady) renderStudioGallery();
+    if (currentMode !== 'resize' && currentMode !== 'retouch' && currentMode !== 'variant' && currentMode !== 'sheet' && !galleryWasReady) renderStudioGallery();
     applyAgreementGate();
 }
 
@@ -1261,6 +1312,361 @@ function renderGenerationMode(area, formHtml) {
         cachedStudioGalleryPreview = replacement;
     }
     return hadCachedGallery;
+}
+
+function initSheetSelfMode() {
+    const unionId = currentUser?.unionId || '';
+    if (unionId && sheetSelfLoadedUnionId !== unionId) {
+        sheetSelfState = loadSheetSelfLocal(unionId) || createEmptySheetSelfState();
+        sheetSelfLoadedUnionId = unionId;
+    }
+    renderSheetSelfGrid();
+
+    const grid = document.getElementById('sheetSelfGrid');
+    grid.addEventListener('input', event => {
+        const field = event.target.dataset.sheetField;
+        const slotIndex = Number(event.target.dataset.slotIndex);
+        if (!field || !Number.isInteger(slotIndex) || !sheetSelfState.slots[slotIndex]) return;
+        sheetSelfState.slots[slotIndex][field] = event.target.value;
+        persistSheetSelfDraft();
+    });
+    grid.addEventListener('change', event => {
+        const slotIndex = Number(event.target.dataset.slotIndex);
+        if (!Number.isInteger(slotIndex) || !sheetSelfState.slots[slotIndex]) return;
+        if (event.target.matches('[data-sheet-photographer]')) {
+            sheetSelfState.slots[slotIndex].photographer = event.target.checked;
+            persistSheetSelfDraft();
+            renderSheetSelfGrid();
+            return;
+        }
+        const uploadType = event.target.dataset.sheetUpload;
+        if (uploadType) {
+            const files = Array.from(event.target.files || []);
+            event.target.value = '';
+            handleSheetSelfFiles(slotIndex, uploadType, files);
+        }
+    });
+    grid.addEventListener('click', event => {
+        const button = event.target.closest('[data-sheet-remove]');
+        if (!button) return;
+        const slotIndex = Number(button.dataset.slotIndex);
+        const slot = sheetSelfState.slots[slotIndex];
+        if (!slot) return;
+        if (button.dataset.sheetRemove === 'reference') slot.referenceKey = null;
+        else slot.productKeys.splice(Number(button.dataset.productIndex), 1);
+        slot.status = '';
+        persistSheetSelfDraft(400);
+        renderSheetSelfGrid();
+    });
+    document.getElementById('sheetSelfSubmit').addEventListener('click', submitSheetSelf);
+
+    if (!sheetSelfPagehideWired) {
+        sheetSelfPagehideWired = true;
+        window.addEventListener('pagehide', () => {
+            if (!sheetSelfDirty || !currentUser?.unionId) return;
+            fetch('/api/sheet-self-draft', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ unionId: currentUser.unionId, draft: sheetSelfDraftPayload() }),
+                keepalive: true
+            }).catch(() => {});
+        });
+    }
+    if (unionId && sheetSelfServerLoadedUnionId !== unionId) loadSheetSelfServerDraft(unionId);
+}
+
+function renderSheetSelfGrid() {
+    const grid = document.getElementById('sheetSelfGrid');
+    if (!grid) return;
+    grid.innerHTML = sheetSelfState.slots.map(renderSheetSelfSlot).join('');
+}
+
+function renderSheetSelfSlot(slot, slotIndex) {
+    const reference = renderSheetSelfImage(slot.referenceKey, slotIndex, 'reference', 0, '要模仿的图');
+    const products = slot.photographer
+        ? '<div class="sheet-self-photo-wait">提交后等待摄影师上传两张拍摄原图，系统会分别完成精修和白底抠图，再自动进入图生图。</div>'
+        : [0, 1].map(index => renderSheetSelfImage(slot.productKeys[index], slotIndex, 'product', index, `白底产品图 ${index + 1}`)).join('');
+    const uploadDisabled = slot.uploading ? ' disabled' : '';
+    return `<section class="sheet-self-slot" data-sheet-slot="${slotIndex}">
+        <div class="sheet-self-slot-head">
+            <div class="sheet-self-slot-title"><span class="sheet-self-slot-number">${slotIndex + 1}</span><span>第 ${slotIndex + 1} 张图片</span></div>
+            <span class="sheet-self-fixed-size">1600 × 1600</span>
+        </div>
+        <div class="sheet-self-fields">
+            <div class="sheet-self-field full"><label>产品名称 *</label><input data-sheet-field="productName" data-slot-index="${slotIndex}" maxlength="100" value="${sheetSelfEsc(slot.productName)}" placeholder="例如：S10 电池款"></div>
+            <div class="sheet-self-field"><label>标题</label><input data-sheet-field="title" data-slot-index="${slotIndex}" maxlength="100" value="${sheetSelfEsc(slot.title)}" placeholder="可选"></div>
+            <div class="sheet-self-field"><label>副标题</label><input data-sheet-field="subtitle" data-slot-index="${slotIndex}" maxlength="100" value="${sheetSelfEsc(slot.subtitle)}" placeholder="可选"></div>
+            <div class="sheet-self-field full"><label>其他文案</label><textarea data-sheet-field="otherText" data-slot-index="${slotIndex}" maxlength="300" placeholder="可选，多个卖点可用分号分隔">${sheetSelfEsc(slot.otherText)}</textarea></div>
+        </div>
+        <div class="sheet-self-images">
+            ${reference}
+            ${products}
+        </div>
+        <input type="file" accept="image/*" data-sheet-upload="reference" data-slot-index="${slotIndex}" id="sheetRefInput-${slotIndex}" hidden${uploadDisabled}>
+        <input type="file" accept="image/*" data-sheet-upload="product" data-slot-index="${slotIndex}" id="sheetProductInput-${slotIndex}" multiple hidden${uploadDisabled}>
+        <div class="sheet-self-photo-row">
+            <div class="sheet-self-photo-copy"><strong>由摄影师决定</strong><small>开启后，此图片位暂时不需要用户上传两张白底图</small></div>
+            <label class="sheet-self-switch" title="由摄影师提供两张拍摄原图"><input type="checkbox" data-sheet-photographer data-slot-index="${slotIndex}"${slot.photographer ? ' checked' : ''}><span></span></label>
+        </div>
+        <div class="sheet-self-slot-status${slot.status?.startsWith('失败') ? ' err' : ''}">${sheetSelfEsc(slot.status || (slot.uploading ? '图片上传中，请稍候...' : ''))}</div>
+    </section>`;
+}
+
+function renderSheetSelfImage(file, slotIndex, type, productIndex, label) {
+    if (file?.key) {
+        const removeAttrs = type === 'reference'
+            ? `data-sheet-remove="reference" data-slot-index="${slotIndex}"`
+            : `data-sheet-remove="product" data-slot-index="${slotIndex}" data-product-index="${productIndex}"`;
+        return `<div class="sheet-self-image-slot">
+            <img src="${sheetSelfImageUrl(file.key)}" alt="${sheetSelfEsc(label)}" loading="lazy">
+            <span class="sheet-self-image-badge">${sheetSelfEsc(label)}</span>
+            <button type="button" class="sheet-self-image-remove" ${removeAttrs} title="移除${sheetSelfEsc(label)}" aria-label="移除${sheetSelfEsc(label)}">×</button>
+        </div>`;
+    }
+    const inputId = type === 'reference' ? `sheetRefInput-${slotIndex}` : `sheetProductInput-${slotIndex}`;
+    return `<div class="sheet-self-image-slot${sheetSelfState.slots[slotIndex].uploading ? ' is-loading' : ''}">
+        <label for="${inputId}">
+            <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 16V4m0 0L7 9m5-5 5 5"/><path d="M5 14v5h14v-5"/></svg>
+            <span>${label}<br>单张最大 8 MB</span>
+        </label>
+    </div>`;
+}
+
+async function handleSheetSelfFiles(slotIndex, type, files) {
+    const slot = sheetSelfState.slots[slotIndex];
+    if (!slot || !files.length || slot.uploading) return;
+    const selected = type === 'reference' ? files.slice(0, 1) : files.slice(0, Math.max(0, 2 - slot.productKeys.length));
+    if (!selected.length) {
+        slot.status = '白底产品图最多上传两张';
+        renderSheetSelfGrid();
+        return;
+    }
+    const invalid = selected.map(validateSheetSelfFile).find(Boolean);
+    if (invalid) {
+        slot.status = '失败：' + invalid;
+        renderSheetSelfGrid();
+        return;
+    }
+
+    slot.uploading = true;
+    slot.status = `正在上传 ${selected.length} 张图片...`;
+    renderSheetSelfGrid();
+    try {
+        const keys = await uploadImages(selected.map(file => ({ file, name: file.name })), 'studio/sheet-self');
+        if (type === 'reference') slot.referenceKey = keys[0];
+        else slot.productKeys = [...slot.productKeys, ...keys].slice(0, 2);
+        slot.status = '图片已上传并保存';
+        persistSheetSelfDraft(300);
+    } catch (error) {
+        slot.status = '失败：' + error.message;
+    } finally {
+        slot.uploading = false;
+        renderSheetSelfGrid();
+    }
+}
+
+function validateSheetSelfFile(file) {
+    if (!file?.type?.startsWith('image/')) return '请选择图片文件';
+    if (file.size > MAX_STUDIO_FILE_SIZE) return `${file.name} 超过 8MB`;
+    return '';
+}
+
+function persistSheetSelfDraft(delay = 5000) {
+    sheetSelfState.savedAt = new Date().toISOString();
+    sheetSelfDirty = true;
+    if (currentUser?.unionId) {
+        try { localStorage.setItem(SHEET_SELF_LOCAL_PREFIX + currentUser.unionId, JSON.stringify(sheetSelfDraftPayload())); } catch {}
+    }
+    setSheetSelfSaveStatus('已保存在当前设备，正在同步...', 'is-saving');
+    clearTimeout(sheetSelfSaveTimer);
+    sheetSelfSaveTimer = setTimeout(saveSheetSelfServerDraft, delay);
+}
+
+async function saveSheetSelfServerDraft() {
+    if (!currentUser?.unionId || sheetSelfSaving || !sheetSelfDirty) return;
+    sheetSelfSaving = true;
+    setSheetSelfSaveStatus('正在同步...', 'is-saving');
+    try {
+        const response = await fetch('/api/sheet-self-draft', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ unionId: currentUser.unionId, draft: sheetSelfDraftPayload() })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.ok) throw new Error(result.error || '同步失败');
+        sheetSelfDirty = false;
+        setSheetSelfSaveStatus('已自动保存', 'is-saved');
+    } catch (error) {
+        setSheetSelfSaveStatus('已保存在当前设备', '');
+    } finally {
+        sheetSelfSaving = false;
+    }
+}
+
+async function loadSheetSelfServerDraft(unionId) {
+    sheetSelfServerLoadedUnionId = unionId;
+    try {
+        const response = await fetch('/api/sheet-self-draft?unionId=' + encodeURIComponent(unionId), { cache: 'no-store' });
+        const result = await response.json();
+        if (!response.ok || !result.ok || !result.draft) return;
+        const serverDraft = normalizeSheetSelfDraft(result.draft);
+        const localTime = Date.parse(sheetSelfState.savedAt || '') || 0;
+        const serverTime = Date.parse(serverDraft.savedAt || '') || 0;
+        if (serverTime >= localTime && !sheetSelfDirty) {
+            sheetSelfState = serverDraft;
+            try { localStorage.setItem(SHEET_SELF_LOCAL_PREFIX + unionId, JSON.stringify(sheetSelfDraftPayload())); } catch {}
+            if (currentMode === 'sheet') renderSheetSelfGrid();
+        }
+        setSheetSelfSaveStatus('已自动保存', 'is-saved');
+    } catch {}
+}
+
+function loadSheetSelfLocal(unionId) {
+    try {
+        const value = JSON.parse(localStorage.getItem(SHEET_SELF_LOCAL_PREFIX + unionId) || 'null');
+        return value ? normalizeSheetSelfDraft(value) : null;
+    } catch { return null; }
+}
+
+function normalizeSheetSelfDraft(value) {
+    const state = createEmptySheetSelfState();
+    state.savedAt = String(value?.savedAt || '');
+    state.slots = state.slots.map((empty, index) => {
+        const slot = value?.slots?.[index] || {};
+        return {
+            ...empty,
+            photographer: slot.photographer === true,
+            productName: String(slot.productName || '').slice(0, 100),
+            title: String(slot.title || '').slice(0, 100),
+            subtitle: String(slot.subtitle || '').slice(0, 100),
+            otherText: String(slot.otherText || '').slice(0, 300),
+            referenceKey: normalizeSheetSelfFileKey(slot.referenceKey),
+            productKeys: Array.isArray(slot.productKeys) ? slot.productKeys.slice(0, 2).map(normalizeSheetSelfFileKey).filter(Boolean) : []
+        };
+    });
+    return state;
+}
+
+function normalizeSheetSelfFileKey(value) {
+    const key = String(value?.key || '');
+    if (!key.startsWith('studio/sheet-self/')) return null;
+    return { key, name: String(value?.name || '图片.jpg').slice(0, 160) };
+}
+
+function sheetSelfDraftPayload() {
+    return {
+        version: 1,
+        savedAt: sheetSelfState.savedAt || new Date().toISOString(),
+        slots: sheetSelfState.slots.map(slot => ({
+            index: slot.index,
+            photographer: slot.photographer === true,
+            productName: slot.productName,
+            title: slot.title,
+            subtitle: slot.subtitle,
+            otherText: slot.otherText,
+            referenceKey: slot.referenceKey,
+            productKeys: slot.productKeys
+        }))
+    };
+}
+
+async function submitSheetSelf() {
+    const status = document.getElementById('sheetSelfStatus');
+    const button = document.getElementById('sheetSelfSubmit');
+    if (!currentUser) { showLoginModal(); return; }
+    if (!hasAgreed()) { openGuide(); guideShowPage(2); return; }
+    if (button.dataset.loading === '1' || sheetSelfState.slots.some(slot => slot.uploading)) return;
+
+    const activeSlots = sheetSelfState.slots.filter(sheetSelfSlotHasContent);
+    if (!activeSlots.length) {
+        showStudioFieldError(status, '请至少填写一个图片位', document.getElementById('sheetSelfGrid'));
+        return;
+    }
+    const invalidSlot = activeSlots.find(slot => !slot.productName.trim()
+        || !slot.referenceKey?.key
+        || (!slot.photographer && slot.productKeys.length !== 2));
+    if (invalidSlot) {
+        const invalidIndex = invalidSlot.index;
+        const slot = invalidSlot;
+        const message = !slot.productName.trim()
+            ? `第 ${invalidIndex + 1} 张请填写产品名称`
+            : !slot.referenceKey?.key
+                ? `第 ${invalidIndex + 1} 张请上传要模仿的图`
+                : `第 ${invalidIndex + 1} 张请上传两张白底产品图，或开启“由摄影师决定”`;
+        showStudioFieldError(status, message, document.querySelector(`[data-sheet-slot="${invalidIndex}"]`));
+        return;
+    }
+
+    const originalText = button.textContent;
+    button.dataset.loading = '1';
+    button.disabled = true;
+    button.textContent = `正在创建 ${activeSlots.length} 张任务...`;
+    status.className = 'studio-status';
+    status.textContent = '正在保存并启动自动流程...';
+    try {
+        const response = await fetch('/api/sheet-self-submit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ submitter: currentUser, slots: activeSlots.map(slot => ({
+                index: slot.index,
+                photographer: slot.photographer,
+                productName: slot.productName,
+                title: slot.title,
+                subtitle: slot.subtitle,
+                otherText: slot.otherText,
+                referenceKey: slot.referenceKey,
+                productKeys: slot.productKeys
+            })) })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.ok) throw new Error(result.error || `提交失败 (${response.status})`);
+
+        clearTimeout(sheetSelfSaveTimer);
+        sheetSelfDirty = false;
+        try { localStorage.removeItem(SHEET_SELF_LOCAL_PREFIX + currentUser.unionId); } catch {}
+        fetch('/api/sheet-self-draft', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ unionId: currentUser.unionId, preserveFiles: true })
+        }).catch(() => {});
+        sheetSelfState = createEmptySheetSelfState();
+        renderSheetSelfGrid();
+        setSheetSelfSaveStatus('已提交，新表格等待填写', 'is-saved');
+        status.textContent = '';
+        showSuccessModal(result, `已启动 ${result.automaticSlots} 个图片位；${result.photographerSlots} 个图片位等待摄影师补图。每完成一张就会立即发到钉钉。`);
+    } catch (error) {
+        status.textContent = '提交失败：' + error.message;
+        status.classList.add('err');
+    } finally {
+        button.dataset.loading = '';
+        button.disabled = false;
+        button.textContent = originalText;
+    }
+}
+
+function sheetSelfSlotHasContent(slot) {
+    return Boolean(slot.photographer
+        || slot.productName.trim()
+        || slot.title.trim()
+        || slot.subtitle.trim()
+        || slot.otherText.trim()
+        || slot.referenceKey?.key
+        || slot.productKeys.length);
+}
+
+function setSheetSelfSaveStatus(text, className) {
+    const element = document.getElementById('sheetSelfSaveStatus');
+    if (!element) return;
+    element.textContent = text;
+    element.className = 'sheet-self-save' + (className ? ' ' + className : '');
+}
+
+function sheetSelfImageUrl(key) {
+    return '/api/library-file/' + encodeURIComponent(key);
+}
+
+function sheetSelfEsc(value) {
+    return String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 function initRetouchMode() {

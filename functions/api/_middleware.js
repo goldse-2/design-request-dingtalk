@@ -13,6 +13,7 @@ const ADMIN_PATHS = new Set([
     '/api/studio-complete',
     '/api/admin-optimize-prompt',
     '/api/admin-library-cutout',
+    '/api/sheet-self-photo',
     '/api/retention-cleanup'
 ]);
 

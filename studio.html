@@ -192,6 +192,50 @@
         .variant-result-card { border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; background: #fff; }
         .variant-result-card img { width: 100%; aspect-ratio: 1; object-fit: contain; display: block; background: #f9fafb; }
         .variant-result-card a { display: block; padding: 8px; border-top: 1px solid #e5e7eb; color: #4338ca; font-size: .78rem; font-weight: 700; text-align: center; text-decoration: none; }
+        .sheet-self-layout { width:min(1180px,100%); margin:0 auto; }
+        .sheet-self-panel { width:100% !important; max-width:none !important; padding:24px; }
+        .sheet-self-head { display:flex; align-items:flex-start; justify-content:space-between; gap:20px; margin-bottom:20px; }
+        .sheet-self-head h2 { margin:0 0 5px; color:#111827; font-size:1.08rem; }
+        .sheet-self-head p { margin:0; color:#6b7280; font-size:.8rem; line-height:1.55; }
+        .sheet-self-save { flex-shrink:0; min-width:110px; padding-top:3px; color:#6b7280; font-size:.74rem; text-align:right; }
+        .sheet-self-save.is-saving { color:#b45309; }
+        .sheet-self-save.is-saved { color:#047857; }
+        .sheet-self-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+        .sheet-self-slot { min-width:0; padding:16px; border:1px solid #e5e7eb; border-radius:8px; background:#fff; }
+        .sheet-self-slot-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; }
+        .sheet-self-slot-title { display:flex; align-items:center; gap:8px; color:#111827; font-size:.9rem; font-weight:800; }
+        .sheet-self-slot-number { display:grid; place-items:center; width:25px; height:25px; border-radius:6px; background:#111827; color:#fff; font-size:.74rem; }
+        .sheet-self-fixed-size { color:#047857; font-size:.7rem; font-weight:700; }
+        .sheet-self-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
+        .sheet-self-field { min-width:0; }
+        .sheet-self-field.full { grid-column:1/-1; }
+        .sheet-self-field label { display:block; margin-bottom:4px; color:#4b5563; font-size:.72rem; font-weight:700; }
+        .sheet-self-field input, .sheet-self-field textarea { width:100%; padding:8px 9px; border:1px solid #d1d5db; border-radius:6px; background:#fff; color:#111827; font-size:.78rem; outline:none; }
+        .sheet-self-field textarea { min-height:58px; resize:vertical; line-height:1.45; }
+        .sheet-self-field input:focus, .sheet-self-field textarea:focus { border-color:#6366f1; box-shadow:0 0 0 3px rgba(99,102,241,.1); }
+        .sheet-self-images { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-top:12px; }
+        .sheet-self-image-slot { position:relative; min-width:0; aspect-ratio:1; border:1px dashed #cbd5e1; border-radius:7px; overflow:hidden; background:#f9fafb; }
+        .sheet-self-image-slot label { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; width:100%; height:100%; padding:8px; color:#6b7280; font-size:.68rem; line-height:1.35; text-align:center; cursor:pointer; }
+        .sheet-self-image-slot label:hover { background:#f3f4f6; color:#4338ca; }
+        .sheet-self-image-slot img { width:100%; height:100%; object-fit:cover; display:block; }
+        .sheet-self-image-badge { position:absolute; left:4px; bottom:4px; max-width:calc(100% - 8px); padding:2px 5px; border-radius:4px; background:rgba(17,24,39,.78); color:#fff; font-size:.62rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .sheet-self-image-remove { position:absolute; top:4px; right:4px; display:grid; place-items:center; width:23px; height:23px; padding:0; border:0; border-radius:50%; background:rgba(17,24,39,.82); color:#fff; font-size:15px; cursor:pointer; }
+        .sheet-self-image-slot.is-loading { opacity:.58; pointer-events:none; }
+        .sheet-self-photo-row { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:12px; padding:9px 10px; border:1px solid #e5e7eb; border-radius:7px; background:#f9fafb; }
+        .sheet-self-photo-copy strong { display:block; color:#374151; font-size:.74rem; }
+        .sheet-self-photo-copy small { display:block; margin-top:2px; color:#9ca3af; font-size:.66rem; line-height:1.35; }
+        .sheet-self-switch { position:relative; width:38px; height:22px; flex-shrink:0; }
+        .sheet-self-switch input { position:absolute; opacity:0; pointer-events:none; }
+        .sheet-self-switch span { position:absolute; inset:0; border-radius:999px; background:#cbd5e1; cursor:pointer; transition:background .16s; }
+        .sheet-self-switch span::after { content:''; position:absolute; top:3px; left:3px; width:16px; height:16px; border-radius:50%; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.22); transition:transform .16s; }
+        .sheet-self-switch input:checked + span { background:#111827; }
+        .sheet-self-switch input:checked + span::after { transform:translateX(16px); }
+        .sheet-self-photo-wait { display:flex; align-items:center; justify-content:center; grid-column:1/-1; min-height:92px; padding:14px; border:1px dashed #f59e0b; border-radius:7px; background:#fffbeb; color:#92400e; font-size:.72rem; line-height:1.5; text-align:center; }
+        .sheet-self-slot-status { min-height:18px; margin-top:8px; color:#6b7280; font-size:.7rem; }
+        .sheet-self-slot-status.err { color:#b91c1c; }
+        .sheet-self-actions { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-top:18px; padding-top:16px; border-top:1px solid #e5e7eb; }
+        .sheet-self-actions p { margin:0; color:#6b7280; font-size:.74rem; line-height:1.5; }
+        .sheet-self-submit { width:auto; min-width:180px; flex-shrink:0; }
         @media (max-width: 860px) {
             .studio-layout { grid-template-columns: minmax(0, 1fr) !important; gap: 16px !important; }
             .studio-panel, .studio-preview { width: 100% !important; min-width: 0; }
@@ -203,6 +247,15 @@
             .retouch-selected-grid { grid-template-columns:minmax(0,1fr); }
             .variant-palette { grid-template-columns: repeat(4, minmax(0, 1fr)); }
             .resize-file-list { grid-template-columns:minmax(0,1fr); }
+            .sheet-self-grid { grid-template-columns:minmax(0,1fr); }
+        }
+        @media (max-width: 640px) {
+            .sheet-self-panel { padding:16px 12px; }
+            .sheet-self-head, .sheet-self-actions { align-items:stretch; flex-direction:column; }
+            .sheet-self-save { text-align:left; }
+            .sheet-self-fields { grid-template-columns:minmax(0,1fr); }
+            .sheet-self-field.full { grid-column:auto; }
+            .sheet-self-submit { width:100%; }
         }
     </style>
 </head>
@@ -250,6 +303,7 @@
         <div class="studio-tabs">
             <button class="studio-tab active" data-mode="free">自由模式</button>
             <button class="studio-tab" data-mode="program">图生图模式</button>
+            <button class="studio-tab" data-mode="sheet">表格自助</button>
             <button class="studio-tab" data-mode="retouch">精修/白底</button>
             <button class="studio-tab" data-mode="variant">变体改色</button>
             <button class="studio-tab" data-mode="resize">尺寸修改</button>
@@ -405,6 +459,6 @@
     帮助中心
 </button>
 
-    <script src="studio.js?v=20260716-shoot-request"></script>
+    <script src="studio.js?v=20260717-sheet-self"></script>
 </body>
 </html>

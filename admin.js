@@ -1334,7 +1334,7 @@ async function loadStudioAdmin() {
     if (!container) return;
     container.innerHTML = '<p style="color:#9ca3af;font-size:0.85rem">加载中...</p>';
     try {
-        const res = await fetch('/api/studio-tasks?active=1');
+        const res = await fetch('/api/studio-tasks?active=1&includeSheetSlots=1');
         const json = await res.json();
         if (!res.ok || !json.ok) throw new Error(json.error || '加载失败');
         // 发送给 RPA 后继续显示；完成后也先保留，只有钉钉通知成功后才消失
@@ -1406,13 +1406,14 @@ function renderStudioTasks(allTasks, category) {
 }
 
 function renderStudioTask(task) {
+    if (task.mode === 'sheet_self') return renderSheetSelfAdminTask(task);
     const requiresApproval = studioApprovalModes.has(task.mode);
     const st = task.status === 'done'
         ? ['待通知', '#16a34a', '#dcfce7']
         : task.status === 'processing'
             ? ['处理中', '#3b82f6', '#dbeafe']
             : ['待处理', '#f59e0b', '#fef3c7'];
-    const modeText = task.mode === 'retouch' ? '精修图片' : task.mode === 'cutout' ? '白底抠图' : task.mode === 'variant' ? '变体改色' : task.mode === 'resize_ai' ? '尺寸修改' : task.mode === 'free' ? '自由模式' : '程序模式';
+    const modeText = task.mode === 'sheet_self' ? '表格自助' : task.mode === 'retouch' ? '精修图片' : task.mode === 'cutout' ? '白底抠图' : task.mode === 'variant' ? '变体改色' : task.mode === 'resize_ai' ? '尺寸修改' : task.mode === 'free' ? '自由模式' : '程序模式';
     const time = new Date(task.timestamp).toLocaleString('zh-CN', { timeZone:'Asia/Shanghai', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
 
     const card = document.createElement('div');
@@ -1578,6 +1579,185 @@ function startCountdownTimer(taskId, createdAt) {
             countdownEl.textContent = '⏱ ' + mins + '分' + secs + '秒后自动发送';
         }
     }, 1000);
+}
+
+function renderSheetSelfAdminTask(task) {
+    const slots = Array.isArray(task.workflowSlots) ? task.workflowSlots.filter(Boolean) : [];
+    const completedCount = slots.filter(slot => slot.stage === 'done' && slot.resultNotified).length;
+    const failedCount = slots.filter(slot => slot.stage === 'error' || (slot.stage === 'done' && !slot.resultNotified)).length;
+    const time = new Date(task.timestamp).toLocaleString('zh-CN', { timeZone:'Asia/Shanghai', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+    const card = document.createElement('div');
+    card.id = 'studio-card-' + task.id;
+    card.style.cssText = 'background:#fff;border-radius:10px;padding:18px 20px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.07);border-left:4px solid #111827';
+    card.innerHTML = `<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:14px">
+        <div>
+            <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+                <strong style="color:#111827;font-size:.96rem">${esc(task.submitter?.name || '匿名')}</strong>
+                <span style="font-size:.76rem;color:#fff;background:#111827;padding:3px 8px;border-radius:6px">表格自助</span>
+                <span style="font-size:.74rem;color:#047857;background:#ecfdf5;padding:3px 8px;border-radius:6px">已发送 ${completedCount}/${slots.length || task.sheetSelfSlotCount || 0}</span>
+                ${failedCount ? `<span style="font-size:.74rem;color:#b91c1c;background:#fef2f2;padding:3px 8px;border-radius:6px">需处理 ${failedCount}</span>` : ''}
+            </div>
+            <div style="margin-top:5px;color:#6b7280;font-size:.74rem">任务ID：${esc(task.id)}</div>
+        </div>
+        <span style="color:#9ca3af;font-size:.75rem;white-space:nowrap">${time}</span>
+    </div>`;
+
+    const list = document.createElement('div');
+    list.style.cssText = 'display:flex;flex-direction:column;border-top:1px solid #eef0f3';
+    if (!slots.length) {
+        list.innerHTML = '<div style="padding:14px 0;color:#b91c1c;font-size:.8rem">图片位状态暂时未加载，请刷新管理台</div>';
+    }
+    slots.forEach(slot => list.appendChild(renderSheetSelfAdminSlot(task, slot)));
+    card.appendChild(list);
+    return card;
+}
+
+function renderSheetSelfAdminSlot(task, slot) {
+    const statusInfo = sheetSelfAdminStatus(slot);
+    const row = document.createElement('div');
+    row.style.cssText = 'display:grid;grid-template-columns:minmax(150px,1fr) minmax(160px,1.5fr) auto;gap:14px;align-items:center;padding:12px 0;border-bottom:1px solid #eef0f3';
+    const displayNumber = Number(slot.displayIndex ?? slot.index) + 1;
+    const referenceUrl = slot.referenceKey?.key ? '/api/library-file/' + encodeURIComponent(slot.referenceKey.key) : '';
+    row.innerHTML = `<div style="display:flex;align-items:center;gap:10px;min-width:0">
+        ${referenceUrl ? `<img src="${referenceUrl}" alt="" style="width:44px;height:44px;object-fit:cover;border:1px solid #e5e7eb;border-radius:6px;background:#f9fafb" loading="lazy">` : ''}
+        <div style="min-width:0"><strong style="display:block;color:#111827;font-size:.82rem">第 ${displayNumber} 张</strong><span style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#6b7280;font-size:.72rem">${esc(slot.productName || '未命名产品')}</span></div>
+    </div>
+    <div style="min-width:0"><span style="display:inline-block;padding:4px 8px;border-radius:6px;background:${statusInfo.bg};color:${statusInfo.color};font-size:.73rem;font-weight:700">${statusInfo.text}</span>${slot.error || slot.notificationError ? `<div style="margin-top:5px;color:#b91c1c;font-size:.7rem;line-height:1.4;word-break:break-word">${esc(slot.error || slot.notificationError)}</div>` : ''}</div>`;
+
+    const actions = document.createElement('div');
+    actions.style.cssText = 'display:flex;align-items:center;gap:7px;justify-content:flex-end;flex-wrap:wrap';
+    if (slot.stage === 'waiting_photos') {
+        const uploadButton = document.createElement('button');
+        uploadButton.type = 'button';
+        uploadButton.textContent = '上传两张原图';
+        uploadButton.style.cssText = 'border:0;border-radius:6px;background:#111827;color:#fff;padding:7px 11px;font-size:.74rem;font-weight:700;cursor:pointer;white-space:nowrap';
+        uploadButton.onclick = () => uploadSheetSelfPhotos(task.id, slot.index, uploadButton);
+        actions.appendChild(uploadButton);
+    }
+    if (slot.stage === 'error' || (slot.stage === 'done' && !slot.resultNotified)) {
+        const retryButton = document.createElement('button');
+        retryButton.type = 'button';
+        retryButton.textContent = slot.stage === 'done' ? '重发给用户' : '重试当前环节';
+        retryButton.style.cssText = 'border:1px solid #f59e0b;border-radius:6px;background:#fff;color:#b45309;padding:7px 11px;font-size:.74rem;font-weight:700;cursor:pointer;white-space:nowrap';
+        retryButton.onclick = () => retrySheetSelfAdminSlot(task.id, slot.index, retryButton);
+        actions.appendChild(retryButton);
+    }
+    if (!actions.childNodes.length) {
+        const automatic = document.createElement('span');
+        automatic.textContent = slot.stage === 'done' ? '已完成' : '自动处理中';
+        automatic.style.cssText = 'color:#9ca3af;font-size:.72rem;white-space:nowrap';
+        actions.appendChild(automatic);
+    }
+    row.appendChild(actions);
+    return row;
+}
+
+function sheetSelfAdminStatus(slot) {
+    if (slot.stage === 'waiting_photos') return { text: '等待你上传拍摄原图', color: '#92400e', bg: '#fffbeb' };
+    if (slot.stage === 'retouch') return { text: '精修中', color: '#1d4ed8', bg: '#eff6ff' };
+    if (slot.stage === 'cutout') return { text: '白底抠图中', color: '#0369a1', bg: '#f0f9ff' };
+    if (slot.stage === 'program' || slot.stage === 'queued') return { text: '图生图中', color: '#6d28d9', bg: '#f5f3ff' };
+    if (slot.stage === 'done' && slot.resultNotified) return { text: '已完成并发给用户', color: '#047857', bg: '#ecfdf5' };
+    if (slot.stage === 'done') return { text: '图片已完成，钉钉发送失败', color: '#b91c1c', bg: '#fef2f2' };
+    if (slot.stage === 'error') {
+        const stage = { retouch: '精修', cutout: '白底抠图', program: '图生图', notify: '钉钉发送' }[slot.failedStage] || '当前环节';
+        return { text: stage + '失败', color: '#b91c1c', bg: '#fef2f2' };
+    }
+    return { text: '准备中', color: '#4b5563', bg: '#f3f4f6' };
+}
+
+function uploadSheetSelfPhotos(parentId, slotIndex, button) {
+    document.getElementById('sheetSelfPhotoModal')?.remove();
+    const modal = document.createElement('div');
+    modal.id = 'sheetSelfPhotoModal';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:12000;display:grid;place-items:center;padding:16px;background:rgba(17,24,39,.5)';
+    modal.innerHTML = `<div style="width:min(460px,100%);padding:24px;border-radius:10px;background:#fff;box-shadow:0 20px 60px rgba(0,0,0,.22)">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px"><strong style="font-size:1rem;color:#111827">上传两张图片</strong><button type="button" data-photo-close style="display:grid;place-items:center;width:30px;height:30px;border:0;border-radius:6px;background:#f3f4f6;color:#4b5563;font-size:19px;cursor:pointer" title="关闭">×</button></div>
+        <label style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px;border:1px solid #e5e7eb;border-radius:8px;background:#f9fafb;cursor:pointer">
+            <span><strong style="display:block;color:#374151;font-size:.82rem">需要精修和白底抠图</strong><small id="sheetPhotoModeCopy" style="display:block;margin-top:3px;color:#6b7280;font-size:.72rem;line-height:1.45">默认开启：上传两张拍摄原图，分别完成精修和抠图后再图生图</small></span>
+            <span style="position:relative;width:42px;height:24px;flex-shrink:0"><input id="sheetPhotoNeedsProcessing" type="checkbox" checked style="position:absolute;opacity:0"><span id="sheetPhotoSwitchTrack" style="position:absolute;inset:0;border-radius:999px;background:#111827"><i style="position:absolute;top:3px;left:21px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:left .15s"></i></span></span>
+        </label>
+        <label for="sheetPhotoFiles" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:110px;margin-top:12px;padding:16px;border:1px dashed #cbd5e1;border-radius:8px;background:#fff;color:#6b7280;font-size:.8rem;text-align:center;cursor:pointer">
+            <svg viewBox="0 0 24 24" width="25" height="25" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 16V4m0 0L7 9m5-5 5 5"/><path d="M5 14v5h14v-5"/></svg>
+            <span id="sheetPhotoFileText" style="margin-top:7px">选择两张拍摄原图</span><small style="margin-top:3px;color:#9ca3af">单张最大 15MB</small>
+        </label>
+        <input id="sheetPhotoFiles" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden>
+        <div id="sheetPhotoStatus" style="min-height:20px;margin-top:9px;color:#6b7280;font-size:.76rem"></div>
+        <button id="sheetPhotoSubmit" type="button" style="width:100%;height:42px;margin-top:5px;border:0;border-radius:7px;background:#111827;color:#fff;font-size:.84rem;font-weight:700;cursor:pointer">上传并启动</button>
+    </div>`;
+    document.body.appendChild(modal);
+    const close = () => modal.remove();
+    modal.querySelector('[data-photo-close]').onclick = close;
+    modal.onclick = event => { if (event.target === modal) close(); };
+    const processingInput = modal.querySelector('#sheetPhotoNeedsProcessing');
+    const track = modal.querySelector('#sheetPhotoSwitchTrack');
+    const copy = modal.querySelector('#sheetPhotoModeCopy');
+    const fileInput = modal.querySelector('#sheetPhotoFiles');
+    const fileText = modal.querySelector('#sheetPhotoFileText');
+    const status = modal.querySelector('#sheetPhotoStatus');
+    processingInput.onchange = () => {
+        const enabled = processingInput.checked;
+        track.style.background = enabled ? '#111827' : '#cbd5e1';
+        track.querySelector('i').style.left = enabled ? '21px' : '3px';
+        copy.textContent = enabled
+            ? '默认开启：上传两张拍摄原图，分别完成精修和抠图后再图生图'
+            : '已关闭：上传两张已经精修并抠好的图片，直接进入图生图';
+        fileText.textContent = enabled ? '选择两张拍摄原图' : '选择两张已处理好的图片';
+    };
+    fileInput.onchange = () => {
+        const files = Array.from(fileInput.files || []);
+        fileText.textContent = files.length ? `已选择 ${files.length} 张：${files.map(file => file.name).join('、')}` : (processingInput.checked ? '选择两张拍摄原图' : '选择两张已处理好的图片');
+    };
+    modal.querySelector('#sheetPhotoSubmit').onclick = async event => {
+        const submit = event.currentTarget;
+        const files = Array.from(fileInput.files || []);
+        if (files.length !== 2) { status.textContent = '请一次选择两张图片'; status.style.color = '#b91c1c'; return; }
+        if (files.some(file => file.size > 15 * 1024 * 1024)) { status.textContent = '图片单张不能超过 15MB'; status.style.color = '#b91c1c'; return; }
+        submit.disabled = true;
+        submit.textContent = '上传并启动中...';
+        status.textContent = '正在上传两张图片，请不要关闭';
+        status.style.color = '#6b7280';
+        try {
+            const form = new FormData();
+            form.append('parentId', parentId);
+            form.append('slotIndex', String(slotIndex));
+            form.append('needsProcessing', String(processingInput.checked));
+            files.forEach(file => form.append('files', file, file.name));
+            const response = await fetch('/api/sheet-self-photo', { method: 'POST', body: form });
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok || !result.ok) throw new Error(result.error || `操作失败 (${response.status})`);
+            status.textContent = result.needsProcessing ? '已启动精修流程' : '已跳过精修和抠图，直接进入图生图';
+            status.style.color = '#047857';
+            button.textContent = result.needsProcessing ? '已启动精修' : '已启动图生图';
+            setTimeout(() => { close(); loadStudioAdmin(); }, 800);
+        } catch (error) {
+            status.textContent = error.message;
+            status.style.color = '#b91c1c';
+            submit.disabled = false;
+            submit.textContent = '上传并启动';
+        }
+    };
+}
+
+async function retrySheetSelfAdminSlot(parentId, slotIndex, button) {
+    const original = button.textContent;
+    button.disabled = true;
+    button.textContent = '重试中...';
+    try {
+        const response = await fetch('/api/sheet-self-photo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ parentId, slotIndex, action: 'retry' })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.ok) throw new Error(result.error || `重试失败 (${response.status})`);
+        button.textContent = result.notified ? '已发给用户' : '已重新发送';
+        setTimeout(loadStudioAdmin, 700);
+    } catch (error) {
+        alert('重试失败：' + error.message);
+        button.disabled = false;
+        button.textContent = original;
+    }
 }
 
 async function retryImageTask(taskId, btn) {
@@ -2132,7 +2312,7 @@ function renderStudioHistoryCard(task) {
     const card = document.createElement('div');
     card.style.cssText = 'background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:14px 16px;margin-bottom:10px';
     
-    const modeText = task.mode === 'retouch' ? '精修图片' : task.mode === 'cutout' ? '白底抠图' : task.mode === 'variant' ? '变体改色' : task.mode === 'resize_ai' ? '尺寸修改' : task.mode === 'free' ? '自由模式' : '程序模式';
+    const modeText = task.mode === 'sheet_self' ? '表格自助' : task.mode === 'retouch' ? '精修图片' : task.mode === 'cutout' ? '白底抠图' : task.mode === 'variant' ? '变体改色' : task.mode === 'resize_ai' ? '尺寸修改' : task.mode === 'free' ? '自由模式' : '程序模式';
     const time = new Date(task.timestamp).toLocaleString('zh-CN', { timeZone:'Asia/Shanghai', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
     
     let html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'

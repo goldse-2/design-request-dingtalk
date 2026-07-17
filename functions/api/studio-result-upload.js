@@ -1,6 +1,7 @@
 import { markStudioNotificationFailed, markStudioNotificationSent, sendStudioResultImages } from '../_shared/studio-dingtalk.js';
 import { completeSilentLibraryReplacement, ensureSilentLibraryReplacement, replaceLibraryImage } from '../_shared/studio-library-replacement.js';
 import { studioTaskPutOptions } from '../_shared/studio-task-storage.js';
+import { advanceSheetSelfWorkflow } from '../_shared/sheet-self-workflow.js';
 
 export async function onRequestPut(context) {
     const { request, env } = context;
@@ -132,7 +133,7 @@ export async function onRequestPost(context) {
         task.dingtalkNotified = false;
         task.r2AutoNotified = false;
     }
-    const canNotify = Boolean(task.submitter?.unionId && env.DINGTALK_APPKEY && env.DINGTALK_APPSECRET);
+    const canNotify = Boolean(!task.silent && task.submitter?.unionId && env.DINGTALK_APPKEY && env.DINGTALK_APPSECRET);
     if (!libraryReplacement) {
         task.dingtalkNotificationState = canNotify ? 'sending' : 'pending';
         task.dingtalkNotificationStartedAt = canNotify ? new Date().toISOString() : '';
@@ -140,7 +141,11 @@ export async function onRequestPost(context) {
 
     await env.SUBMISSIONS.put(taskId, JSON.stringify(task), studioTaskPutOptions(task));
 
-    if (!libraryReplacement && canNotify) {
+    if (task.workflow?.type === 'sheet_self') {
+        await advanceSheetSelfWorkflow({ env, task, origin: new URL(request.url).origin });
+    }
+
+    if (!libraryReplacement && !task.silent && canNotify) {
         const notify = notifyUserDone(env, task, new URL(request.url).origin)
             .then(() => markStudioNotificationSent(env, taskId))
             .catch(async error => {
@@ -154,7 +159,7 @@ export async function onRequestPost(context) {
             });
         if (waitUntil) waitUntil(notify);
         else await notify;
-    } else if (!libraryReplacement && task.submitter?.unionId) {
+    } else if (!libraryReplacement && !task.silent && task.submitter?.unionId) {
         await appendQueue(env.SUBMISSIONS, 'studio:processingQueue:v2', taskId).catch(error => {
             console.error('Queue result notification retry failed:', taskId, error.message);
         });

@@ -1,6 +1,7 @@
 import { markStudioNotificationSent, sendStudioResultImages } from '../_shared/studio-dingtalk.js';
 import { RECORD_RETENTION_MS, studioTaskPutOptions, studioTaskRetentionAnchor } from '../_shared/studio-task-storage.js';
 import { parseResizeTarget, transformToExactJpeg } from './studio-check-overdue.js';
+import { advanceSheetSelfWorkflow, getSheetSelfSlots } from '../_shared/sheet-self-workflow.js';
 
 export async function onRequestPatch(context) {
     const { request, env } = context;
@@ -102,6 +103,7 @@ export async function onRequestGet(context) {
     const retouchQueue = url.searchParams.get('retouchQueue') === '1';
     const resizeQueue = url.searchParams.get('resizeQueue') === '1';
     const mode = String(url.searchParams.get('mode') || '').trim();
+    const includeSheetSlots = url.searchParams.get('includeSheetSlots') === '1';
     const requestedLimit = Number(url.searchParams.get('limit'));
     const taskLimit = Number.isFinite(requestedLimit) && requestedLimit > 0
         ? Math.min(100, Math.floor(requestedLimit))
@@ -153,6 +155,8 @@ export async function onRequestGet(context) {
             .map(r => { try { return JSON.parse(r); } catch { return null; } })
             .filter(t => t && t.kind === 'studio');
 
+        tasks = tasks.filter(task => !(task.silent && task.workflow?.type === 'sheet_self'));
+
         if (!all && unionId) {
             tasks = tasks.filter(t => t.submitter?.unionId === unionId);
         }
@@ -171,6 +175,12 @@ export async function onRequestGet(context) {
         }
 
         tasks.sort((a, b) => b.timestamp - a.timestamp);
+
+        if (includeSheetSlots) {
+            await Promise.all(tasks.filter(task => task.mode === 'sheet_self').map(async task => {
+                task.workflowSlots = await getSheetSelfSlots(env, task.id, task.sheetSelfSlotCount);
+            }));
+        }
 
         return Response.json({ ok: true, tasks });
     } catch (err) {
@@ -240,7 +250,11 @@ async function syncR2StudioResults(env, request, listedKeys) {
 
         await env.SUBMISSIONS.put(task.id, JSON.stringify(task), studioTaskPutOptions(task));
 
-        if (!task.r2AutoNotified && task.submitter?.unionId && env.DINGTALK_APPKEY && env.DINGTALK_APPSECRET) {
+        if (task.workflow?.type === 'sheet_self') {
+            await advanceSheetSelfWorkflow({ env, task, origin: new URL(request.url).origin });
+        }
+
+        if (!task.silent && !task.r2AutoNotified && task.submitter?.unionId && env.DINGTALK_APPKEY && env.DINGTALK_APPSECRET) {
             try {
                 await notifyUserDone(env, task, new URL(request.url).origin);
                 const latestTask = await markStudioNotificationSent(env, task.id, 'r2AutoNotified');
