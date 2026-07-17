@@ -2248,17 +2248,33 @@ function uploadSheetSelfPhotos(parentId, slotIndex, button, skipRetouch = false)
     const modal = document.createElement('div');
     modal.id = 'sheetSelfPhotoModal';
     modal.style.cssText = 'position:fixed;inset:0;z-index:12000;display:grid;place-items:center;padding:16px;background:rgba(17,24,39,.5)';
-    modal.innerHTML = `<div style="width:min(460px,100%);padding:24px;border-radius:10px;background:#fff;box-shadow:0 20px 60px rgba(0,0,0,.22)">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px"><strong style="font-size:1rem;color:#111827">上传一张或两张图片</strong><button type="button" data-photo-close style="display:grid;place-items:center;width:30px;height:30px;border:0;border-radius:6px;background:#f3f4f6;color:#4b5563;font-size:19px;cursor:pointer" title="关闭">×</button></div>
-        <label style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px;border:1px solid #e5e7eb;border-radius:8px;background:#f9fafb;cursor:pointer">
-            <span><strong style="display:block;color:#374151;font-size:.82rem">${skipRetouch ? '需要白底抠图' : '需要精修和白底抠图'}</strong><small id="sheetPhotoModeCopy" style="display:block;margin-top:3px;color:#6b7280;font-size:.72rem;line-height:1.45">${skipRetouch ? '用户已关闭精修：上传原图后直接完成白底抠图，再进入图生图' : '默认开启：上传一张或两张拍摄原图，分别完成精修和抠图后再图生图'}</small></span>
-            <span style="position:relative;width:42px;height:24px;flex-shrink:0"><input id="sheetPhotoNeedsProcessing" type="checkbox" checked style="position:absolute;opacity:0"><span id="sheetPhotoSwitchTrack" style="position:absolute;inset:0;border-radius:999px;background:#111827"><i style="position:absolute;top:3px;left:21px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:left .15s"></i></span></span>
-        </label>
-        <label for="sheetPhotoFiles" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:110px;margin-top:12px;padding:16px;border:1px dashed #cbd5e1;border-radius:8px;background:#fff;color:#6b7280;font-size:.8rem;text-align:center;cursor:pointer">
-            <svg viewBox="0 0 24 24" width="25" height="25" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 16V4m0 0L7 9m5-5 5 5"/><path d="M5 14v5h14v-5"/></svg>
-            <span id="sheetPhotoFileText" style="margin-top:7px">选择一张或两张拍摄原图</span><small style="margin-top:3px;color:#9ca3af">只选一张时会自动复制成两张 · 单张最大 15MB</small>
-        </label>
-        <input id="sheetPhotoFiles" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden>
+    modal.innerHTML = `<div style="width:min(680px,100%);padding:24px;border-radius:10px;background:#fff;box-shadow:0 20px 60px rgba(0,0,0,.22)">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px"><strong style="font-size:1rem;color:#111827">上传两张图片</strong><button type="button" data-photo-close style="display:grid;place-items:center;width:30px;height:30px;border:0;border-radius:6px;background:#f3f4f6;color:#4b5563;font-size:19px;cursor:pointer" title="关闭">×</button></div>
+        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">
+            <div style="min-width:0">
+                <label for="sheetPhotoFile0" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:132px;padding:14px 10px;border:1px dashed #cbd5e1;border-radius:8px;background:#fff;color:#6b7280;font-size:.78rem;text-align:center;cursor:pointer">
+                    <svg viewBox="0 0 24 24" width="25" height="25" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 16V4m0 0L7 9m5-5 5 5"/><path d="M5 14v5h14v-5"/></svg>
+                    <span id="sheetPhotoFileText0" style="max-width:100%;margin-top:7px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">选择第一张拍摄原图</span><small style="margin-top:3px;color:#9ca3af">单张最大 15MB</small>
+                </label>
+                <input id="sheetPhotoFile0" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+                <label id="sheetPhotoProcessingLabel0" style="display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:58px;margin-top:8px;padding:9px 10px;border:1px solid #e5e7eb;border-radius:8px;background:#f9fafb;cursor:pointer">
+                    <span style="min-width:0"><strong style="display:block;color:#374151;font-size:.74rem;line-height:1.35">${skipRetouch ? '需要白底抠图' : '需要精修和白底抠图'}</strong><small id="sheetPhotoModeCopy0" style="display:block;margin-top:2px;color:#6b7280;font-size:.67rem">此图需要处理</small></span>
+                    <span style="position:relative;width:38px;height:22px;flex:0 0 38px"><input id="sheetPhotoNeedsProcessing0" type="checkbox" checked style="position:absolute;opacity:0"><span id="sheetPhotoSwitchTrack0" style="position:absolute;inset:0;border-radius:999px;background:#111827"><i style="position:absolute;top:3px;left:19px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:left .15s"></i></span></span>
+                </label>
+            </div>
+            <div style="min-width:0">
+                <label for="sheetPhotoFile1" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:132px;padding:14px 10px;border:1px dashed #cbd5e1;border-radius:8px;background:#fff;color:#6b7280;font-size:.78rem;text-align:center;cursor:pointer">
+                    <svg viewBox="0 0 24 24" width="25" height="25" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 16V4m0 0L7 9m5-5 5 5"/><path d="M5 14v5h14v-5"/></svg>
+                    <span id="sheetPhotoFileText1" style="max-width:100%;margin-top:7px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">选择第二张拍摄原图</span><small style="margin-top:3px;color:#9ca3af">单张最大 15MB</small>
+                </label>
+                <input id="sheetPhotoFile1" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+                <label id="sheetPhotoProcessingLabel1" style="display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:58px;margin-top:8px;padding:9px 10px;border:1px solid #e5e7eb;border-radius:8px;background:#f9fafb;cursor:pointer">
+                    <span style="min-width:0"><strong style="display:block;color:#374151;font-size:.74rem;line-height:1.35">${skipRetouch ? '需要白底抠图' : '需要精修和白底抠图'}</strong><small id="sheetPhotoModeCopy1" style="display:block;margin-top:2px;color:#6b7280;font-size:.67rem">此图需要处理</small></span>
+                    <span style="position:relative;width:38px;height:22px;flex:0 0 38px"><input id="sheetPhotoNeedsProcessing1" type="checkbox" checked style="position:absolute;opacity:0"><span id="sheetPhotoSwitchTrack1" style="position:absolute;inset:0;border-radius:999px;background:#111827"><i style="position:absolute;top:3px;left:19px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:left .15s"></i></span></span>
+                </label>
+            </div>
+        </div>
+        <div style="margin-top:8px;color:#9ca3af;font-size:.7rem;text-align:center">只上传一张时会自动作为两张使用，并沿用该图片的处理开关</div>
         <button id="sheetPhotoLibraryOpen" type="button" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;height:40px;margin-top:10px;border:1px solid #d1d5db;border-radius:7px;background:#fff;color:#374151;font-size:.8rem;font-weight:700;cursor:pointer">
             <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7h6l2 2h10v10H3z"/><path d="M3 7V5h6l2 2"/></svg>
             <span>从去白底资料库选择</span>
@@ -2271,22 +2287,38 @@ function uploadSheetSelfPhotos(parentId, slotIndex, button, skipRetouch = false)
     const close = () => modal.remove();
     modal.querySelector('[data-photo-close]').onclick = close;
     modal.onclick = event => { if (event.target === modal) close(); };
-    const processingInput = modal.querySelector('#sheetPhotoNeedsProcessing');
-    const track = modal.querySelector('#sheetPhotoSwitchTrack');
-    const copy = modal.querySelector('#sheetPhotoModeCopy');
-    const fileInput = modal.querySelector('#sheetPhotoFiles');
-    const fileText = modal.querySelector('#sheetPhotoFileText');
+    const processingInputs = [0, 1].map(index => modal.querySelector(`#sheetPhotoNeedsProcessing${index}`));
+    const processingLabels = [0, 1].map(index => modal.querySelector(`#sheetPhotoProcessingLabel${index}`));
+    const tracks = [0, 1].map(index => modal.querySelector(`#sheetPhotoSwitchTrack${index}`));
+    const copies = [0, 1].map(index => modal.querySelector(`#sheetPhotoModeCopy${index}`));
+    const fileInputs = [0, 1].map(index => modal.querySelector(`#sheetPhotoFile${index}`));
+    const fileTexts = [0, 1].map(index => modal.querySelector(`#sheetPhotoFileText${index}`));
     const status = modal.querySelector('#sheetPhotoStatus');
     const submit = modal.querySelector('#sheetPhotoSubmit');
     const libraryPreview = modal.querySelector('#sheetPhotoLibraryPreview');
     let selectedLibraryFiles = [];
-    const setProcessingState = (enabled, disabled = false) => {
-        processingInput.checked = enabled;
-        processingInput.disabled = disabled;
-        processingInput.closest('label').style.opacity = disabled ? '.64' : '1';
-        processingInput.closest('label').style.cursor = disabled ? 'default' : 'pointer';
-        track.style.background = enabled ? '#111827' : '#cbd5e1';
-        track.querySelector('i').style.left = enabled ? '21px' : '3px';
+    const updateFileText = index => {
+        const file = fileInputs[index].files?.[0];
+        if (file) {
+            fileTexts[index].textContent = file.name;
+            return;
+        }
+        const order = index === 0 ? '第一张' : '第二张';
+        fileTexts[index].textContent = processingInputs[index].checked
+            ? `选择${order}拍摄原图`
+            : `选择${order}已处理图片`;
+    };
+    const setProcessingState = (index, enabled, disabled = false) => {
+        processingInputs[index].checked = enabled;
+        processingInputs[index].disabled = disabled;
+        processingLabels[index].style.opacity = disabled ? '.64' : '1';
+        processingLabels[index].style.cursor = disabled ? 'default' : 'pointer';
+        tracks[index].style.background = enabled ? '#111827' : '#cbd5e1';
+        tracks[index].querySelector('i').style.left = enabled ? '19px' : '3px';
+        copies[index].textContent = disabled
+            ? '资料库白底图，直接使用'
+            : (enabled ? '此图需要处理' : '此图直接使用');
+        if (!selectedLibraryFiles.length) updateFileText(index);
     };
     const renderLibrarySelection = () => {
         libraryPreview.innerHTML = selectedLibraryFiles.map(file => `
@@ -2296,42 +2328,30 @@ function uploadSheetSelfPhotos(parentId, slotIndex, button, skipRetouch = false)
             </div>`).join('');
         libraryPreview.hidden = selectedLibraryFiles.length === 0;
     };
-    processingInput.onchange = () => {
-        const enabled = processingInput.checked;
-        track.style.background = enabled ? '#111827' : '#cbd5e1';
-        track.querySelector('i').style.left = enabled ? '21px' : '3px';
-        copy.textContent = enabled
-            ? (skipRetouch ? '用户已关闭精修：上传原图后直接完成白底抠图，再进入图生图' : '默认开启：上传一张或两张拍摄原图，分别完成精修和抠图后再图生图')
-            : '已关闭：上传一张或两张已经处理好的图片，直接进入图生图';
-        fileText.textContent = enabled ? '选择一张或两张拍摄原图' : '选择一张或两张已处理好的图片';
-    };
-    fileInput.onchange = () => {
-        const files = Array.from(fileInput.files || []).slice(0, 2);
-        if (files.length) {
-            selectedLibraryFiles = [];
-            renderLibrarySelection();
-            setProcessingState(true);
-            copy.textContent = skipRetouch
-                ? '用户已关闭精修：上传原图后直接完成白底抠图，再进入图生图'
-                : '默认开启：上传一张或两张拍摄原图，分别完成精修和抠图后再图生图';
+    processingInputs.forEach((input, index) => {
+        input.onchange = () => setProcessingState(index, input.checked);
+    });
+    fileInputs.forEach((input, index) => {
+        input.onchange = () => {
+            if (input.files?.[0] && selectedLibraryFiles.length) {
+                selectedLibraryFiles = [];
+                renderLibrarySelection();
+                processingInputs.forEach((_, processingIndex) => setProcessingState(processingIndex, true));
+            }
+            updateFileText(index);
             submit.textContent = '上传并启动';
             status.textContent = '';
-        }
-        fileText.textContent = files.length === 1
-            ? `已选择 1 张：${files[0].name}（将作为两张处理）`
-            : (files.length === 2
-                ? `已选择 2 张：${files.map(file => file.name).join('、')}`
-                : (processingInput.checked ? '选择一张或两张拍摄原图' : '选择一张或两张已处理好的图片'));
-    };
+        };
+    });
     modal.querySelector('#sheetPhotoLibraryOpen').onclick = () => {
         openSheetPhotoLibraryPicker(selectedLibraryFiles, files => {
             selectedLibraryFiles = files;
-            fileInput.value = '';
-            setProcessingState(false, true);
-            copy.textContent = '已选择去白底资料库图片，将跳过精修和抠图，直接进入图生图';
-            fileText.textContent = files.length === 1
-                ? `资料库已选择 1 张：${files[0].name}（将作为两张使用）`
-                : `资料库已选择 2 张：${files.map(file => file.name).join('、')}`;
+            fileInputs.forEach(input => { input.value = ''; });
+            processingInputs.forEach((_, index) => setProcessingState(index, false, true));
+            const positionedFiles = files.length === 1 ? [files[0], files[0]] : files;
+            fileTexts.forEach((text, index) => {
+                text.textContent = positionedFiles[index]?.name || `资料库图片 ${index + 1}`;
+            });
             submit.textContent = '启动图生图';
             status.textContent = '';
             renderLibrarySelection();
@@ -2339,7 +2359,12 @@ function uploadSheetSelfPhotos(parentId, slotIndex, button, skipRetouch = false)
     };
     submit.onclick = async event => {
         const submitButton = event.currentTarget;
-        const files = Array.from(fileInput.files || []);
+        const localEntries = fileInputs.map((input, index) => ({
+            file: input.files?.[0] || null,
+            needsProcessing: processingInputs[index].checked
+        })).filter(entry => entry.file);
+        const files = localEntries.map(entry => entry.file);
+        const processingFlags = localEntries.map(entry => entry.needsProcessing);
         if (!selectedLibraryFiles.length && (files.length < 1 || files.length > 2)) { status.textContent = '请上传图片，或从去白底资料库选择'; status.style.color = '#b91c1c'; return; }
         if (files.some(file => file.size > 15 * 1024 * 1024)) { status.textContent = '图片单张不能超过 15MB'; status.style.color = '#b91c1c'; return; }
         submitButton.disabled = true;
@@ -2365,17 +2390,20 @@ function uploadSheetSelfPhotos(parentId, slotIndex, button, skipRetouch = false)
                 const form = new FormData();
                 form.append('parentId', parentId);
                 form.append('slotIndex', String(slotIndex));
-                form.append('needsProcessing', String(processingInput.checked));
+                form.append('needsProcessing', String(processingFlags.some(Boolean)));
+                form.append('processingFlags', JSON.stringify(processingFlags));
                 files.forEach(file => form.append('files', file, file.name));
                 response = await fetch('/api/sheet-self-photo', { method: 'POST', body: form });
             }
             const result = await response.json().catch(() => ({}));
             if (!response.ok || !result.ok) throw new Error(result.error || `操作失败 (${response.status})`);
             status.textContent = result.needsProcessing
-                ? (result.duplicatedSource ? '已把同一张图作为两张并启动处理' : (result.skipRetouch ? '已跳过精修并启动白底抠图' : '已启动精修流程'))
+                ? (result.mixedProcessing
+                    ? '已按两张图片各自的开关启动处理'
+                    : (result.duplicatedSource ? '已把同一张图作为两张并启动处理' : (result.skipRetouch ? '已启动白底抠图' : '已启动精修流程')))
                 : '已跳过精修和抠图，直接进入图生图';
             status.style.color = '#047857';
-            button.textContent = result.needsProcessing ? '已启动精修' : '已启动图生图';
+            button.textContent = result.needsProcessing ? '已启动处理' : '已启动图生图';
             setTimeout(() => { close(); loadStudioAdmin(); }, 800);
         } catch (error) {
             status.textContent = error.message;

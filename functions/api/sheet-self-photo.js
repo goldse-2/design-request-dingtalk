@@ -15,7 +15,7 @@ export async function onRequestPost(context) {
 
     const parentId = String(form.get('parentId') || '').trim();
     const slotIndex = Number(form.get('slotIndex'));
-    const needsProcessing = String(form.get('needsProcessing') || 'true') !== 'false';
+    const legacyNeedsProcessing = String(form.get('needsProcessing') || 'true') !== 'false';
     const files = form.getAll('files').filter(file => file && typeof file !== 'string');
     const loaded = await loadParentAndSlot(env, parentId, slotIndex);
     if (loaded.error) return loaded.error;
@@ -27,6 +27,11 @@ export async function onRequestPost(context) {
 
     const duplicatedSource = files.length === 1;
     const processingFiles = duplicatedSource ? [files[0], files[0]] : files;
+    const requestedFlags = parseProcessingFlags(form.get('processingFlags'), files.length, legacyNeedsProcessing);
+    const processingFlags = duplicatedSource
+        ? [requestedFlags[0], requestedFlags[0]]
+        : requestedFlags;
+    const needsProcessing = processingFlags.some(Boolean);
     const sourceKeys = [];
     for (let index = 0; index < processingFiles.length; index++) {
         const file = processingFiles[index];
@@ -43,14 +48,30 @@ export async function onRequestPost(context) {
     try {
         const origin = new URL(request.url).origin;
         if (needsProcessing) {
-            await startSheetSelfPhotographySlot(env, loaded.parent, loaded.slot, sourceKeys, origin);
-            return Response.json({ ok: true, parentId, slotIndex, stage: loaded.slot.skipRetouch ? 'cutout' : 'retouch', needsProcessing: true, skipRetouch: loaded.slot.skipRetouch === true, duplicatedSource });
+            await startSheetSelfPhotographySlot(env, loaded.parent, loaded.slot, sourceKeys, origin, processingFlags);
+            return Response.json({
+                ok: true,
+                parentId,
+                slotIndex,
+                stage: loaded.slot.skipRetouch ? 'cutout' : 'retouch',
+                needsProcessing: true,
+                skipRetouch: loaded.slot.skipRetouch === true,
+                duplicatedSource,
+                processingFlags,
+                mixedProcessing: processingFlags.some(Boolean) && processingFlags.some(flag => !flag)
+            });
         }
         loaded.slot.sourceKeys = sourceKeys;
         loaded.slot.cutoutKeys = sourceKeys;
+        loaded.slot.processingFlags = [false, false];
         loaded.slot.processingSkipped = true;
         loaded.slot.error = '';
         loaded.slot.failedStage = '';
+        loaded.slot.children = {
+            ...(loaded.slot.children || {}),
+            retouch: [],
+            cutout: []
+        };
         await putSheetSelfSlot(env, loaded.slot);
         await startSheetSelfProgramSlot(env, loaded.parent, loaded.slot, origin);
         return Response.json({ ok: true, parentId, slotIndex, stage: 'program', needsProcessing: false, duplicatedSource });
@@ -120,6 +141,7 @@ async function useLibraryImages(context, body) {
     try {
         loaded.slot.sourceKeys = sourceKeys;
         loaded.slot.cutoutKeys = sourceKeys;
+        loaded.slot.processingFlags = [false, false];
         loaded.slot.processingSkipped = true;
         loaded.slot.error = '';
         loaded.slot.failedStage = '';
@@ -171,4 +193,16 @@ function cleanLibraryFileName(name, key) {
 
 function isSupportedLibraryImage(name) {
     return /\.(?:jpe?g|png|webp)$/i.test(String(name || ''));
+}
+
+function parseProcessingFlags(rawValue, fileCount, fallback) {
+    let values = [];
+    try {
+        const parsed = JSON.parse(String(rawValue || '[]'));
+        if (Array.isArray(parsed)) values = parsed;
+    } catch {}
+    return Array.from({ length: fileCount }, (_, index) => {
+        if (index >= values.length) return fallback;
+        return values[index] !== false && values[index] !== 'false';
+    });
 }
