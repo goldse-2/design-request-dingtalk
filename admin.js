@@ -1824,10 +1824,13 @@ function renderSheetSelfAdminSlot(task, slot) {
     const displayNumber = Number(slot.displayIndex ?? slot.index) + 1;
     const referenceUrl = slot.referenceKey?.key ? '/api/library-file/' + encodeURIComponent(slot.referenceKey.key) : '';
     row.innerHTML = `<div class="sheet-self-admin-product" style="display:flex;align-items:center;gap:10px;min-width:0">
-        ${referenceUrl ? `<img src="${referenceUrl}" alt="" style="width:44px;height:44px;object-fit:cover;border:1px solid #e5e7eb;border-radius:6px;background:#f9fafb" loading="lazy">` : ''}
+        ${referenceUrl ? `<button type="button" class="sheet-self-admin-preview" data-sheet-reference-preview title="点击放大查看"><img src="${referenceUrl}" alt="第 ${displayNumber} 张参考图" loading="lazy"></button>` : ''}
         <div style="min-width:0"><strong style="display:block;color:#111827;font-size:.82rem">第 ${displayNumber} 张</strong><span style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#6b7280;font-size:.72rem">${esc(slot.productName || '未命名产品')}</span></div>
     </div>
     <div class="sheet-self-admin-progress-cell" style="min-width:0">${renderSheetSelfProgress(slot)}${slot.error || slot.notificationError ? `<div style="margin-top:7px;color:#b91c1c;font-size:.7rem;line-height:1.4;word-break:break-word">${esc(slot.error || slot.notificationError)}</div>` : ''}</div>`;
+
+    const previewButton = row.querySelector('[data-sheet-reference-preview]');
+    if (previewButton) previewButton.onclick = () => openAdminImagePreview(referenceUrl, `第 ${displayNumber} 张参考图`);
 
     const actions = document.createElement('div');
     actions.className = 'sheet-self-admin-actions';
@@ -1866,6 +1869,18 @@ function ensureSheetSelfAdminStyles() {
     const style = document.createElement('style');
     style.id = 'sheetSelfAdminStyles';
     style.textContent = `
+        .sheet-self-admin-preview { width:44px; height:44px; flex:0 0 44px; padding:0; overflow:hidden; border:1px solid #e5e7eb; border-radius:6px; background:#f9fafb; cursor:zoom-in; }
+        .sheet-self-admin-preview:hover { border-color:#64748b; box-shadow:0 0 0 2px rgba(100,116,139,.12); }
+        .sheet-self-admin-preview:focus-visible { outline:2px solid #2563eb; outline-offset:2px; }
+        .sheet-self-admin-preview img { display:block; width:100%; height:100%; object-fit:cover; }
+        .admin-image-preview { position:fixed; inset:0; z-index:15000; display:grid; place-items:center; padding:24px; background:rgba(15,23,42,.78); backdrop-filter:blur(2px); }
+        .admin-image-preview-dialog { position:relative; display:grid; grid-template-rows:auto minmax(0,1fr); width:min(1120px,94vw); height:min(820px,90vh); overflow:hidden; border-radius:8px; background:#fff; box-shadow:0 24px 70px rgba(0,0,0,.35); }
+        .admin-image-preview-head { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:12px 14px 12px 18px; border-bottom:1px solid #e5e7eb; }
+        .admin-image-preview-title { overflow:hidden; color:#111827; font-size:.88rem; font-weight:700; text-overflow:ellipsis; white-space:nowrap; }
+        .admin-image-preview-close { display:grid; place-items:center; width:34px; height:34px; padding:0; border:0; border-radius:6px; background:#f1f5f9; color:#475569; font-size:21px; cursor:pointer; }
+        .admin-image-preview-stage { position:relative; display:grid; place-items:center; min-height:0; padding:18px; overflow:auto; background:#f8fafc; }
+        .admin-image-preview-stage img { display:block; max-width:100%; max-height:100%; object-fit:contain; }
+        .admin-image-preview-status { position:absolute; inset:auto; color:#64748b; font-size:.8rem; }
         @media (max-width: 800px) {
             .sheet-self-admin-slot { grid-template-columns:minmax(0,1fr) auto !important; gap:12px !important; }
             .sheet-self-admin-progress-cell { grid-column:1 / -1; grid-row:2; }
@@ -1879,6 +1894,38 @@ function ensureSheetSelfAdminStyles() {
         }
     `;
     document.head.appendChild(style);
+}
+
+function openAdminImagePreview(imageUrl, title) {
+    const existing = document.getElementById('adminImagePreview');
+    if (existing?.closePreview) existing.closePreview();
+
+    const previousOverflow = document.body.style.overflow;
+    const overlay = document.createElement('div');
+    overlay.id = 'adminImagePreview';
+    overlay.className = 'admin-image-preview';
+    overlay.innerHTML = `<div class="admin-image-preview-dialog" role="dialog" aria-modal="true" aria-label="${esc(title || '查看大图')}">
+        <div class="admin-image-preview-head"><div class="admin-image-preview-title">${esc(title || '查看大图')}</div><button type="button" class="admin-image-preview-close" aria-label="关闭大图">×</button></div>
+        <div class="admin-image-preview-stage"><div class="admin-image-preview-status">图片加载中...</div><img src="${imageUrl}" alt="${esc(title || '参考图')}"></div>
+    </div>`;
+
+    const close = () => {
+        document.removeEventListener('keydown', onKeyDown);
+        document.body.style.overflow = previousOverflow;
+        overlay.remove();
+    };
+    const onKeyDown = event => { if (event.key === 'Escape') close(); };
+    overlay.closePreview = close;
+    overlay.querySelector('.admin-image-preview-close').onclick = close;
+    overlay.onclick = event => { if (event.target === overlay) close(); };
+    const image = overlay.querySelector('img');
+    const status = overlay.querySelector('.admin-image-preview-status');
+    image.onload = () => { status.hidden = true; };
+    image.onerror = () => { status.textContent = '图片加载失败，请稍后重试'; };
+    document.addEventListener('keydown', onKeyDown);
+    document.body.style.overflow = 'hidden';
+    document.body.appendChild(overlay);
+    overlay.querySelector('.admin-image-preview-close').focus();
 }
 
 function renderSheetSelfProgress(slot) {
