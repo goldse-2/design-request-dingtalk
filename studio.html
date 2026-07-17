@@ -218,15 +218,18 @@
         .sheet-self-global-product input { width:100%; padding:10px 12px; border:1px solid #d8dde5; border-radius:6px; background:#fff; color:#111827; font-size:.82rem; outline:none; }
         .sheet-self-global-product input:focus { border-color:#6366f1; box-shadow:0 0 0 3px rgba(99,102,241,.1); }
         .sheet-self-global-product small { color:#9ca3af; font-size:.69rem; line-height:1.45; }
-        .sheet-self-table-head { display:grid; grid-template-columns:58px minmax(160px,.9fr) minmax(220px,1.1fr) minmax(300px,1.5fr) minmax(125px,.7fr); gap:18px; padding:10px 20px; border-bottom:1px solid #e5e7eb; background:#f8fafc; color:#6b7280; font-size:.67rem; font-weight:700; }
+        .sheet-self-table-head { display:grid; grid-template-columns:110px minmax(160px,.9fr) minmax(220px,1.1fr) minmax(300px,1.5fr) minmax(125px,.7fr); gap:18px; padding:10px 20px; border-bottom:1px solid #e5e7eb; background:#f8fafc; color:#6b7280; font-size:.67rem; font-weight:700; }
         .sheet-self-grid { display:grid; grid-template-columns:minmax(0,1fr); }
-        .sheet-self-slot { display:grid; grid-template-columns:58px minmax(160px,.9fr) minmax(220px,1.1fr) minmax(300px,1.5fr) minmax(125px,.7fr); gap:18px; align-items:start; min-width:0; padding:16px 20px; border-bottom:1px solid #e9edf2; background:#fff; transition:background .15s; }
+        .sheet-self-slot { display:grid; grid-template-columns:110px minmax(160px,.9fr) minmax(220px,1.1fr) minmax(300px,1.5fr) minmax(125px,.7fr); gap:18px; align-items:start; min-width:0; padding:16px 20px; border-bottom:1px solid #e9edf2; background:#fff; transition:background .15s; }
         .sheet-self-slot:last-child { border-bottom:0; }
         .sheet-self-slot:hover { background:#fbfcfe; }
         .sheet-self-slot-head { display:flex; flex-direction:column; align-items:flex-start; gap:8px; min-width:0; }
         .sheet-self-slot-title { display:flex; flex-direction:column; align-items:flex-start; gap:5px; color:#111827; font-size:.72rem; font-weight:800; white-space:nowrap; }
         .sheet-self-slot-number { display:grid; place-items:center; width:28px; height:28px; border-radius:6px; background:#111827; color:#fff; font-size:.78rem; }
         .sheet-self-fixed-size { color:#047857; font-size:.63rem; font-weight:700; line-height:1.35; }
+        .sheet-self-size { display:grid; gap:4px; width:100%; color:#6b7280; font-size:.64rem; font-weight:700; }
+        .sheet-self-size select { width:100%; min-height:32px; padding:5px 24px 5px 7px; border:1px solid #d8dde5; border-radius:6px; background:#fff; color:#111827; font-size:.68rem; font-weight:700; outline:none; }
+        .sheet-self-size select:focus { border-color:#6366f1; box-shadow:0 0 0 3px rgba(99,102,241,.1); }
         .sheet-self-product { display:grid; gap:9px; min-width:0; }
         .sheet-self-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
         .sheet-self-copy-tools { grid-column:1/-1; display:flex; align-items:center; gap:8px; min-width:0; }
@@ -241,6 +244,8 @@
         .sheet-self-media { display:flex; flex-direction:column; min-width:0; }
         .sheet-self-images { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; }
         .sheet-self-images.is-photographer { grid-template-columns:minmax(120px,180px); }
+        .sheet-self-a-plus-note { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:7px; color:#047857; font-size:.65rem; line-height:1.4; }
+        .sheet-self-a-plus-note button { flex-shrink:0; padding:3px 6px; border:1px solid #a7f3d0; border-radius:5px; background:#ecfdf5; color:#047857; font-size:.63rem; font-weight:800; cursor:pointer; }
         .sheet-self-image-slot { position:relative; min-width:0; height:112px; border:1px dashed #cbd5e1; border-radius:6px; overflow:hidden; background:#f8fafc; }
         .sheet-self-image-slot.is-reference { border-color:#bfdbfe; background:#f6faff; }
         .sheet-self-image-slot.is-product { border-color:#d5dbe3; background:#fafbfc; }
@@ -262,6 +267,12 @@
         .sheet-self-switch input:checked + span::after { transform:translateX(16px); }
         .sheet-self-slot-status { min-height:16px; margin-top:10px; color:#6b7280; font-size:.66rem; line-height:1.4; }
         .sheet-self-slot-status.err { color:#b91c1c; }
+        .sheet-self-add-row { display:flex; justify-content:center; padding:14px 20px; border-top:1px solid #eef0f3; background:#fff; }
+        .sheet-self-add { display:inline-flex; align-items:center; justify-content:center; gap:7px; min-height:38px; padding:8px 16px; border:1px dashed #9ca3af; border-radius:7px; background:#f9fafb; color:#374151; font-size:.78rem; font-weight:800; cursor:pointer; }
+        .sheet-self-add[hidden] { display:none; }
+        .sheet-self-add:hover { border-color:#111827; background:#f3f4f6; color:#111827; }
+        .sheet-self-add > span { display:grid; place-items:center; width:19px; height:19px; border-radius:50%; background:#111827; color:#fff; font-size:15px; line-height:1; }
+        .sheet-self-add small { color:#9ca3af; font-size:.65rem; }
         .sheet-source-overlay { position:fixed; inset:0; z-index:12000; display:grid; place-items:center; padding:18px; background:rgba(17,24,39,.48); }
         .sheet-source-dialog { width:min(430px,100%); padding:22px; border-radius:10px; background:#fff; box-shadow:0 24px 70px rgba(15,23,42,.22); }
         .sheet-source-head { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:16px; }
@@ -281,7 +292,7 @@
         }
         @media (max-width: 1080px) {
             .sheet-self-table-head { display:none; }
-            .sheet-self-slot { grid-template-columns:64px minmax(0,1fr) minmax(280px,.9fr); }
+            .sheet-self-slot { grid-template-columns:120px minmax(0,1fr) minmax(280px,.9fr); }
             .sheet-self-slot-head { grid-row:1/3; }
             .sheet-self-product { grid-column:2; }
             .sheet-self-fields { grid-column:2; }
@@ -304,12 +315,15 @@
             .sheet-self-slot-head, .sheet-self-product, .sheet-self-fields, .sheet-self-media, .sheet-self-setting { grid-column:auto; grid-row:auto; }
             .sheet-self-slot-head { flex-direction:row; align-items:center; justify-content:space-between; padding-bottom:10px; border-bottom:1px solid #edf0f4; }
             .sheet-self-slot-title { flex-direction:row; align-items:center; }
+            .sheet-self-size { width:min(180px,48%); }
             .sheet-self-setting { padding:10px 0 0; }
         }
         @media (max-width: 640px) {
             .sheet-self-head, .sheet-self-actions { align-items:stretch; flex-direction:column; padding-left:16px; padding-right:16px; }
             .sheet-self-global-product { grid-template-columns:minmax(0,1fr); gap:7px; padding:14px 16px; }
             .sheet-self-slot { padding:14px 16px; }
+            .sheet-self-add-row { padding:12px 16px; }
+            .sheet-self-add { width:100%; }
             .sheet-self-save { text-align:left; }
             .sheet-self-fields { grid-template-columns:minmax(0,1fr); }
             .sheet-self-field.full { grid-column:auto; }
@@ -520,6 +534,6 @@
     帮助中心
 </button>
 
-    <script src="studio.js?v=20260717-no-ai-count"></script>
+    <script src="studio.js?v=20260717-sheet8-sizes"></script>
 </body>
 </html>

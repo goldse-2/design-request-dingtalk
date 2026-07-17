@@ -475,8 +475,8 @@ const SHEET_SELF_FORM = `
         <div class="studio-panel sheet-self-panel">
             <div class="sheet-self-head">
                 <div>
-                    <h2>表格自助 · 最多六张</h2>
-                    <p>填写 1–6 个图片位，每个图片位按图生图模式生成一张，固定输出 1600 × 1600。内容和已上传图片会自动保存。</p>
+                    <h2>表格自助 · 最多八个图片位</h2>
+                    <p>默认显示 3 个图片位，可按需添加到 8 个；每个图片位可独立选择输出尺寸。内容和已上传图片会自动保存。</p>
                 </div>
                 <div class="sheet-self-save" id="sheetSelfSaveStatus">等待编辑</div>
             </div>
@@ -492,8 +492,11 @@ const SHEET_SELF_FORM = `
                 </div>
                 <small>只需填写一次，提交时会自动用于下面所有已填写的图片位。</small>
             </div>
-            <div class="sheet-self-table-head" aria-hidden="true"><span>图片</span><span>其他文案</span><span>标题与副标题</span><span>素材图片</span><span>设置</span></div>
+            <div class="sheet-self-table-head" aria-hidden="true"><span>图片 / 尺寸</span><span>其他文案</span><span>标题与副标题</span><span>素材图片</span><span>设置</span></div>
             <div class="sheet-self-grid" id="sheetSelfGrid"></div>
+            <div class="sheet-self-add-row">
+                <button type="button" class="sheet-self-add" id="sheetSelfAddSlot"><span aria-hidden="true">+</span> 添加图片位 <small id="sheetSelfSlotCount">3/8</small></button>
+            </div>
             <div class="sheet-self-actions">
                 <p>整个流程时间需要1-3小时才能完成，请耐心等待</p>
                 <button class="sf-submit sheet-self-submit" id="sheetSelfSubmit">提交已填写图片</button>
@@ -666,7 +669,8 @@ const VARIANT_FORM = `
     </div>`;
 
 const uploads = { freeImages: [], freeModel: null, freeScene: null, freeProduct: [], freeProduct1: null, freeProduct2: null, progRef: [], progProduct: [], retouchImages: [], cutoutImages: [], variantImages: [] };
-const SHEET_SELF_SLOT_COUNT = 6;
+const SHEET_SELF_DEFAULT_SLOT_COUNT = 3;
+const SHEET_SELF_SLOT_COUNT = 8;
 const SHEET_SELF_LOCAL_PREFIX = 'sheet_self_draft_v1:';
 let sheetSelfState = createEmptySheetSelfState();
 let sheetSelfLoadedUnionId = '';
@@ -703,24 +707,30 @@ const aPlusDoubleState = {
 
 function createEmptySheetSelfState() {
     return {
-        version: 1,
+        version: 2,
         productName: '',
         savedAt: '',
-        slots: Array.from({ length: SHEET_SELF_SLOT_COUNT }, (_, index) => ({
-            index,
-            photographer: true,
-            title: '',
-            subtitle: '',
-            otherText: '',
-            referenceKey: null,
-            productKeys: [],
-            uploading: false,
-            status: '',
-            copyAiBusy: false,
-            copyAiStatus: '',
-            copyAiState: '',
-            copyAiRequestId: 0
-        }))
+        slots: Array.from({ length: SHEET_SELF_DEFAULT_SLOT_COUNT }, (_, index) => createSheetSelfSlot(index))
+    };
+}
+
+function createSheetSelfSlot(index) {
+    return {
+        index,
+        photographer: true,
+        size: '1600x1600',
+        aPlusDouble: false,
+        title: '',
+        subtitle: '',
+        otherText: '',
+        referenceKey: null,
+        productKeys: [],
+        uploading: false,
+        status: '',
+        copyAiBusy: false,
+        copyAiStatus: '',
+        copyAiState: '',
+        copyAiRequestId: 0
     };
 }
 
@@ -1370,6 +1380,7 @@ function initSheetSelfMode() {
         persistSheetSelfDraft();
     });
     document.getElementById('sheetSelfIdentifyProductBtn')?.addEventListener('click', () => runSheetSelfProductRecognition(true));
+    document.getElementById('sheetSelfAddSlot')?.addEventListener('click', addSheetSelfSlot);
     renderSheetSelfGrid();
     updateSheetSelfProductAiControls();
 
@@ -1384,6 +1395,20 @@ function initSheetSelfMode() {
     grid.addEventListener('change', event => {
         const slotIndex = Number(event.target.dataset.slotIndex);
         if (!Number.isInteger(slotIndex) || !sheetSelfState.slots[slotIndex]) return;
+        if (event.target.matches('[data-sheet-size]')) {
+            const slot = sheetSelfState.slots[slotIndex];
+            const previousAPlus = slot.aPlusDouble === true;
+            slot.size = normalizeSheetSelfSize(event.target.value);
+            slot.aPlusDouble = slot.size === A_PLUS_DOUBLE_SIZE;
+            if (previousAPlus !== slot.aPlusDouble) {
+                slot.referenceKey = null;
+                resetSheetSelfCopyAiState(slot);
+            }
+            persistSheetSelfDraft(300);
+            renderSheetSelfGrid();
+            if (slot.aPlusDouble) setTimeout(() => openSheetAPlusDoubleModal(slotIndex), 0);
+            return;
+        }
         if (event.target.matches('[data-sheet-photographer]')) {
             sheetSelfState.slots[slotIndex].photographer = event.target.checked;
             persistSheetSelfDraft();
@@ -1403,9 +1428,16 @@ function initSheetSelfMode() {
             runSheetSelfCopyGeneration(Number(copyButton.dataset.slotIndex));
             return;
         }
+        const aPlusButton = event.target.closest('[data-sheet-a-plus-edit]');
+        if (aPlusButton) {
+            openSheetAPlusDoubleModal(Number(aPlusButton.dataset.slotIndex));
+            return;
+        }
         const sourceButton = event.target.closest('[data-sheet-source]');
         if (sourceButton) {
-            openSheetImageSource(Number(sourceButton.dataset.slotIndex), sourceButton.dataset.uploadType);
+            const slotIndex = Number(sourceButton.dataset.slotIndex);
+            if (sourceButton.dataset.uploadType === 'a_plus') openSheetAPlusDoubleModal(slotIndex);
+            else openSheetImageSource(slotIndex, sourceButton.dataset.uploadType);
             return;
         }
         const button = event.target.closest('[data-sheet-remove]');
@@ -1447,10 +1479,27 @@ function renderSheetSelfGrid() {
     const grid = document.getElementById('sheetSelfGrid');
     if (!grid) return;
     grid.innerHTML = sheetSelfState.slots.map(renderSheetSelfSlot).join('');
+    const addButton = document.getElementById('sheetSelfAddSlot');
+    const count = document.getElementById('sheetSelfSlotCount');
+    if (count) count.textContent = `${sheetSelfState.slots.length}/${SHEET_SELF_SLOT_COUNT}`;
+    if (addButton) {
+        addButton.disabled = sheetSelfState.slots.length >= SHEET_SELF_SLOT_COUNT;
+        addButton.hidden = sheetSelfState.slots.length >= SHEET_SELF_SLOT_COUNT;
+    }
+}
+
+function addSheetSelfSlot() {
+    if (sheetSelfState.slots.length >= SHEET_SELF_SLOT_COUNT) return;
+    sheetSelfState.slots.push(createSheetSelfSlot(sheetSelfState.slots.length));
+    persistSheetSelfDraft(300);
+    renderSheetSelfGrid();
+    document.querySelector(`[data-sheet-slot="${sheetSelfState.slots.length - 1}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 function renderSheetSelfSlot(slot, slotIndex) {
-    const reference = renderSheetSelfImage(slot.referenceKey, slotIndex, 'reference', 0, '要模仿的图');
+    const size = normalizeSheetSelfSize(slot.size);
+    const isAPlus = size === A_PLUS_DOUBLE_SIZE;
+    const reference = renderSheetSelfImage(slot.referenceKey, slotIndex, 'reference', 0, isAPlus ? 'A+ 上下双图参考' : '要模仿的图', isAPlus ? 'a_plus' : 'reference');
     const products = slot.photographer
         ? ''
         : [0, 1].map(index => renderSheetSelfImage(slot.productKeys[index], slotIndex, 'product', index, `白底产品图 ${index + 1}`)).join('');
@@ -1461,7 +1510,11 @@ function renderSheetSelfSlot(slot, slotIndex) {
     return `<section class="sheet-self-slot" data-sheet-slot="${slotIndex}">
         <div class="sheet-self-slot-head">
             <div class="sheet-self-slot-title"><span class="sheet-self-slot-number">${slotIndex + 1}</span><span>第 ${slotIndex + 1} 张图片</span></div>
-            <span class="sheet-self-fixed-size">1600 × 1600</span>
+            <label class="sheet-self-size"><span>输出尺寸</span><select data-sheet-size data-slot-index="${slotIndex}" aria-label="第 ${slotIndex + 1} 张输出尺寸">
+                <option value="1600x1600"${size === '1600x1600' ? ' selected' : ''}>1600 × 1600</option>
+                <option value="1464x600"${size === '1464x600' ? ' selected' : ''}>1464 × 600</option>
+                <option value="1464x1200"${isAPlus ? ' selected' : ''}>A+ 连续双图</option>
+            </select></label>
         </div>
         <div class="sheet-self-product">
             <div class="sheet-self-field"><label>其他文案</label><textarea data-sheet-field="otherText" data-slot-index="${slotIndex}" maxlength="300" placeholder="可选，多个卖点可用分号分隔">${sheetSelfEsc(slot.otherText)}</textarea></div>
@@ -1482,6 +1535,7 @@ function renderSheetSelfSlot(slot, slotIndex) {
                 ${reference}
                 ${products}
             </div>
+            ${isAPlus ? `<div class="sheet-self-a-plus-note">输出 1464 × 1200，完成后自动拆成上下两张 1464 × 600${slot.referenceKey?.key ? `<button type="button" data-sheet-a-plus-edit data-slot-index="${slotIndex}">重新上传</button>` : ''}</div>` : ''}
             <input type="file" accept="image/*" data-sheet-upload="reference" data-slot-index="${slotIndex}" id="sheetRefInput-${slotIndex}" hidden${uploadDisabled}>
             <input type="file" accept="image/*" data-sheet-upload="product" data-slot-index="${slotIndex}" id="sheetProductInput-${slotIndex}" multiple hidden${uploadDisabled}>
         </div>
@@ -1495,7 +1549,7 @@ function renderSheetSelfSlot(slot, slotIndex) {
     </section>`;
 }
 
-function renderSheetSelfImage(file, slotIndex, type, productIndex, label) {
+function renderSheetSelfImage(file, slotIndex, type, productIndex, label, sourceType = type) {
     if (file?.key) {
         const removeAttrs = type === 'reference'
             ? `data-sheet-remove="reference" data-slot-index="${slotIndex}"`
@@ -1507,11 +1561,144 @@ function renderSheetSelfImage(file, slotIndex, type, productIndex, label) {
         </div>`;
     }
     return `<div class="sheet-self-image-slot ${type === 'reference' ? 'is-reference' : 'is-product'}${sheetSelfState.slots[slotIndex].uploading ? ' is-loading' : ''}">
-        <button type="button" class="sheet-self-image-choice" data-sheet-source data-slot-index="${slotIndex}" data-upload-type="${type}">
+        <button type="button" class="sheet-self-image-choice" data-sheet-source data-slot-index="${slotIndex}" data-upload-type="${sourceType}">
             <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 16V4m0 0L7 9m5-5 5 5"/><path d="M5 14v5h14v-5"/></svg>
-            <span>${label}<br>单张最大 8 MB</span>
+            <span>${label}<br>${sourceType === 'a_plus' ? '上传上下两张 1464 × 600' : '单张最大 8 MB'}</span>
         </button>
     </div>`;
+}
+
+function normalizeSheetSelfSize(value) {
+    const size = String(value || '').replace(/[×\s]/g, 'x').toLowerCase();
+    return ['1600x1600', '1464x600', A_PLUS_DOUBLE_SIZE].includes(size) ? size : '1600x1600';
+}
+
+function openSheetAPlusDoubleModal(slotIndex) {
+    const slot = sheetSelfState.slots[slotIndex];
+    if (currentMode !== 'sheet' || !slot || slot.uploading) return;
+    document.getElementById('aPlusDoubleModal')?.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'aPlusDoubleModal';
+    overlay.className = 'a-plus-double-modal';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-labelledby', 'aPlusDoubleModalTitle');
+    overlay.innerHTML = `
+        <div class="a-plus-double-dialog">
+            <div class="a-plus-double-dialog-head">
+                <div><h3 id="aPlusDoubleModalTitle">第 ${slotIndex + 1} 张 · A+ 连续双图</h3><p>分别上传上下两张 1464 × 600 图片</p></div>
+                <button type="button" class="a-plus-double-close" aria-label="关闭">×</button>
+            </div>
+            <div class="a-plus-double-slot-grid">
+                <div class="a-plus-double-slot-wrap">
+                    <div class="a-plus-double-slot-label"><span>1</span> 上半部分</div>
+                    <button type="button" class="a-plus-double-slot" data-a-plus-slot="top"></button>
+                    <input type="file" accept="image/*" data-a-plus-input="top" hidden>
+                </div>
+                <div class="a-plus-double-slot-wrap">
+                    <div class="a-plus-double-slot-label"><span>2</span> 下半部分</div>
+                    <button type="button" class="a-plus-double-slot" data-a-plus-slot="bottom"></button>
+                    <input type="file" accept="image/*" data-a-plus-input="bottom" hidden>
+                </div>
+            </div>
+            <div class="a-plus-double-modal-status" aria-live="polite">合并后固定输出 1464 × 1200，成品会自动拆成上下两张。</div>
+            <div class="a-plus-double-dialog-actions">
+                <button type="button" class="a-plus-double-cancel">取消</button>
+                <button type="button" class="a-plus-double-merge" disabled>合并并使用</button>
+            </div>
+        </div>`;
+
+    const selected = { top: null, bottom: null };
+    const status = overlay.querySelector('.a-plus-double-modal-status');
+    const mergeButton = overlay.querySelector('.a-plus-double-merge');
+    const close = () => {
+        document.removeEventListener('keydown', onKeydown);
+        overlay.remove();
+    };
+    const setStatus = (message, error = false) => {
+        status.textContent = message;
+        status.classList.toggle('error', error);
+    };
+    const renderSlot = part => {
+        const button = overlay.querySelector(`[data-a-plus-slot="${part}"]`);
+        const item = selected[part];
+        button.replaceChildren();
+        button.classList.toggle('has-image', Boolean(item));
+        if (item) {
+            const image = document.createElement('img');
+            image.src = item.dataUrl;
+            image.alt = part === 'top' ? '上半部分预览' : '下半部分预览';
+            const copy = document.createElement('span');
+            const name = document.createElement('strong');
+            const dimensions = document.createElement('small');
+            name.textContent = item.name;
+            dimensions.textContent = '1464 × 600 · 点击更换';
+            copy.append(name, dimensions);
+            button.append(image, copy);
+        } else {
+            button.innerHTML = '<svg viewBox="0 0 24 24" width="25" height="25" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5M12 3v12"/></svg><span><strong>选择图片</strong><small>必须为 1464 × 600</small></span>';
+        }
+        mergeButton.disabled = !(selected.top && selected.bottom);
+    };
+    const selectFile = async (part, file) => {
+        if (!file) return;
+        setStatus(`正在读取${part === 'top' ? '上半部分' : '下半部分'}...`);
+        try {
+            selected[part] = await readAPlusHalf(file, part === 'top' ? '上半部分' : '下半部分');
+            renderSlot(part);
+            setStatus(selected.top && selected.bottom ? '两张图片尺寸正确，可以合并。' : '图片尺寸正确，请继续上传另一张。');
+        } catch (error) {
+            setStatus(error.message, true);
+        }
+    };
+    ['top', 'bottom'].forEach(part => {
+        const button = overlay.querySelector(`[data-a-plus-slot="${part}"]`);
+        const input = overlay.querySelector(`[data-a-plus-input="${part}"]`);
+        button.addEventListener('click', () => input.click());
+        button.addEventListener('dragover', event => { event.preventDefault(); button.classList.add('dragover'); });
+        button.addEventListener('dragleave', () => button.classList.remove('dragover'));
+        button.addEventListener('drop', event => {
+            event.preventDefault();
+            button.classList.remove('dragover');
+            selectFile(part, event.dataTransfer.files[0]);
+        });
+        input.addEventListener('change', event => {
+            selectFile(part, event.target.files[0]);
+            event.target.value = '';
+        });
+        renderSlot(part);
+    });
+    const onKeydown = event => { if (event.key === 'Escape') close(); };
+    overlay.querySelector('.a-plus-double-close').addEventListener('click', close);
+    overlay.querySelector('.a-plus-double-cancel').addEventListener('click', close);
+    mergeButton.addEventListener('click', async () => {
+        if (!selected.top || !selected.bottom || mergeButton.disabled) return;
+        mergeButton.disabled = true;
+        mergeButton.textContent = '正在合并并保存...';
+        setStatus('正在合并为 1464 × 1200 并保存...');
+        slot.uploading = true;
+        try {
+            const merged = await mergeAPlusHalves(selected.top, selected.bottom);
+            const [uploaded] = await uploadImages([{ file: merged.file, name: merged.file.name }], 'studio/sheet-self');
+            slot.size = A_PLUS_DOUBLE_SIZE;
+            slot.aPlusDouble = true;
+            slot.referenceKey = uploaded;
+            slot.status = 'A+ 上下双图已合并并保存';
+            resetSheetSelfCopyAiState(slot);
+            persistSheetSelfDraft(300);
+            close();
+        } catch (error) {
+            setStatus(error.message, true);
+            mergeButton.disabled = false;
+            mergeButton.textContent = '合并并使用';
+        } finally {
+            slot.uploading = false;
+            renderSheetSelfGrid();
+        }
+    });
+    overlay.addEventListener('click', event => { if (event.target === overlay) close(); });
+    document.addEventListener('keydown', onKeydown);
+    document.body.appendChild(overlay);
 }
 
 function openSheetImageSource(slotIndex, type) {
@@ -1766,16 +1953,28 @@ function loadSheetSelfLocal(unionId) {
 
 function normalizeSheetSelfDraft(value) {
     const state = createEmptySheetSelfState();
+    const sourceSlots = Array.isArray(value?.slots) ? value.slots.slice(0, SHEET_SELF_SLOT_COUNT) : [];
     const legacyProductName = Array.isArray(value?.slots)
         ? value.slots.find(slot => String(slot?.productName || '').trim())?.productName
         : '';
     state.productName = String(value?.productName || legacyProductName || '').slice(0, 100);
     state.savedAt = String(value?.savedAt || '');
-    state.slots = state.slots.map((empty, index) => {
-        const slot = value?.slots?.[index] || {};
+    const highestContentIndex = sourceSlots.reduce((highest, slot, index) => sheetSelfDraftSlotHasContent(slot) ? index : highest, -1);
+    const requestedCount = Number(value?.visibleSlotCount);
+    const visibleSlotCount = Math.min(
+        SHEET_SELF_SLOT_COUNT,
+        Math.max(SHEET_SELF_DEFAULT_SLOT_COUNT, Number.isInteger(requestedCount) ? requestedCount : highestContentIndex + 1)
+    );
+    state.slots = Array.from({ length: visibleSlotCount }, (_, index) => {
+        const empty = createSheetSelfSlot(index);
+        const slot = sourceSlots[index] || {};
+        const requestedSize = normalizeSheetSelfSize(slot.size);
+        const aPlusDouble = requestedSize === A_PLUS_DOUBLE_SIZE || slot.aPlusDouble === true;
         return {
             ...empty,
             photographer: sheetSelfDraftSlotHasContent(slot) ? slot.photographer === true : true,
+            size: aPlusDouble ? A_PLUS_DOUBLE_SIZE : requestedSize,
+            aPlusDouble,
             title: String(slot.title || '').slice(0, 100),
             subtitle: String(slot.subtitle || '').slice(0, 100),
             otherText: String(slot.otherText || '').slice(0, 300),
@@ -1794,12 +1993,15 @@ function normalizeSheetSelfFileKey(value) {
 
 function sheetSelfDraftPayload() {
     return {
-        version: 1,
+        version: 2,
         productName: sheetSelfState.productName,
+        visibleSlotCount: sheetSelfState.slots.length,
         savedAt: sheetSelfState.savedAt || new Date().toISOString(),
         slots: sheetSelfState.slots.map(slot => ({
             index: slot.index,
             photographer: slot.photographer === true,
+            size: normalizeSheetSelfSize(slot.size),
+            aPlusDouble: slot.aPlusDouble === true,
             title: slot.title,
             subtitle: slot.subtitle,
             otherText: slot.otherText,
@@ -1831,7 +2033,7 @@ async function submitSheetSelf() {
         const invalidIndex = invalidSlot.index;
         const slot = invalidSlot;
         const message = !slot.referenceKey?.key
-                ? `第 ${invalidIndex + 1} 张请上传要模仿的图`
+                ? (slot.aPlusDouble ? `第 ${invalidIndex + 1} 张请上传 A+ 上下两张 1464 × 600 图片` : `第 ${invalidIndex + 1} 张请上传要模仿的图`)
                 : `第 ${invalidIndex + 1} 张请上传两张白底产品图，或开启“由摄影师决定”`;
         showStudioFieldError(status, message, document.querySelector(`[data-sheet-slot="${invalidIndex}"]`));
         return;
@@ -1851,6 +2053,8 @@ async function submitSheetSelf() {
                 index: slot.index,
                 photographer: slot.photographer,
                 productName: sheetSelfState.productName,
+                size: normalizeSheetSelfSize(slot.size),
+                aPlusDouble: slot.aPlusDouble === true,
                 title: slot.title,
                 subtitle: slot.subtitle,
                 otherText: slot.otherText,
@@ -1889,6 +2093,8 @@ function sheetSelfSlotHasContent(slot) {
     return Boolean(slot.title.trim()
         || slot.subtitle.trim()
         || slot.otherText.trim()
+        || normalizeSheetSelfSize(slot.size) !== '1600x1600'
+        || slot.aPlusDouble === true
         || slot.referenceKey?.key
         || slot.productKeys.length);
 }
@@ -1898,6 +2104,8 @@ function sheetSelfDraftSlotHasContent(slot) {
         || String(slot?.title || '').trim()
         || String(slot?.subtitle || '').trim()
         || String(slot?.otherText || '').trim()
+        || normalizeSheetSelfSize(slot?.size) !== '1600x1600'
+        || slot?.aPlusDouble === true
         || slot?.referenceKey?.key
         || (Array.isArray(slot?.productKeys) && slot.productKeys.length));
 }

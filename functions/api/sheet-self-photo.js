@@ -1,4 +1,4 @@
-import { getSheetSelfSlot, putSheetSelfSlot, retrySheetSelfSlot, startSheetSelfPhotographySlot, startSheetSelfProgramSlot } from '../_shared/sheet-self-workflow.js';
+import { SHEET_SELF_SLOT_COUNT, getSheetSelfSlot, putSheetSelfSlot, retrySheetSelfSlot, startSheetSelfPhotographySlot, startSheetSelfProgramSlot } from '../_shared/sheet-self-workflow.js';
 
 export async function onRequestPost(context) {
     const { request, env } = context;
@@ -76,7 +76,7 @@ async function retrySlot(context) {
 }
 
 async function loadParentAndSlot(env, parentId, slotIndex) {
-    if (!parentId || !Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex >= 6) {
+    if (!parentId || !Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex >= SHEET_SELF_SLOT_COUNT) {
         return { error: Response.json({ ok: false, error: '任务或图片位参数错误' }, { status: 400 }) };
     }
     const raw = await env.SUBMISSIONS.get(parentId);

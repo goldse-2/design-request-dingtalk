@@ -21,6 +21,7 @@ export async function onRequestPost(context) {
 
     const id = `studio-sheet-${crypto.randomUUID()}`;
     const timestamp = Date.now();
+    const sizeSummary = [...new Set(slots.map(slot => slot.aPlusDouble ? 'A+ 连续双图 1464 × 1200' : slot.size.replace('x', ' × ')))];
     const parent = {
         id,
         kind: 'studio',
@@ -29,8 +30,8 @@ export async function onRequestPost(context) {
         category: '图片',
         imageName: `表格自助-${slots.length}张图片`,
         productName: slots[0]?.productName || '表格自助',
-        desc: `固定生成 ${slots.length} 张 1600 × 1600 图片`,
-        size: '1600x1600',
+        desc: `生成 ${slots.length} 个图片位：${sizeSummary.join('、')}`,
+        size: sizeSummary.length === 1 ? slots[0].size : 'mixed',
         productKeys: [],
         refKeys: slots.map(slot => slot.referenceKey),
         modelKeys: [],
@@ -88,12 +89,16 @@ export async function onRequestPost(context) {
 function normalizeSlot(value, index) {
     const slot = value && typeof value === 'object' ? value : {};
     const referenceKey = normalizeFileKey(slot.referenceKey);
-    const productKeys = Array.isArray(slot.productKeys) ? slot.productKeys.map(normalizeFileKey).filter(Boolean) : [];
+    const productKeys = Array.isArray(slot.productKeys) ? slot.productKeys.slice(0, 2).map(normalizeFileKey).filter(Boolean) : [];
     const photographer = slot.photographer === true;
+    const requestedSize = normalizeSize(slot.size);
+    const aPlusDouble = slot.aPlusDouble === true || requestedSize === '1464x1200';
     const normalized = {
         index,
         displayIndex: Number.isInteger(Number(slot.index)) && Number(slot.index) >= 0 && Number(slot.index) < SHEET_SELF_SLOT_COUNT ? Number(slot.index) : index,
         photographer,
+        size: aPlusDouble ? '1464x1200' : requestedSize,
+        aPlusDouble,
         productName: cleanText(slot.productName, 100),
         title: cleanText(slot.title, 100),
         subtitle: cleanText(slot.subtitle, 100),
@@ -111,9 +116,16 @@ function normalizeSlot(value, index) {
     };
     const displayNumber = normalized.displayIndex + 1;
     if (!normalized.productName) normalized.error = `第 ${displayNumber} 张请填写产品名称`;
-    else if (!referenceKey) normalized.error = `第 ${displayNumber} 张请上传要模仿的参考图`;
+    else if (!referenceKey) normalized.error = aPlusDouble
+        ? `第 ${displayNumber} 张请上传 A+ 上下两张 1464 × 600 图片`
+        : `第 ${displayNumber} 张请上传要模仿的参考图`;
     else if (!photographer && productKeys.length !== 2) normalized.error = `第 ${displayNumber} 张请上传两张白底产品图，或开启“由摄影师决定”`;
     return normalized;
+}
+
+function normalizeSize(value) {
+    const size = String(value || '').replace(/[×\s]/g, 'x').toLowerCase();
+    return ['1600x1600', '1464x600', '1464x1200'].includes(size) ? size : '1600x1600';
 }
 
 function normalizeFileKey(value) {

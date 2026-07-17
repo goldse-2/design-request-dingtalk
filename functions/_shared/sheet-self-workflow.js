@@ -2,7 +2,7 @@ import { dispatchStudioTaskToRpa } from '../api/studio-webhook.js';
 import { sendStudioResultImages } from './studio-dingtalk.js';
 import { RECORD_RETENTION_SECONDS, studioTaskPutOptions } from './studio-task-storage.js';
 
-export const SHEET_SELF_SLOT_COUNT = 6;
+export const SHEET_SELF_SLOT_COUNT = 8;
 
 export function sheetSelfSlotKey(parentId, slotIndex) {
     return `sheet-self:slot:${parentId}:${slotIndex}`;
@@ -311,7 +311,7 @@ function makeChildTask(parent, slot, options) {
         note: '',
         scene: '',
         analyzePrompt: '',
-        size: options.mode === 'program' ? '亚马逊主图 1600x1600' : '',
+        size: options.mode === 'program' ? (slot.aPlusDouble ? '1464x1200' : slot.size || '1600x1600') : '',
         imageName: `表格自助-第${Number(slot.displayIndex ?? slot.index) + 1}张`,
         productName: slot.productName || '-',
         title: slot.title || '',
@@ -321,6 +321,7 @@ function makeChildTask(parent, slot, options) {
         refKeys: options.refKeys || [],
         modelKeys: [],
         resultKeys: [],
+        aPlusDouble: options.mode === 'program' && slot.aPlusDouble === true,
         cutoutOutputFormat: options.cutoutOutputFormat || '',
         silent: true,
         dingtalkNotified: true,
