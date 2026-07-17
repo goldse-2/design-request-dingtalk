@@ -10,6 +10,18 @@
         .size-resize-hint { margin-top: 8px; padding: 9px 11px; border-left: 3px solid #4f46e5; background: #f5f5ff; color: #4b5563; font-size: 0.8rem; line-height: 1.5; }
         .size-resize-hint a { color: #4338ca; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
         .program-product-hint { margin: 6px 0 8px; padding: 7px 9px; border-left: 3px solid #f59e0b; border-radius: 0 6px 6px 0; background: #fffbeb; color: #4b5563; font-size: .75rem; line-height: 1.5; }
+        .program-ai-label-row { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:7px; }
+        .program-ai-label-row .sf-label { margin:0; }
+        .program-ai-btn { display:inline-flex; align-items:center; justify-content:center; gap:6px; min-height:31px; padding:6px 10px; border:1px solid #cbd5e1; border-radius:7px; background:#fff; color:#334155; font-size:.74rem; font-weight:800; cursor:pointer; }
+        .program-ai-btn:hover:not(:disabled) { border-color:#6366f1; background:#f5f7ff; color:#3730a3; }
+        .program-ai-btn:disabled { cursor:not-allowed; opacity:.48; }
+        .program-ai-btn.loading { border-color:#c7d2fe; background:#eef2ff; color:#3730a3; }
+        .program-ai-btn.loading svg { animation:promptOptimizeSpin 1.2s linear infinite; }
+        .program-ai-status { min-height:18px; margin-top:6px; color:#9ca3af; font-size:.7rem; line-height:1.45; }
+        .program-ai-status.success { color:#047857; }
+        .program-ai-status.error { color:#b91c1c; }
+        .program-ai-copy-bar { display:flex; align-items:center; gap:10px; margin-bottom:12px; padding:10px 11px; border:1px solid #e2e8f0; border-radius:8px; background:#f8fafc; }
+        .program-ai-copy-bar .program-ai-status { flex:1; min-width:0; margin:0; }
         .size-visual-picker { padding: 10px; border: 1px solid #e5e7eb; border-radius: 10px; background: linear-gradient(135deg,#fff,#fbfbff); }
         .size-picker-title { margin-bottom: 7px; color: #6b7280; font-size: .74rem; font-weight: 700; }
         .size-resolution-row { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; margin-bottom: 10px; }
@@ -37,7 +49,7 @@
         .prompt-quota { color: #9ca3af; font-size: .72rem; white-space: nowrap; }
         #optimizeQuota { margin-left: auto; }
         @keyframes promptOptimizeSpin { to { transform: rotate(360deg); } }
-        @media (max-width: 640px) { .prompt-optimize-row { align-items: flex-start; flex-wrap: wrap; } #optimizeQuota { margin-left: 0; } }
+        @media (max-width: 640px) { .prompt-optimize-row { align-items: flex-start; flex-wrap: wrap; } #optimizeQuota { margin-left: 0; } .program-ai-copy-bar { align-items:flex-start; flex-direction:column; } .program-ai-copy-bar .program-ai-btn { width:100%; } }
         .a-plus-double-launcher { margin-top: 10px; }
         .a-plus-double-action-row { position: relative; display: flex; align-items: stretch; gap: 7px; }
         .a-plus-double-btn { min-width: 0; min-height: 40px; flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 7px; background: #fff; color: #334155; font-size: .78rem; font-weight: 800; line-height: 1.35; cursor: pointer; }
@@ -503,6 +515,6 @@
     帮助中心
 </button>
 
-    <script src="studio.js?v=20260717-sheet-wait-message"></script>
+    <script src="studio.js?v=20260717-program-ai"></script>
 </body>
 </html>

@@ -1,0 +1,153 @@
+import { generateAiText } from '../_shared/ai-text.js';
+
+const DAILY_LIMIT = 30;
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+
+export async function onRequestPost({ request, env }) {
+    if (!env.AI_API_KEY) return jsonError('AI 服务尚未配置', 503);
+    if (!env.SUBMISSIONS) return jsonError('AI 次数统计尚未配置', 503);
+    const sameOriginError = validateOrigin(request);
+    if (sameOriginError) return sameOriginError;
+
+    let body;
+    try { body = await request.json(); }
+    catch { return jsonError('请求内容无效', 400); }
+
+    const action = String(body.action || '');
+    const userId = String(body.userId || '').trim().slice(0, 160);
+    if (!userId) return jsonError('请先登录后使用 AI 功能', 401);
+    if (!['identify_product', 'generate_copy'].includes(action)) return jsonError('不支持的 AI 操作', 400);
+
+    const image = normalizeImage(body.image);
+    if (image.error) return jsonError(image.error, 400);
+
+    const quota = await consumeDailyQuota(env.SUBMISSIONS, userId);
+    if (!quota.allowed) {
+        return Response.json({ ok: false, error: '今日程序模式 AI 使用次数已用完，请明天再试', remaining: 0, limit: DAILY_LIMIT }, { status: 429 });
+    }
+
+    try {
+        if (action === 'identify_product') {
+            const raw = await generateAiText(env, {
+                system: '你是电商产品视觉识别助手。只根据白底产品图识别产品，不猜测看不见的功能。仅输出一条简洁中文产品描述，格式为主要可见颜色或外观特征加具体产品类别，例如：一个黑色面板的美甲灯。控制在4到24个中文字符，不要标题、解释、Markdown、引号、句号或尺寸。',
+                user: '请识别图片中的产品，并输出简洁产品描述。',
+                images: [image],
+                temperature: 0.1,
+                maxTokens: 80,
+                timeoutMs: 30000
+            });
+            const productName = sanitizeProductName(raw);
+            if (!productName) throw new Error('AI 没有识别出有效产品名称');
+            return Response.json({ ok: true, productName, remaining: quota.remaining, limit: DAILY_LIMIT });
+        }
+
+        const productName = cleanText(body.productName, 100) || '图中的产品';
+        const raw = await generateAiText(env, {
+            system: '你是电商图片文案助手。分析用户上传的参考图，并结合产品名称生成简洁中文文案。只返回严格 JSON，不要代码块或解释，格式必须为 {"title":"","subtitle":"","otherText":""}。title 为4到16字，subtitle 为6到24字，otherText 为2到3条简短卖点并用中文分号分隔。只写图片和产品名称能支持的内容，不虚构功能、参数、品牌、尺寸或认证。',
+            user: `产品名称：${productName}\n请根据参考图的视觉主题、文字层级和表达方式生成标题、副标题和其他文案。`,
+            images: [image],
+            temperature: 0.25,
+            maxTokens: 260,
+            timeoutMs: 35000
+        });
+        const copy = parseProgramCopy(raw);
+        if (!copy.title && !copy.subtitle && !copy.otherText) throw new Error('AI 没有返回有效文案');
+        return Response.json({ ok: true, ...copy, remaining: quota.remaining, limit: DAILY_LIMIT });
+    } catch (error) {
+        await restoreDailyQuota(env.SUBMISSIONS, quota);
+        console.error('Program AI error', error?.status || '', error?.message || '');
+        const message = error?.name === 'AbortError'
+            ? 'AI 响应超时，请稍后重试'
+            : error?.status >= 500
+                ? 'AI 服务通道暂时不可用，请稍后重试'
+                : error?.status
+                    ? 'AI 服务请求失败，请检查接口余额或模型权限'
+                    : String(error?.message || 'AI 识别失败，请稍后重试').slice(0, 100);
+        return jsonError(message, 503, quota.previousRemaining);
+    }
+}
+
+function normalizeImage(value) {
+    const mimeType = String(value?.mimeType || '').toLowerCase();
+    const base64 = String(value?.base64 || '').replace(/^data:[^;]+;base64,/i, '').replace(/\s+/g, '');
+    if (!/^image\/(?:jpeg|png|webp)$/i.test(mimeType)) return { error: '请选择 JPG、PNG 或 WebP 图片' };
+    if (!base64 || !/^[a-z0-9+/]+={0,2}$/i.test(base64)) return { error: '图片内容无效，请重新上传' };
+    const byteLength = Math.floor(base64.length * 3 / 4) - (base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0);
+    if (byteLength > MAX_IMAGE_BYTES) return { error: '图片单张不能超过 8MB' };
+    return { mimeType, base64 };
+}
+
+function sanitizeProductName(value) {
+    return String(value || '')
+        .replace(/^```(?:text)?\s*/i, '')
+        .replace(/\s*```$/i, '')
+        .replace(/^(?:产品名称|识别结果|描述)\s*[:：]\s*/i, '')
+        .replace(/["'“”‘’。，.!！?？\r\n]/g, '')
+        .replace(/\s{2,}/g, ' ')
+        .trim()
+        .slice(0, 50);
+}
+
+function parseProgramCopy(value) {
+    const text = String(value || '').replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+    let parsed = null;
+    try { parsed = JSON.parse(text); } catch {
+        const match = text.match(/\{[\s\S]*\}/);
+        if (match) {
+            try { parsed = JSON.parse(match[0]); } catch {}
+        }
+    }
+    if (!parsed || typeof parsed !== 'object') return { title: '', subtitle: '', otherText: '' };
+    return {
+        title: cleanText(parsed.title, 100),
+        subtitle: cleanText(parsed.subtitle, 100),
+        otherText: cleanText(parsed.otherText, 300)
+    };
+}
+
+async function consumeDailyQuota(kv, userId) {
+    const key = await quotaKey(userId);
+    const count = Math.max(0, Number(await kv.get(key)) || 0);
+    if (count >= DAILY_LIMIT) return { key, count, allowed: false, remaining: 0 };
+    await kv.put(key, String(count + 1), { expirationTtl: 172800 });
+    return { key, count, allowed: true, remaining: DAILY_LIMIT - count - 1, previousRemaining: DAILY_LIMIT - count };
+}
+
+async function restoreDailyQuota(kv, quota) {
+    if (!quota?.allowed) return;
+    if (quota.count === 0) await kv.delete(quota.key);
+    else await kv.put(quota.key, String(quota.count), { expirationTtl: 172800 });
+}
+
+async function quotaKey(userId) {
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(userId)));
+    const hash = [...new Uint8Array(digest)].slice(0, 12).map(value => value.toString(16).padStart(2, '0')).join('');
+    return `program-ai-quota:${shanghaiDateKey()}:${hash}`;
+}
+
+function shanghaiDateKey() {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+}
+
+function validateOrigin(request) {
+    const origin = request.headers.get('Origin');
+    const requestUrl = new URL(request.url);
+    if (origin && (isSameHost(origin, requestUrl.host) || /^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/i.test(origin))) return null;
+    const referer = request.headers.get('Referer');
+    if (referer && isSameHost(referer, requestUrl.host)) return null;
+    if (request.headers.get('Sec-Fetch-Site') === 'same-origin') return null;
+    return jsonError('不允许跨站调用', 403);
+}
+
+function isSameHost(value, host) {
+    try { return new URL(value).host === host; }
+    catch { return false; }
+}
+
+function cleanText(value, maxLength) {
+    return String(value || '').replace(/[\r\n]+/g, ' ').replace(/\s{2,}/g, ' ').trim().slice(0, maxLength);
+}
+
+function jsonError(error, status, remaining) {
+    return Response.json({ ok: false, error, ...(remaining === undefined ? {} : { remaining }) }, { status });
+}

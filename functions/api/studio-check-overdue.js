@@ -1,4 +1,4 @@
-import { taskNeedsRpaTranslation, translateForRpa } from '../_shared/ai-translate.js';
+import { taskNeedsRpaTranslation, translateForRpa, translateProgramFieldsForRpa } from '../_shared/ai-translate.js';
 import { markStudioNotificationFailed, markStudioNotificationSent, sendStudioResultImages, studioNotificationLeaseActive } from '../_shared/studio-dingtalk.js';
 import { isAdminLibraryCutoutTask } from '../_shared/studio-library-replacement.js';
 import { recolorImage } from '../_shared/variant-recolor-core.js';
@@ -136,6 +136,17 @@ export async function onRequestGet(context) {
                     const { payload, pickedSize } = buildRpaPayload(task, origin);
                     if (task.mode === 'free' && taskNeedsRpaTranslation(task)) {
                         payload.params["描述"] = await translateForRpa(env, payload.params["描述"]);
+                    } else if (task.mode === 'program') {
+                        const translatedFields = await translateProgramFieldsForRpa(env, {
+                            productName: task.productName || '-',
+                            title: task.title || '-',
+                            subtitle: task.subtitle || '-',
+                            otherText: task.otherText || '-'
+                        });
+                        payload.params["产品名称"] = translatedFields.productName;
+                        payload.params["标题"] = translatedFields.title;
+                        payload.params["副标题"] = translatedFields.subtitle;
+                        payload.params["其他文案"] = translatedFields.otherText;
                     }
                     const res = await fetchWithTimeout(webhookUrl, {
                         method: 'POST',

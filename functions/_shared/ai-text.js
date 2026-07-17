@@ -18,11 +18,28 @@ export async function generateAiText(env, options) {
         headers['x-openai-actor-authorization'] = String(env.AI_API_ACTOR_AUTHORIZATION);
     }
 
+    const images = normalizeImages(options.images);
+    const responsesInput = images.length
+        ? [{
+            role: 'user',
+            content: [
+                { type: 'input_text', text: String(options.user || '') },
+                ...images.map(image => ({ type: 'input_image', image_url: image.dataUrl }))
+            ]
+        }]
+        : options.user;
+    const chatUserContent = images.length
+        ? [
+            { type: 'text', text: String(options.user || '') },
+            ...images.map(image => ({ type: 'image_url', image_url: { url: image.dataUrl } }))
+        ]
+        : options.user;
+
     const body = useResponses
         ? {
             model,
             instructions: options.system,
-            input: options.user,
+            input: responsesInput,
             max_output_tokens: options.maxTokens,
             store: false
         }
@@ -32,7 +49,7 @@ export async function generateAiText(env, options) {
             max_tokens: options.maxTokens,
             messages: [
                 { role: 'system', content: options.system },
-                { role: 'user', content: options.user }
+                { role: 'user', content: chatUserContent }
             ]
         };
 
@@ -53,6 +70,17 @@ export async function generateAiText(env, options) {
     } finally {
         clearTimeout(timeout);
     }
+}
+
+function normalizeImages(images) {
+    if (!Array.isArray(images)) return [];
+    return images.slice(0, 2).map(image => {
+        const mimeType = /^image\/(?:jpeg|png|webp|gif)$/i.test(String(image?.mimeType || ''))
+            ? String(image.mimeType).toLowerCase()
+            : 'image/jpeg';
+        const base64 = String(image?.base64 || '').replace(/^data:[^;]+;base64,/i, '').replace(/\s+/g, '');
+        return base64 ? { dataUrl: `data:${mimeType};base64,${base64}` } : null;
+    }).filter(Boolean);
 }
 
 function buildEndpoint(apiBase, path) {

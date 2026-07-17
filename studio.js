@@ -392,8 +392,15 @@ const PROGRAM_FORM = `
     <div class="studio-layout">
         <div class="studio-panel">
             <div class="sf-section">
-                <div class="sf-label">产品名称 <span class="sf-req">*</span></div>
+                <div class="program-ai-label-row">
+                    <div class="sf-label">产品名称 <span class="sf-req">*</span></div>
+                    <button type="button" class="program-ai-btn" id="progIdentifyProductBtn" disabled>
+                        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l1.3 4.2L17.5 8.5l-4.2 1.3L12 14l-1.3-4.2-4.2-1.3 4.2-1.3L12 3Z"/><path d="M18.5 14l.8 2.7 2.7.8-2.7.8-.8 2.7-.8-2.7-2.7-.8 2.7-.8.8-2.7Z"/></svg>
+                        <span>AI 识别产品</span>
+                    </button>
+                </div>
                 <input class="sf-input" id="progProductName" type="text" maxlength="100" placeholder="例如：蓝牙耳机">
+                <div class="program-ai-status" id="progProductAiStatus">上传白底产品图后自动识别</div>
             </div>
             <div class="sf-section">
                 <div class="sf-label">标题 <span class="sf-sub">（可选）</span></div>
@@ -408,6 +415,13 @@ const PROGRAM_FORM = `
                 <textarea class="sf-textarea" id="progOtherText" rows="3" maxlength="300" placeholder="例如：降噪技术；续航持久；蓝牙5.0"></textarea>
             </div>
             <div class="sf-section" id="progRefSection">
+                <div class="program-ai-copy-bar">
+                    <button type="button" class="program-ai-btn" id="progGenerateCopyBtn" disabled>
+                        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l1.3 4.2L17.5 8.5l-4.2 1.3L12 14l-1.3-4.2-4.2-1.3 4.2-1.3L12 3Z"/><path d="M5 15l.8 2.7 2.7.8-2.7.8L5 22l-.8-2.7-2.7-.8 2.7-.8L5 15Z"/></svg>
+                        <span>AI 自动标题和文案</span>
+                    </button>
+                    <span class="program-ai-status" id="progCopyAiStatus">请先上传要模仿的图</span>
+                </div>
                 <div class="sf-label">要模仿的图 <span class="sf-req">*</span> <span class="sf-sub">(1张)</span></div>
                 <div class="sf-upload-row">
                     <div class="sf-upload-box" id="progRefDrop" tabindex="-1">
@@ -656,6 +670,10 @@ let sheetSelfDirty = false;
 let sheetSelfServerLoadedUnionId = '';
 let sheetSelfPagehideWired = false;
 let sheetLibraryTarget = null;
+let programProductAiTimer = null;
+let programProductAiBusy = false;
+let programCopyAiBusy = false;
+let programProductAiRequestId = 0;
 let resizeToolCleanup = null;
 const MAX_STUDIO_FILE_SIZE = 8 * 1024 * 1024;
 const MAX_RETOUCH_FILE_SIZE = 15 * 1024 * 1024;
@@ -1258,6 +1276,10 @@ function renderForm() {
     const attachedGallery = area.querySelector('.studio-gallery-preview');
     if (attachedGallery) cachedStudioGalleryPreview = attachedGallery;
     clearRetouchUploads();
+    clearTimeout(programProductAiTimer);
+    programProductAiRequestId += 1;
+    programProductAiBusy = false;
+    programCopyAiBusy = false;
     resetAPlusDoubleState();
     uploads.freeImages = []; uploads.freeModel = null; uploads.freeScene = null; uploads.freeProduct = []; uploads.freeProduct1 = null; uploads.freeProduct2 = null; uploads.progRef = []; uploads.progProduct = []; uploads.variantImages = [];
     let galleryWasReady = false;
@@ -1273,6 +1295,7 @@ function renderForm() {
         galleryWasReady = renderGenerationMode(area, PROGRAM_FORM);
         wireDrop('progRefDrop', 'progRefInput', 'progRefThumbs', 'progRef');
         wireDrop('progProductDrop', 'progProductInput', 'progProductThumbs', 'progProduct');
+        wireProgramAiTools();
         initSizePicker('progSizeSelect', 'progSizeHint');
         document.getElementById('progSubmit').addEventListener('click', submitProgram);
     } else if (currentMode === 'sheet') {
@@ -3005,6 +3028,7 @@ function handleFiles(files, thumbsId, bucket) {
             const base64 = ev.target.result.split(',')[1];
             uploads[bucket].push({ name: file.name, base64, mimeType: file.type, dataUrl: ev.target.result });
             renderThumbs(thumbsId, bucket);
+            if (bucket === 'progProduct') queueProgramProductRecognition();
         };
         reader.readAsDataURL(file);
     });
@@ -3025,6 +3049,141 @@ function renderThumbs(thumbsId, bucket) {
         });
         wrap.appendChild(div);
     });
+    if (bucket === 'progRef' || bucket === 'progProduct') updateProgramAiControls();
+}
+
+function wireProgramAiTools() {
+    const productInput = document.getElementById('progProductName');
+    const identifyButton = document.getElementById('progIdentifyProductBtn');
+    const copyButton = document.getElementById('progGenerateCopyBtn');
+    if (!productInput || !identifyButton || !copyButton) return;
+
+    productInput.addEventListener('input', () => {
+        productInput.dataset.aiGenerated = 'false';
+        if (uploads.progProduct.length) {
+            setProgramAiStatus(document.getElementById('progProductAiStatus'), '已保留手动填写，可点击“AI 识别产品”覆盖', '');
+        }
+    });
+    identifyButton.addEventListener('click', () => runProgramProductRecognition(true));
+    copyButton.addEventListener('click', runProgramCopyGeneration);
+    updateProgramAiControls();
+}
+
+function updateProgramAiControls() {
+    if (currentMode !== 'program') return;
+    const identifyButton = document.getElementById('progIdentifyProductBtn');
+    const copyButton = document.getElementById('progGenerateCopyBtn');
+    const productStatus = document.getElementById('progProductAiStatus');
+    const copyStatus = document.getElementById('progCopyAiStatus');
+    if (identifyButton) identifyButton.disabled = programProductAiBusy || uploads.progProduct.length === 0;
+    if (copyButton) copyButton.disabled = programCopyAiBusy || uploads.progRef.length !== 1;
+
+    if (productStatus && !programProductAiBusy && uploads.progProduct.length === 0) {
+        setProgramAiStatus(productStatus, '上传白底产品图后自动识别', '');
+    }
+    if (copyStatus && !programCopyAiBusy) {
+        if (uploads.progRef.length !== 1) setProgramAiStatus(copyStatus, '请先上传要模仿的图', '');
+        else if (copyStatus.dataset.state === 'prerequisite' || !copyStatus.dataset.state) setProgramAiStatus(copyStatus, '参考图已上传，可以生成', 'success');
+    }
+}
+
+function queueProgramProductRecognition() {
+    clearTimeout(programProductAiTimer);
+    if (currentMode !== 'program' || !uploads.progProduct.length) return;
+    programProductAiTimer = setTimeout(() => runProgramProductRecognition(false), 250);
+}
+
+async function runProgramProductRecognition(force) {
+    const image = uploads.progProduct[0];
+    const input = document.getElementById('progProductName');
+    const button = document.getElementById('progIdentifyProductBtn');
+    const status = document.getElementById('progProductAiStatus');
+    if (!image || !input || !button || !status || programProductAiBusy) return;
+    if (!force && input.value.trim() && input.dataset.aiGenerated !== 'true') {
+        setProgramAiStatus(status, '已保留手动填写，可点击“AI 识别产品”覆盖', '');
+        return;
+    }
+
+    const baseline = input.value;
+    const requestId = ++programProductAiRequestId;
+    programProductAiBusy = true;
+    button.classList.add('loading');
+    button.querySelector('span').textContent = '正在识别...';
+    setProgramAiStatus(status, '正在分析白底产品图...', '');
+    updateProgramAiControls();
+    try {
+        const data = await callProgramAi({ action: 'identify_product', image });
+        if (requestId !== programProductAiRequestId || currentMode !== 'program') return;
+        if (!force && input.value !== baseline && input.dataset.aiGenerated !== 'true') {
+            setProgramAiStatus(status, '已保留手动填写，可点击“AI 识别产品”覆盖', '');
+            return;
+        }
+        input.value = data.productName;
+        input.dataset.aiGenerated = 'true';
+        setProgramAiStatus(status, `已识别：${data.productName}（今日剩余 ${data.remaining} 次）`, 'success');
+    } catch (error) {
+        if (requestId === programProductAiRequestId) setProgramAiStatus(status, error.message || 'AI 识别失败，请重试', 'error');
+    } finally {
+        if (requestId === programProductAiRequestId) {
+            programProductAiBusy = false;
+            button.classList.remove('loading');
+            button.querySelector('span').textContent = 'AI 识别产品';
+            updateProgramAiControls();
+        }
+    }
+}
+
+async function runProgramCopyGeneration() {
+    const image = uploads.progRef[0];
+    const button = document.getElementById('progGenerateCopyBtn');
+    const status = document.getElementById('progCopyAiStatus');
+    if (!image || !button || !status || programCopyAiBusy) return;
+
+    programCopyAiBusy = true;
+    button.classList.add('loading');
+    button.querySelector('span').textContent = '正在生成...';
+    setProgramAiStatus(status, '正在分析参考图...', '');
+    updateProgramAiControls();
+    try {
+        const data = await callProgramAi({
+            action: 'generate_copy',
+            image,
+            productName: document.getElementById('progProductName')?.value.trim() || ''
+        });
+        document.getElementById('progTitle').value = data.title || '';
+        document.getElementById('progSubtitle').value = data.subtitle || '';
+        document.getElementById('progOtherText').value = data.otherText || '';
+        setProgramAiStatus(status, `标题和文案已生成（今日剩余 ${data.remaining} 次）`, 'success');
+    } catch (error) {
+        setProgramAiStatus(status, error.message || 'AI 文案生成失败，请重试', 'error');
+    } finally {
+        programCopyAiBusy = false;
+        button.classList.remove('loading');
+        button.querySelector('span').textContent = 'AI 自动标题和文案';
+        updateProgramAiControls();
+    }
+}
+
+async function callProgramAi(payload) {
+    const response = await fetch('/api/program-ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            ...payload,
+            userId: currentUser?.unionId || '',
+            image: { base64: payload.image.base64, mimeType: payload.image.mimeType }
+        })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.ok) throw new Error(data.error || 'AI 请求失败，请稍后重试');
+    return data;
+}
+
+function setProgramAiStatus(element, text, state) {
+    if (!element) return;
+    element.textContent = text;
+    element.className = 'program-ai-status' + (state ? ' ' + state : '');
+    element.dataset.state = state || (text.startsWith('请先') ? 'prerequisite' : 'info');
 }
 
 function updateCharCount(el, countId, max) {

@@ -1,4 +1,4 @@
-import { taskNeedsRpaTranslation, translateForRpa } from '../_shared/ai-translate.js';
+import { taskNeedsRpaTranslation, translateForRpa, translateProgramFieldsForRpa } from '../_shared/ai-translate.js';
 import { studioTaskPutOptions } from '../_shared/studio-task-storage.js';
 
 export async function onRequestPost(context) {
@@ -65,12 +65,18 @@ export async function dispatchStudioTaskToRpa({ env, task, origin, webhookUrl, p
         payload = { params: { "待处理图片链接": sourceImageUrl, "任务ID": task.id } };
     } else if (task.mode === 'program') {
         pickedSize = normalizeStudioSize(task.size, task.desc || '');
+        const translatedFields = await translateProgramFieldsForRpa(env, {
+            productName: task.productName || '-',
+            title: task.title || '-',
+            subtitle: task.subtitle || '-',
+            otherText: task.otherText || '-'
+        });
         payload = {
             params: {
-                "产品名称": task.productName || '-',
-                "标题": task.title || '-',
-                "副标题": task.subtitle || '-',
-                "其他文案": task.otherText || '-',
+                "产品名称": translatedFields.productName,
+                "标题": translatedFields.title,
+                "副标题": translatedFields.subtitle,
+                "其他文案": translatedFields.otherText,
                 "竞品参考图链接": refUrls[0]?.url || '-',
                 "白底参考图链接一": productUrls[0]?.url || '-',
                 "白底参考图链接二": productUrls[1]?.url || '-',
