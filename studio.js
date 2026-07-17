@@ -1416,8 +1416,8 @@ function initSheetSelfMode() {
             renderSheetSelfGrid();
             return;
         }
-        if (event.target.matches('[data-sheet-skip-retouch]')) {
-            sheetSelfState.slots[slotIndex].skipRetouch = event.target.checked;
+        if (event.target.matches('[data-sheet-retouch]')) {
+            sheetSelfState.slots[slotIndex].skipRetouch = !event.target.checked;
             persistSheetSelfDraft();
             renderSheetSelfGrid();
             return;
@@ -1557,8 +1557,11 @@ function renderSheetSelfSlot(slot, slotIndex) {
                 <label class="sheet-self-switch" title="由摄影师提供两张拍摄原图"><input type="checkbox" data-sheet-photographer data-slot-index="${slotIndex}"${slot.photographer ? ' checked' : ''}><span></span></label>
             </div>
             <div class="sheet-self-photo-row">
-                <div class="sheet-self-photo-copy"><strong>关闭精修</strong><small>效果更真实、速度更快，如果是场景图可以不用精修</small></div>
-                <label class="sheet-self-switch" title="摄影原图跳过精修，直接进入白底抠图"><input type="checkbox" data-sheet-skip-retouch data-slot-index="${slotIndex}"${slot.skipRetouch ? ' checked' : ''}><span></span></label>
+                <div class="sheet-self-photo-copy"><strong>需要精修</strong><small>${slot.skipRetouch ? '已关闭：跳过精修，速度更快，适合场景图' : '已开启：先精修，再进行白底抠图'}</small></div>
+                <div class="sheet-self-switch-control">
+                    <span class="sheet-self-switch-state${slot.skipRetouch ? ' is-off' : ' is-on'}">${slot.skipRetouch ? '已关闭' : '已开启'}</span>
+                    <label class="sheet-self-switch" title="控制此图片位是否需要精修"><input type="checkbox" data-sheet-retouch data-slot-index="${slotIndex}" aria-label="需要精修"${slot.skipRetouch ? '' : ' checked'}><span></span></label>
+                </div>
             </div>
             <div class="sheet-self-slot-status${slot.status?.startsWith('失败') ? ' err' : ''}">${sheetSelfEsc(slot.status || (slot.uploading ? '图片上传中，请稍候...' : ''))}</div>
         </div>
