@@ -467,7 +467,12 @@ const SHEET_SELF_FORM = `
                 </div>
                 <div class="sheet-self-save" id="sheetSelfSaveStatus">等待编辑</div>
             </div>
-            <div class="sheet-self-table-head" aria-hidden="true"><span>图片</span><span>产品信息</span><span>文案信息</span><span>素材图片</span><span>设置</span></div>
+            <div class="sheet-self-global-product">
+                <label for="sheetSelfProductName">统一产品名称 <span>*</span></label>
+                <input id="sheetSelfProductName" maxlength="100" placeholder="例如：S10 电池款">
+                <small>只需填写一次，提交时会自动用于下面所有已填写的图片位。</small>
+            </div>
+            <div class="sheet-self-table-head" aria-hidden="true"><span>图片</span><span>其他文案</span><span>标题与副标题</span><span>素材图片</span><span>设置</span></div>
             <div class="sheet-self-grid" id="sheetSelfGrid"></div>
             <div class="sheet-self-actions">
                 <p>开启“由摄影师决定”后，该图片位无需上传白底图；提交后由摄影师补传两张原图，系统自动完成精修、抠图和图生图。</p>
@@ -650,6 +655,7 @@ let sheetSelfSaving = false;
 let sheetSelfDirty = false;
 let sheetSelfServerLoadedUnionId = '';
 let sheetSelfPagehideWired = false;
+let sheetLibraryTarget = null;
 let resizeToolCleanup = null;
 const MAX_STUDIO_FILE_SIZE = 8 * 1024 * 1024;
 const MAX_RETOUCH_FILE_SIZE = 15 * 1024 * 1024;
@@ -672,11 +678,11 @@ const aPlusDoubleState = {
 function createEmptySheetSelfState() {
     return {
         version: 1,
+        productName: '',
         savedAt: '',
         slots: Array.from({ length: SHEET_SELF_SLOT_COUNT }, (_, index) => ({
             index,
-            photographer: false,
-            productName: '',
+            photographer: true,
             title: '',
             subtitle: '',
             otherText: '',
@@ -1321,6 +1327,12 @@ function initSheetSelfMode() {
         sheetSelfState = loadSheetSelfLocal(unionId) || createEmptySheetSelfState();
         sheetSelfLoadedUnionId = unionId;
     }
+    const productNameInput = document.getElementById('sheetSelfProductName');
+    productNameInput.value = sheetSelfState.productName;
+    productNameInput.addEventListener('input', event => {
+        sheetSelfState.productName = event.target.value;
+        persistSheetSelfDraft();
+    });
     renderSheetSelfGrid();
 
     const grid = document.getElementById('sheetSelfGrid');
@@ -1348,6 +1360,11 @@ function initSheetSelfMode() {
         }
     });
     grid.addEventListener('click', event => {
+        const sourceButton = event.target.closest('[data-sheet-source]');
+        if (sourceButton) {
+            openSheetImageSource(Number(sourceButton.dataset.slotIndex), sourceButton.dataset.uploadType);
+            return;
+        }
         const button = event.target.closest('[data-sheet-remove]');
         if (!button) return;
         const slotIndex = Number(button.dataset.slotIndex);
@@ -1385,7 +1402,7 @@ function renderSheetSelfGrid() {
 function renderSheetSelfSlot(slot, slotIndex) {
     const reference = renderSheetSelfImage(slot.referenceKey, slotIndex, 'reference', 0, '要模仿的图');
     const products = slot.photographer
-        ? '<div class="sheet-self-photo-wait">提交后等待摄影师上传两张拍摄原图，系统会分别完成精修和白底抠图，再自动进入图生图。</div>'
+        ? ''
         : [0, 1].map(index => renderSheetSelfImage(slot.productKeys[index], slotIndex, 'product', index, `白底产品图 ${index + 1}`)).join('');
     const uploadDisabled = slot.uploading ? ' disabled' : '';
     return `<section class="sheet-self-slot" data-sheet-slot="${slotIndex}">
@@ -1394,15 +1411,14 @@ function renderSheetSelfSlot(slot, slotIndex) {
             <span class="sheet-self-fixed-size">1600 × 1600</span>
         </div>
         <div class="sheet-self-product">
-            <div class="sheet-self-field"><label>产品名称 *</label><input data-sheet-field="productName" data-slot-index="${slotIndex}" maxlength="100" value="${sheetSelfEsc(slot.productName)}" placeholder="例如：S10 电池款"></div>
+            <div class="sheet-self-field"><label>其他文案</label><textarea data-sheet-field="otherText" data-slot-index="${slotIndex}" maxlength="300" placeholder="可选，多个卖点可用分号分隔">${sheetSelfEsc(slot.otherText)}</textarea></div>
         </div>
         <div class="sheet-self-fields">
             <div class="sheet-self-field"><label>标题</label><input data-sheet-field="title" data-slot-index="${slotIndex}" maxlength="100" value="${sheetSelfEsc(slot.title)}" placeholder="可选"></div>
             <div class="sheet-self-field"><label>副标题</label><input data-sheet-field="subtitle" data-slot-index="${slotIndex}" maxlength="100" value="${sheetSelfEsc(slot.subtitle)}" placeholder="可选"></div>
-            <div class="sheet-self-field full"><label>其他文案</label><textarea data-sheet-field="otherText" data-slot-index="${slotIndex}" maxlength="300" placeholder="可选，多个卖点可用分号分隔">${sheetSelfEsc(slot.otherText)}</textarea></div>
         </div>
         <div class="sheet-self-media">
-            <div class="sheet-self-images">
+            <div class="sheet-self-images${slot.photographer ? ' is-photographer' : ''}">
                 ${reference}
                 ${products}
             </div>
@@ -1424,19 +1440,52 @@ function renderSheetSelfImage(file, slotIndex, type, productIndex, label) {
         const removeAttrs = type === 'reference'
             ? `data-sheet-remove="reference" data-slot-index="${slotIndex}"`
             : `data-sheet-remove="product" data-slot-index="${slotIndex}" data-product-index="${productIndex}"`;
-        return `<div class="sheet-self-image-slot">
+        return `<div class="sheet-self-image-slot ${type === 'reference' ? 'is-reference' : 'is-product'}">
             <img src="${sheetSelfImageUrl(file.key)}" alt="${sheetSelfEsc(label)}" loading="lazy">
             <span class="sheet-self-image-badge">${sheetSelfEsc(label)}</span>
             <button type="button" class="sheet-self-image-remove" ${removeAttrs} title="移除${sheetSelfEsc(label)}" aria-label="移除${sheetSelfEsc(label)}">×</button>
         </div>`;
     }
-    const inputId = type === 'reference' ? `sheetRefInput-${slotIndex}` : `sheetProductInput-${slotIndex}`;
-    return `<div class="sheet-self-image-slot${sheetSelfState.slots[slotIndex].uploading ? ' is-loading' : ''}">
-        <label for="${inputId}">
+    return `<div class="sheet-self-image-slot ${type === 'reference' ? 'is-reference' : 'is-product'}${sheetSelfState.slots[slotIndex].uploading ? ' is-loading' : ''}">
+        <button type="button" class="sheet-self-image-choice" data-sheet-source data-slot-index="${slotIndex}" data-upload-type="${type}">
             <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 16V4m0 0L7 9m5-5 5 5"/><path d="M5 14v5h14v-5"/></svg>
             <span>${label}<br>单张最大 8 MB</span>
-        </label>
+        </button>
     </div>`;
+}
+
+function openSheetImageSource(slotIndex, type) {
+    if (!Number.isInteger(slotIndex) || !sheetSelfState.slots[slotIndex] || !['reference', 'product'].includes(type)) return;
+    document.getElementById('sheetImageSourceModal')?.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'sheetImageSourceModal';
+    overlay.className = 'sheet-source-overlay';
+    const label = type === 'reference' ? '要模仿的图' : '白底产品图';
+    overlay.innerHTML = `<div class="sheet-source-dialog" role="dialog" aria-modal="true" aria-label="选择图片来源">
+        <div class="sheet-source-head"><strong>选择${label}来源</strong><button type="button" class="sheet-source-close" aria-label="关闭">×</button></div>
+        <div class="sheet-source-options">
+            <button type="button" class="sheet-source-option" data-sheet-source-action="library"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 7.5h7l2 2h9v9.5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7.5Z"/><path d="M3 7.5V5a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v2.5"/></svg><strong>从资料库选择</strong><small>浏览产品分类并选择已有图片</small></button>
+            <button type="button" class="sheet-source-option" data-sheet-source-action="local"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 16V4m0 0L7 9m5-5 5 5"/><path d="M5 14v5h14v-5"/></svg><strong>本地上传</strong><small>从电脑中选择一张或多张图片</small></button>
+        </div>
+    </div>`;
+    const close = () => overlay.remove();
+    overlay.querySelector('.sheet-source-close').onclick = close;
+    overlay.onclick = event => { if (event.target === overlay) close(); };
+    overlay.querySelector('[data-sheet-source-action="local"]').onclick = () => {
+        close();
+        const inputId = type === 'reference' ? `sheetRefInput-${slotIndex}` : `sheetProductInput-${slotIndex}`;
+        document.getElementById(inputId)?.click();
+    };
+    overlay.querySelector('[data-sheet-source-action="library"]').onclick = () => {
+        close();
+        openSheetLibraryPicker(slotIndex, type);
+    };
+    document.body.appendChild(overlay);
+}
+
+function openSheetLibraryPicker(slotIndex, type) {
+    sheetLibraryTarget = { slotIndex, type };
+    return openLibPicker('sheet');
 }
 
 async function handleSheetSelfFiles(slotIndex, type, files) {
@@ -1522,7 +1571,11 @@ async function loadSheetSelfServerDraft(unionId) {
         if (serverTime >= localTime && !sheetSelfDirty) {
             sheetSelfState = serverDraft;
             try { localStorage.setItem(SHEET_SELF_LOCAL_PREFIX + unionId, JSON.stringify(sheetSelfDraftPayload())); } catch {}
-            if (currentMode === 'sheet') renderSheetSelfGrid();
+            if (currentMode === 'sheet') {
+                const productNameInput = document.getElementById('sheetSelfProductName');
+                if (productNameInput) productNameInput.value = sheetSelfState.productName;
+                renderSheetSelfGrid();
+            }
         }
         setSheetSelfSaveStatus('已自动保存', 'is-saved');
     } catch {}
@@ -1537,13 +1590,16 @@ function loadSheetSelfLocal(unionId) {
 
 function normalizeSheetSelfDraft(value) {
     const state = createEmptySheetSelfState();
+    const legacyProductName = Array.isArray(value?.slots)
+        ? value.slots.find(slot => String(slot?.productName || '').trim())?.productName
+        : '';
+    state.productName = String(value?.productName || legacyProductName || '').slice(0, 100);
     state.savedAt = String(value?.savedAt || '');
     state.slots = state.slots.map((empty, index) => {
         const slot = value?.slots?.[index] || {};
         return {
             ...empty,
-            photographer: slot.photographer === true,
-            productName: String(slot.productName || '').slice(0, 100),
+            photographer: sheetSelfDraftSlotHasContent(slot) ? slot.photographer === true : true,
             title: String(slot.title || '').slice(0, 100),
             subtitle: String(slot.subtitle || '').slice(0, 100),
             otherText: String(slot.otherText || '').slice(0, 300),
@@ -1563,11 +1619,11 @@ function normalizeSheetSelfFileKey(value) {
 function sheetSelfDraftPayload() {
     return {
         version: 1,
+        productName: sheetSelfState.productName,
         savedAt: sheetSelfState.savedAt || new Date().toISOString(),
         slots: sheetSelfState.slots.map(slot => ({
             index: slot.index,
             photographer: slot.photographer === true,
-            productName: slot.productName,
             title: slot.title,
             subtitle: slot.subtitle,
             otherText: slot.otherText,
@@ -1589,15 +1645,16 @@ async function submitSheetSelf() {
         showStudioFieldError(status, '请至少填写一个图片位', document.getElementById('sheetSelfGrid'));
         return;
     }
-    const invalidSlot = activeSlots.find(slot => !slot.productName.trim()
-        || !slot.referenceKey?.key
+    if (!sheetSelfState.productName.trim()) {
+        showStudioFieldError(status, '请填写顶部的统一产品名称', document.getElementById('sheetSelfProductName'));
+        return;
+    }
+    const invalidSlot = activeSlots.find(slot => !slot.referenceKey?.key
         || (!slot.photographer && slot.productKeys.length !== 2));
     if (invalidSlot) {
         const invalidIndex = invalidSlot.index;
         const slot = invalidSlot;
-        const message = !slot.productName.trim()
-            ? `第 ${invalidIndex + 1} 张请填写产品名称`
-            : !slot.referenceKey?.key
+        const message = !slot.referenceKey?.key
                 ? `第 ${invalidIndex + 1} 张请上传要模仿的图`
                 : `第 ${invalidIndex + 1} 张请上传两张白底产品图，或开启“由摄影师决定”`;
         showStudioFieldError(status, message, document.querySelector(`[data-sheet-slot="${invalidIndex}"]`));
@@ -1617,7 +1674,7 @@ async function submitSheetSelf() {
             body: JSON.stringify({ submitter: currentUser, slots: activeSlots.map(slot => ({
                 index: slot.index,
                 photographer: slot.photographer,
-                productName: slot.productName,
+                productName: sheetSelfState.productName,
                 title: slot.title,
                 subtitle: slot.subtitle,
                 otherText: slot.otherText,
@@ -1637,6 +1694,7 @@ async function submitSheetSelf() {
             body: JSON.stringify({ unionId: currentUser.unionId, preserveFiles: true })
         }).catch(() => {});
         sheetSelfState = createEmptySheetSelfState();
+        document.getElementById('sheetSelfProductName').value = '';
         renderSheetSelfGrid();
         setSheetSelfSaveStatus('已提交，新表格等待填写', 'is-saved');
         status.textContent = '';
@@ -1652,13 +1710,20 @@ async function submitSheetSelf() {
 }
 
 function sheetSelfSlotHasContent(slot) {
-    return Boolean(slot.photographer
-        || slot.productName.trim()
-        || slot.title.trim()
+    return Boolean(slot.title.trim()
         || slot.subtitle.trim()
         || slot.otherText.trim()
         || slot.referenceKey?.key
         || slot.productKeys.length);
+}
+
+function sheetSelfDraftSlotHasContent(slot) {
+    return Boolean(String(slot?.productName || '').trim()
+        || String(slot?.title || '').trim()
+        || String(slot?.subtitle || '').trim()
+        || String(slot?.otherText || '').trim()
+        || slot?.referenceKey?.key
+        || (Array.isArray(slot?.productKeys) && slot.productKeys.length));
 }
 
 function setSheetSelfSaveStatus(text, className) {
@@ -3195,9 +3260,9 @@ async function openLibPicker(purpose = 'reference') {
     const box = document.createElement('div');
     box.style.cssText = 'background:#fff;border-radius:16px;padding:24px;width:min(680px,95vw);max-height:80vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,0.18)';
     box.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">'
-        + '<span style="font-size:1rem;font-weight:700;color:#111827">' + (purpose === 'model' ? '选择模特' : purpose === 'scene' ? '选择场景' : '白底素材库') + '</span>'
+        + '<span style="font-size:1rem;font-weight:700;color:#111827">' + (purpose === 'model' ? '选择模特' : purpose === 'scene' ? '选择场景' : purpose === 'sheet' ? '从资料库选择图片' : '白底素材库') + '</span>'
         + '<button id="libPickerClose" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:#9ca3af">×</button>'
-        + '</div><div style="font-size:0.8rem;color:#6366f1;margin-bottom:12px">' + (purpose === 'model' ? '点击图片选择为模特参考图' : purpose === 'scene' ? '点击图片选择为场景参考图' : '点击图片加入，最多4张') + '</div>'
+        + '</div><div style="font-size:0.8rem;color:#6366f1;margin-bottom:12px">' + (purpose === 'model' ? '点击图片选择为模特参考图' : purpose === 'scene' ? '点击图片选择为场景参考图' : purpose === 'sheet' ? '进入产品分类，点击一张图片导入当前图片位' : '点击图片加入，最多4张') + '</div>'
         + '<div id="libPickerBody"><p style="color:#9ca3af;font-size:0.85rem">加载中...</p></div>';
     modal.appendChild(box);
     modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
@@ -3245,7 +3310,17 @@ function libPickerBreadcrumb(parts, onBack) {
 function renderLibPickerCategories(categories, body, modal) {
     body.innerHTML = '';
     const isModelPicker = modal.dataset.purpose === 'model';
-    const visibleCategories = Object.fromEntries(Object.entries(categories).filter(([cat]) => isModelPicker ? cat === '模特' : modal.dataset.purpose === 'scene' ? cat !== '模特' : cat !== '模特'));
+    const isSheetPicker = modal.dataset.purpose === 'sheet';
+    const visibleCategories = Object.fromEntries(Object.entries(categories).filter(([cat, products]) => {
+        if (isModelPicker) return cat === '模特';
+        if (modal.dataset.purpose === 'scene') return cat !== '模特';
+        if (isSheetPicker) {
+            return cat !== '模特'
+                && cat !== '说明书'
+                && Object.values(products || {}).some(files => files.some(isLibraryImageFile));
+        }
+        return cat !== '模特';
+    }));
     if (!Object.keys(visibleCategories).length) {
         body.innerHTML = '<p style="color:#9ca3af;font-size:0.85rem">' + (isModelPicker ? '暂无模特素材，请先在资料库管理里上传到“模特”分类' : modal.dataset.purpose === 'scene' ? '暂无场景素材，请先在资料库里上传场景图' : '素材库为空') + '</p>';
         return;
@@ -3258,7 +3333,7 @@ function renderLibPickerCategories(categories, body, modal) {
     const grid = document.createElement('div');
     grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px';
     for (const [cat, products] of Object.entries(visibleCategories)) {
-        const prodCount = Object.keys(products).length;
+        const prodCount = Object.values(products).filter(files => !isSheetPicker || files.some(isLibraryImageFile)).length;
         const cover = (() => {
             for (const files of Object.values(products)) {
                 const img = files.find(f => /\.(png|jpg|jpeg|webp|gif)$/i.test(f.name));
@@ -3280,16 +3355,23 @@ function renderLibPickerCategories(categories, body, modal) {
 
 function renderLibPickerProducts(categories, cat, body, modal) {
     const products = categories[cat] || {};
+    const isSheetPicker = modal.dataset.purpose === 'sheet';
+    const visibleProducts = Object.entries(products).filter(([, files]) => !isSheetPicker || files.some(isLibraryImageFile));
     body.innerHTML = '';
     body.appendChild(libPickerBreadcrumb([cat], () => renderLibPickerCategories(categories, body, modal)));
+    if (!visibleProducts.length) {
+        body.insertAdjacentHTML('beforeend', '<p style="color:#9ca3af;font-size:0.85rem">此分类暂无产品图片</p>');
+        return;
+    }
     const grid = document.createElement('div');
     grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px';
-    for (const [prod, files] of Object.entries(products)) {
+    for (const [prod, files] of visibleProducts) {
+        const imageFiles = files.filter(isLibraryImageFile);
         const cover = files.find(f => /\.(png|jpg|jpeg|webp|gif)$/i.test(f.name)) || files[0];
         const card = document.createElement('div');
         card.style.cssText = 'cursor:pointer;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;transition:border-color 0.15s';
         card.innerHTML = (cover ? '<img src="/api/library-file/' + encodeURIComponent(cover.key) + '" style="width:100%;aspect-ratio:1.3;object-fit:cover;display:block" loading="lazy">' : '<div style="aspect-ratio:1.3;background:#f3f4f6"></div>')
-            + '<div style="padding:8px 10px"><div style="font-size:0.86rem;font-weight:700;color:#111827;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + prod + '</div><div style="font-size:0.74rem;color:#9ca3af;margin-top:2px">' + files.length + ' 张</div></div>';
+            + '<div style="padding:8px 10px"><div style="font-size:0.86rem;font-weight:700;color:#111827;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + prod + '</div><div style="font-size:0.74rem;color:#9ca3af;margin-top:2px">' + (isSheetPicker ? imageFiles.length : files.length) + ' 张</div></div>';
         card.onmouseover = () => card.style.borderColor = '#111827';
         card.onmouseout = () => card.style.borderColor = '#e5e7eb';
         card.onclick = () => renderLibPickerImages(categories, cat, prod, body, modal);
@@ -3299,7 +3381,8 @@ function renderLibPickerProducts(categories, cat, body, modal) {
 }
 
 function renderLibPickerImages(categories, cat, prod, body, modal) {
-    const files = (categories[cat] && categories[cat][prod]) || [];
+    const isSheetPicker = modal.dataset.purpose === 'sheet';
+    const files = ((categories[cat] && categories[cat][prod]) || []).filter(file => !isSheetPicker || isLibraryImageFile(file));
     body.innerHTML = '';
     body.appendChild(libPickerBreadcrumb([cat, prod], () => renderLibPickerProducts(categories, cat, body, modal)));
     const grid = document.createElement('div');
@@ -3314,6 +3397,10 @@ function renderLibPickerImages(categories, cat, prod, body, modal) {
         tile.onclick = async () => {
             const isModelPick = modal.dataset.purpose === 'model';
             const isScenePick = modal.dataset.purpose === 'scene';
+            if (isSheetPicker) {
+                await importSheetLibraryFile(f, modal);
+                return;
+            }
             if (!isModelPick && !isScenePick && uploads.freeImages.length >= 4) { alert('最多加入 4 张'); return; }
             try {
                 const r = await fetch('/api/library-file/' + encodeURIComponent(f.key));
@@ -3341,6 +3428,59 @@ function renderLibPickerImages(categories, cat, prod, body, modal) {
         grid.appendChild(tile);
     });
     body.appendChild(grid);
+}
+
+function isLibraryImageFile(file) {
+    return /\.(png|jpg|jpeg|webp|gif)$/i.test(String(file?.name || ''));
+}
+
+async function importSheetLibraryFile(libraryFile, modal) {
+    const target = sheetLibraryTarget;
+    const slot = Number.isInteger(target?.slotIndex) ? sheetSelfState.slots[target.slotIndex] : null;
+    if (!slot || !['reference', 'product'].includes(target?.type) || slot.uploading) return;
+    if (target.type === 'product' && slot.productKeys.length >= 2) {
+        slot.status = '白底产品图最多上传两张';
+        renderSheetSelfGrid();
+        modal.remove();
+        sheetLibraryTarget = null;
+        return;
+    }
+
+    slot.uploading = true;
+    slot.status = '正在从资料库导入图片...';
+    renderSheetSelfGrid();
+    try {
+        const response = await fetch('/api/library-file/' + encodeURIComponent(libraryFile.key));
+        if (!response.ok) throw new Error(`读取资料库图片失败 (${response.status})`);
+        const blob = await response.blob();
+        const extension = String(libraryFile.name || '').split('.').pop().toLowerCase();
+        const inferredMime = extension === 'jpg' || extension === 'jpeg'
+            ? 'image/jpeg'
+            : extension === 'webp'
+                ? 'image/webp'
+                : extension === 'gif'
+                    ? 'image/gif'
+                    : 'image/png';
+        const file = new File([blob], libraryFile.name || `资料库图片.${extension || 'png'}`, {
+            type: blob.type.startsWith('image/') ? blob.type : inferredMime
+        });
+        const invalid = validateSheetSelfFile(file);
+        if (invalid) throw new Error(invalid);
+
+        const [uploaded] = await uploadImages([{ file, name: file.name }], 'studio/sheet-self');
+        if (target.type === 'reference') slot.referenceKey = uploaded;
+        else slot.productKeys = [...slot.productKeys, uploaded].slice(0, 2);
+        slot.status = '已从资料库导入并保存';
+        persistSheetSelfDraft(300);
+        modal.remove();
+        sheetLibraryTarget = null;
+    } catch (error) {
+        slot.status = '失败：' + error.message;
+        alert('选取失败：' + error.message);
+    } finally {
+        slot.uploading = false;
+        renderSheetSelfGrid();
+    }
 }
 
 function showSuccessModal(task, estimateText = '') {

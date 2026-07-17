@@ -200,16 +200,22 @@
         .sheet-self-save { flex-shrink:0; min-width:110px; padding-top:3px; color:#6b7280; font-size:.74rem; text-align:right; }
         .sheet-self-save.is-saving { color:#b45309; }
         .sheet-self-save.is-saved { color:#047857; }
-        .sheet-self-table-head { display:grid; grid-template-columns:58px minmax(130px,.7fr) minmax(245px,1.3fr) minmax(300px,1.55fr) minmax(125px,.65fr); gap:18px; padding:10px 20px; border-bottom:1px solid #e5e7eb; background:#f8fafc; color:#6b7280; font-size:.67rem; font-weight:700; }
+        .sheet-self-global-product { display:grid; grid-template-columns:minmax(140px,190px) minmax(260px,560px) 1fr; align-items:center; gap:16px; padding:14px 24px; border-bottom:1px solid #e5e7eb; background:#fbfcfe; }
+        .sheet-self-global-product label { color:#374151; font-size:.78rem; font-weight:800; }
+        .sheet-self-global-product label span { color:#dc2626; }
+        .sheet-self-global-product input { width:100%; padding:10px 12px; border:1px solid #d8dde5; border-radius:6px; background:#fff; color:#111827; font-size:.82rem; outline:none; }
+        .sheet-self-global-product input:focus { border-color:#6366f1; box-shadow:0 0 0 3px rgba(99,102,241,.1); }
+        .sheet-self-global-product small { color:#9ca3af; font-size:.69rem; line-height:1.45; }
+        .sheet-self-table-head { display:grid; grid-template-columns:58px minmax(160px,.9fr) minmax(220px,1.1fr) minmax(300px,1.5fr) minmax(125px,.7fr); gap:18px; padding:10px 20px; border-bottom:1px solid #e5e7eb; background:#f8fafc; color:#6b7280; font-size:.67rem; font-weight:700; }
         .sheet-self-grid { display:grid; grid-template-columns:minmax(0,1fr); }
-        .sheet-self-slot { display:grid; grid-template-columns:58px minmax(130px,.7fr) minmax(245px,1.3fr) minmax(300px,1.55fr) minmax(125px,.65fr); gap:18px; align-items:start; min-width:0; padding:16px 20px; border-bottom:1px solid #e9edf2; background:#fff; transition:background .15s; }
+        .sheet-self-slot { display:grid; grid-template-columns:58px minmax(160px,.9fr) minmax(220px,1.1fr) minmax(300px,1.5fr) minmax(125px,.7fr); gap:18px; align-items:start; min-width:0; padding:16px 20px; border-bottom:1px solid #e9edf2; background:#fff; transition:background .15s; }
         .sheet-self-slot:last-child { border-bottom:0; }
         .sheet-self-slot:hover { background:#fbfcfe; }
         .sheet-self-slot-head { display:flex; flex-direction:column; align-items:flex-start; gap:8px; min-width:0; }
         .sheet-self-slot-title { display:flex; flex-direction:column; align-items:flex-start; gap:5px; color:#111827; font-size:.72rem; font-weight:800; white-space:nowrap; }
         .sheet-self-slot-number { display:grid; place-items:center; width:28px; height:28px; border-radius:6px; background:#111827; color:#fff; font-size:.78rem; }
         .sheet-self-fixed-size { color:#047857; font-size:.63rem; font-weight:700; line-height:1.35; }
-        .sheet-self-product { min-width:0; }
+        .sheet-self-product { display:grid; gap:9px; min-width:0; }
         .sheet-self-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
         .sheet-self-field { min-width:0; }
         .sheet-self-field.full { grid-column:1/-1; }
@@ -219,9 +225,12 @@
         .sheet-self-field input:focus, .sheet-self-field textarea:focus { border-color:#6366f1; box-shadow:0 0 0 3px rgba(99,102,241,.1); }
         .sheet-self-media { display:flex; flex-direction:column; min-width:0; }
         .sheet-self-images { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; }
-        .sheet-self-image-slot { position:relative; min-width:0; aspect-ratio:1.18/1; border:1px dashed #cbd5e1; border-radius:6px; overflow:hidden; background:#f8fafc; }
-        .sheet-self-image-slot label { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; width:100%; height:100%; padding:6px; color:#6b7280; font-size:.63rem; line-height:1.3; text-align:center; cursor:pointer; }
-        .sheet-self-image-slot label:hover { border-color:#818cf8; background:#f5f7ff; color:#4338ca; }
+        .sheet-self-images.is-photographer { grid-template-columns:minmax(120px,180px); }
+        .sheet-self-image-slot { position:relative; min-width:0; height:112px; border:1px dashed #cbd5e1; border-radius:6px; overflow:hidden; background:#f8fafc; }
+        .sheet-self-image-slot.is-reference { border-color:#bfdbfe; background:#f6faff; }
+        .sheet-self-image-slot.is-product { border-color:#d5dbe3; background:#fafbfc; }
+        .sheet-self-image-choice { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; width:100%; height:100%; padding:6px; border:0; background:transparent; color:#6b7280; font:inherit; font-size:.63rem; line-height:1.3; text-align:center; cursor:pointer; }
+        .sheet-self-image-choice:hover { background:#f5f7ff; color:#4338ca; }
         .sheet-self-image-slot img { width:100%; height:100%; object-fit:cover; display:block; }
         .sheet-self-image-badge { position:absolute; left:4px; bottom:4px; max-width:calc(100% - 8px); padding:2px 5px; border-radius:4px; background:rgba(17,24,39,.78); color:#fff; font-size:.62rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
         .sheet-self-image-remove { position:absolute; top:4px; right:4px; display:grid; place-items:center; width:23px; height:23px; padding:0; border:0; border-radius:50%; background:rgba(17,24,39,.82); color:#fff; font-size:15px; cursor:pointer; }
@@ -236,12 +245,25 @@
         .sheet-self-switch span::after { content:''; position:absolute; top:3px; left:3px; width:16px; height:16px; border-radius:50%; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.22); transition:transform .16s; }
         .sheet-self-switch input:checked + span { background:#111827; }
         .sheet-self-switch input:checked + span::after { transform:translateX(16px); }
-        .sheet-self-photo-wait { display:flex; align-items:center; justify-content:center; grid-column:span 2; min-height:100%; padding:10px; border:1px dashed #f59e0b; border-radius:6px; background:#fffbeb; color:#92400e; font-size:.66rem; line-height:1.45; text-align:center; }
         .sheet-self-slot-status { min-height:16px; margin-top:10px; color:#6b7280; font-size:.66rem; line-height:1.4; }
         .sheet-self-slot-status.err { color:#b91c1c; }
+        .sheet-source-overlay { position:fixed; inset:0; z-index:12000; display:grid; place-items:center; padding:18px; background:rgba(17,24,39,.48); }
+        .sheet-source-dialog { width:min(430px,100%); padding:22px; border-radius:10px; background:#fff; box-shadow:0 24px 70px rgba(15,23,42,.22); }
+        .sheet-source-head { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:16px; }
+        .sheet-source-head strong { color:#111827; font-size:.96rem; }
+        .sheet-source-close { display:grid; place-items:center; width:30px; height:30px; border:0; border-radius:6px; background:#f3f4f6; color:#6b7280; font-size:18px; cursor:pointer; }
+        .sheet-source-options { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+        .sheet-source-option { min-height:122px; padding:16px 12px; border:1px solid #dfe3e8; border-radius:8px; background:#fff; color:#111827; text-align:left; cursor:pointer; }
+        .sheet-source-option:hover { border-color:#111827; background:#fafafa; }
+        .sheet-source-option svg { display:block; width:24px; height:24px; margin-bottom:12px; color:#4b5563; }
+        .sheet-source-option strong { display:block; font-size:.82rem; }
+        .sheet-source-option small { display:block; margin-top:5px; color:#9ca3af; font-size:.68rem; line-height:1.45; }
         .sheet-self-actions { display:flex; align-items:center; justify-content:space-between; gap:16px; margin:0; padding:18px 24px; border-top:1px solid #e5e7eb; background:#fbfcfe; }
         .sheet-self-actions p { margin:0; color:#6b7280; font-size:.74rem; line-height:1.5; }
         .sheet-self-submit { width:auto; min-width:180px; flex-shrink:0; }
+        @media (min-width: 1400px) {
+            .sheet-self-photo-row { flex-direction:row; align-items:center; justify-content:space-between; }
+        }
         @media (max-width: 1080px) {
             .sheet-self-table-head { display:none; }
             .sheet-self-slot { grid-template-columns:64px minmax(0,1fr) minmax(280px,.9fr); }
@@ -271,11 +293,12 @@
         }
         @media (max-width: 640px) {
             .sheet-self-head, .sheet-self-actions { align-items:stretch; flex-direction:column; padding-left:16px; padding-right:16px; }
+            .sheet-self-global-product { grid-template-columns:minmax(0,1fr); gap:7px; padding:14px 16px; }
             .sheet-self-slot { padding:14px 16px; }
             .sheet-self-save { text-align:left; }
             .sheet-self-fields { grid-template-columns:minmax(0,1fr); }
             .sheet-self-field.full { grid-column:auto; }
-            .sheet-self-image-slot { aspect-ratio:1; }
+            .sheet-self-image-slot { height:auto; aspect-ratio:1; }
             .sheet-self-submit { width:100%; }
         }
     </style>
@@ -480,6 +503,6 @@
     帮助中心
 </button>
 
-    <script src="studio.js?v=20260717-sheet-self-table-wide"></script>
+    <script src="studio.js?v=20260717-sheet-self-library-picker"></script>
 </body>
 </html>

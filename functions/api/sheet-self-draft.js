@@ -51,18 +51,20 @@ export async function onRequestDelete(context) {
 }
 
 function normalizeDraft(value) {
+    const legacyProductName = Array.isArray(value?.slots)
+        ? value.slots.find(slot => String(slot?.productName || '').trim())?.productName
+        : '';
     const slots = Array.isArray(value?.slots) ? value.slots.slice(0, 6).map((slot, index) => ({
         index,
         photographer: slot?.photographer === true,
-        productName: cleanText(slot?.productName, 100),
         title: cleanText(slot?.title, 100),
         subtitle: cleanText(slot?.subtitle, 100),
         otherText: cleanText(slot?.otherText, 300),
         referenceKey: normalizeFileKey(slot?.referenceKey),
         productKeys: Array.isArray(slot?.productKeys) ? slot.productKeys.slice(0, 2).map(normalizeFileKey).filter(Boolean) : []
     })) : [];
-    while (slots.length < 6) slots.push({ index: slots.length, photographer: false, productName: '', title: '', subtitle: '', otherText: '', referenceKey: null, productKeys: [] });
-    return { version: 1, slots, savedAt: new Date().toISOString() };
+    while (slots.length < 6) slots.push({ index: slots.length, photographer: true, title: '', subtitle: '', otherText: '', referenceKey: null, productKeys: [] });
+    return { version: 1, productName: cleanText(value?.productName || legacyProductName, 100), slots, savedAt: new Date().toISOString() };
 }
 
 function normalizeFileKey(value) {
