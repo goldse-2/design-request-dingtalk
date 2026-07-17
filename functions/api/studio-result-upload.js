@@ -3,6 +3,7 @@ import { completeSilentLibraryReplacement, ensureSilentLibraryReplacement, repla
 import { studioTaskPutOptions } from '../_shared/studio-task-storage.js';
 import { advanceSheetSelfWorkflow } from '../_shared/sheet-self-workflow.js';
 import { releaseStudioRpaSlot } from '../_shared/studio-rpa-slot.js';
+import { wakeStudioRpaQueue } from '../_shared/studio-rpa-wakeup.js';
 
 export async function onRequestPut(context) {
     const { request, env } = context;
@@ -146,6 +147,7 @@ export async function onRequestPost(context) {
     if (task.workflow?.type === 'sheet_self') {
         await advanceSheetSelfWorkflow({ env, task, origin: new URL(request.url).origin });
     }
+    wakeStudioRpaQueue(request, waitUntil);
 
     if (!libraryReplacement && !task.silent && canNotify) {
         const notify = notifyUserDone(env, task, new URL(request.url).origin)

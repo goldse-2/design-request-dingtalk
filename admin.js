@@ -1710,11 +1710,11 @@ function renderSheetSelfProgress(slot) {
     let currentIndex = steps.findIndex(step => step.key === stageKey);
     if (currentIndex < 0) currentIndex = 0;
     const progress = steps.length > 1 ? (currentIndex / (steps.length - 1)) * 100 : 100;
-    const fillColor = failed ? '#ef4444' : '#2f9cf4';
+    const fillBackground = 'linear-gradient(90deg,#2f9cf4,#1687e8)';
     const labels = steps.map((step, index) => {
         const active = index === currentIndex;
         const completed = index < currentIndex || (index === currentIndex && step.key === 'done' && !failed);
-        const color = active && failed ? '#dc2626' : (active || completed ? '#1d4ed8' : '#9ca3af');
+        const color = active ? '#111827' : (completed ? '#1d4ed8' : '#9ca3af');
         const weight = active ? 700 : 500;
         const align = index === 0 ? 'left' : (index === steps.length - 1 ? 'right' : 'center');
         return `<span style="min-width:0;color:${color};font-size:.68rem;font-weight:${weight};text-align:${align};white-space:nowrap">${step.label}</span>`;
@@ -1722,13 +1722,13 @@ function renderSheetSelfProgress(slot) {
     const markers = steps.map((step, index) => {
         const left = steps.length > 1 ? (index / (steps.length - 1)) * 100 : 100;
         const reached = index <= currentIndex;
-        const markerColor = index === currentIndex && failed ? '#ef4444' : (reached ? '#2f9cf4' : '#d1d5db');
+        const markerColor = reached ? '#2f9cf4' : '#d1d5db';
         return `<i style="position:absolute;top:50%;left:${left}%;width:8px;height:8px;border:2px solid #fff;border-radius:50%;background:${markerColor};box-shadow:0 0 0 1px ${markerColor};transform:translate(-50%,-50%)"></i>`;
     }).join('');
     return `<div role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(progress)}" style="width:100%;padding:2px 3px">
         <div style="display:grid;grid-template-columns:repeat(${steps.length},minmax(0,1fr));align-items:end;gap:3px">${labels}</div>
         <div style="position:relative;height:7px;margin:9px 4px 1px;border-radius:999px;background:#e5e7eb">
-            <div style="position:absolute;inset:0 auto 0 0;width:${progress}%;border-radius:999px;background:${fillColor};transition:width .25s ease"></div>
+            <div style="position:absolute;inset:0 auto 0 0;width:${progress}%;border-radius:999px;background:${fillBackground};transition:width .25s ease"></div>
             ${markers}
         </div>
     </div>`;

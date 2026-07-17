@@ -3,6 +3,7 @@ import { completeSilentLibraryReplacement, ensureSilentLibraryReplacement, repla
 import { studioTaskPutOptions } from '../_shared/studio-task-storage.js';
 import { advanceSheetSelfWorkflow } from '../_shared/sheet-self-workflow.js';
 import { releaseStudioRpaSlot } from '../_shared/studio-rpa-slot.js';
+import { wakeStudioRpaQueue } from '../_shared/studio-rpa-wakeup.js';
 
 export async function onRequestPost(context) {
     const { request, env, waitUntil } = context;
@@ -68,6 +69,7 @@ export async function onRequestPost(context) {
         if (action === 'complete' && task.workflow?.type === 'sheet_self') {
             await advanceSheetSelfWorkflow({ env, task, origin: new URL(request.url).origin });
         }
+        if (action === 'complete') wakeStudioRpaQueue(request, waitUntil);
 
         if (!task.silent && task.submitter?.unionId && env.DINGTALK_APPKEY && env.DINGTALK_APPSECRET) {
             const origin = new URL(request.url).origin;
