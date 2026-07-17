@@ -1,5 +1,6 @@
 import { studioTaskPutOptions } from '../_shared/studio-task-storage.js';
 import { normalizeLibraryReplacement } from '../_shared/studio-library-replacement.js';
+import { queueStudioRpaTask } from '../_shared/studio-rpa-slot.js';
 
 export async function onRequestPost(context) {
     const { request, env, waitUntil, internalTaskOptions } = context;
@@ -84,25 +85,9 @@ export async function onRequestPost(context) {
     let autoSendError = '';
     try {
         await env.SUBMISSIONS.put(taskId, JSON.stringify(task), studioTaskPutOptions(task));
-        if (mode === 'cutout') {
-            try {
-                await dispatchCutoutTask(request, env, task);
-                autoSent = true;
-                await env.SUBMISSIONS.put(taskId, JSON.stringify(task), studioTaskPutOptions(task));
-                await appendQueue(env.SUBMISSIONS, 'studio:processingQueue:v2', taskId);
-            } catch (error) {
-                autoSendError = String(error?.message || error).slice(0, 300);
-                task.autoRpaLastError = autoSendError;
-                task.autoRpaLastAttemptAt = new Date().toISOString();
-                await env.SUBMISSIONS.put(taskId, JSON.stringify(task), studioTaskPutOptions(task));
-                await appendQueue(env.SUBMISSIONS, 'studio:rpaQueue:v2', taskId);
-            }
-        } else {
-            const queueKey = mode === 'variant' || mode === 'resize_ai'
-                ? 'studio:imageQueue:v2'
-                : 'studio:rpaQueue:v2';
-            await appendQueue(env.SUBMISSIONS, queueKey, taskId);
-        }
+        const isBackgroundImageTask = mode === 'variant' || mode === 'resize_ai';
+        if (isBackgroundImageTask) await appendQueue(env.SUBMISSIONS, 'studio:imageQueue:v2', taskId);
+        else await queueStudioRpaTask(env, taskId);
     } catch (err) {
         return Response.json({ ok: false, error: 'Storage failed' }, { status: 500 });
     }
@@ -178,7 +163,7 @@ export async function onRequestPost(context) {
         if (waitUntil) waitUntil(p2);
     }
 
-    return Response.json({ ok: true, id: taskId, autoSent, autoSendError });
+    return Response.json({ ok: true, id: taskId, autoSent, autoSendError, queued: !autoSent });
 }
 
 function studioModeText(mode) {

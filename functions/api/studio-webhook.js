@@ -1,4 +1,5 @@
 import { taskNeedsRpaTranslation, translateForRpa, translateProgramFieldsForRpa } from '../_shared/ai-translate.js';
+import { acquireStudioRpaSlot, queueStudioRpaTask, releaseStudioRpaSlot } from '../_shared/studio-rpa-slot.js';
 import { studioTaskPutOptions } from '../_shared/studio-task-storage.js';
 
 export async function onRequestPost(context) {
@@ -15,16 +16,41 @@ export async function onRequestPost(context) {
         return Response.json({ ok: false, error: 'KV not configured' }, { status: 500 });
     }
 
+    let acquiredSlot = null;
     try {
         const raw = await env.SUBMISSIONS.get(taskId);
         if (!raw) return Response.json({ ok: false, error: 'Task not found' }, { status: 404 });
         const task = JSON.parse(raw);
         const origin = new URL(request.url).origin;
-        const dispatched = await dispatchStudioTaskToRpa({ env, task, origin, webhookUrl, persistWebhook: true });
-        await env.SUBMISSIONS.put(taskId, JSON.stringify(task), studioTaskPutOptions(task));
+        acquiredSlot = await acquireStudioRpaSlot(env, taskId);
+        if (!acquiredSlot.acquired) {
+            task.status = 'pending';
+            task.sentToRpa = false;
+            task.manualRpaResendQueued = true;
+            task.manualRpaResendQueuedAt = new Date().toISOString();
+            task.overdueNotified = false;
+            task.overdueNotifiedAt = '';
+            await env.SUBMISSIONS.put(taskId, JSON.stringify(task), studioTaskPutOptions(task));
+            const queued = await queueStudioRpaTask(env, taskId);
+            return Response.json({
+                ok: true,
+                queued: true,
+                queuePosition: queued.position,
+                busyTaskId: acquiredSlot.busyTaskId
+            });
+        }
 
-        return Response.json({ ok: true, status: dispatched.status, sentBody: dispatched.payload, response: dispatched.response });
+        const dispatched = await dispatchStudioTaskToRpa({ env, task, origin, webhookUrl, persistWebhook: true });
+        task.manualRpaResendQueued = false;
+        task.manualRpaResendQueuedAt = '';
+        await env.SUBMISSIONS.put(taskId, JSON.stringify(task), studioTaskPutOptions(task));
+        await appendQueue(env.SUBMISSIONS, 'studio:processingQueue:v2', taskId);
+
+        return Response.json({ ok: true, queued: false, status: dispatched.status, sentBody: dispatched.payload, response: dispatched.response });
     } catch (err) {
+        if (acquiredSlot?.acquired && !acquiredSlot.alreadyOwned) {
+            await releaseStudioRpaSlot(env, taskId).catch(() => {});
+        }
         return Response.json({ ok: false, error: err.message }, { status: 500 });
     }
 }
@@ -127,6 +153,17 @@ export async function dispatchStudioTaskToRpa({ env, task, origin, webhookUrl, p
     }
     if (!task.size && pickedSize) task.size = pickedSize;
     return { status: response.status, payload, response: responseText.slice(0, 500), webhookUrl: effectiveWebhookUrl };
+}
+
+async function appendQueue(kv, key, taskId) {
+    const raw = await kv.get(key).catch(() => null);
+    let ids = [];
+    if (raw) {
+        try { ids = JSON.parse(raw); } catch { ids = []; }
+    }
+    if (!Array.isArray(ids)) ids = [];
+    if (!ids.includes(taskId)) ids.push(taskId);
+    await kv.put(key, JSON.stringify(ids.slice(-500)));
 }
 
 function encodeKeyToken(key) {

@@ -2,6 +2,7 @@ import { markStudioNotificationSent, sendStudioResultImages } from '../_shared/s
 import { completeSilentLibraryReplacement, ensureSilentLibraryReplacement, replaceLibraryImage } from '../_shared/studio-library-replacement.js';
 import { studioTaskPutOptions } from '../_shared/studio-task-storage.js';
 import { advanceSheetSelfWorkflow } from '../_shared/sheet-self-workflow.js';
+import { releaseStudioRpaSlot } from '../_shared/studio-rpa-slot.js';
 
 export async function onRequestPost(context) {
     const { request, env, waitUntil } = context;
@@ -29,6 +30,7 @@ export async function onRequestPost(context) {
             completeSilentLibraryReplacement(task, stored);
             if (message) task.completeNote = message;
             await env.SUBMISSIONS.put(taskId, JSON.stringify(task), studioTaskPutOptions(task));
+            await releaseStudioRpaSlot(env, taskId);
             return Response.json({ ok: true, taskId, resultCount: 1, replacedLibraryImage: true });
         }
 
@@ -77,6 +79,7 @@ export async function onRequestPost(context) {
         if (message) task.completeNote = message;
 
         await env.SUBMISSIONS.put(taskId, JSON.stringify(task), studioTaskPutOptions(task));
+        await releaseStudioRpaSlot(env, taskId);
 
         if (task.workflow?.type === 'sheet_self') {
             await advanceSheetSelfWorkflow({ env, task, origin: new URL(request.url).origin });

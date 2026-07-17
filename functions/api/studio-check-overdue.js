@@ -5,6 +5,7 @@ import { recolorImage } from '../_shared/variant-recolor-core.js';
 import { editImageWithPrompt } from '../_shared/image-edit-core.js';
 import { studioTaskPutOptions } from '../_shared/studio-task-storage.js';
 import { advanceSheetSelfWorkflow, retrySheetSelfChildAfterTimeout } from '../_shared/sheet-self-workflow.js';
+import { acquireStudioRpaSlot, ensureStudioRpaSlot, releaseStudioRpaSlot } from '../_shared/studio-rpa-slot.js';
 
 export async function onRequestGet(context) {
     const { env, request, waitUntil } = context;
@@ -57,11 +58,17 @@ export async function onRequestGet(context) {
 
         const initialAutoQueue = [...autoQueueIds];
         const initialProcessingQueue = [...processingQueueIds];
+        let rpaSlot = imageOnly
+            ? { busy: false, taskId: '' }
+            : await ensureStudioRpaSlot(env, processingQueueIds);
 
-        const autoBatchIds = autoQueueIds.slice(0, imageOnly ? 1 : 3);
-        const processingBatchIds = imageOnly ? [] : processingQueueIds.slice(0, 10);
+        const autoBatchIds = autoQueueIds.slice(0, 1);
+        const processingBatchIds = imageOnly
+            ? []
+            : unique([rpaSlot.taskId, ...processingQueueIds.slice(0, 10)].filter(Boolean));
         const deferredAutoQueue = autoQueueIds.slice(autoBatchIds.length);
-        const deferredProcessingQueue = processingQueueIds.slice(processingBatchIds.length);
+        const processingBatchSet = new Set(processingBatchIds);
+        const deferredProcessingQueue = processingQueueIds.filter(id => !processingBatchSet.has(id));
         const autoSendTasks = await readStudioTasks(env, autoBatchIds);
         const tasks = await readStudioTasks(env, processingBatchIds);
         const nextAutoQueue = [];
@@ -86,7 +93,8 @@ export async function onRequestGet(context) {
                 const createdAt = typeof task.timestamp === 'number'
                     ? task.timestamp
                     : new Date(task.createdAt || task.timestamp || 0).getTime();
-                if (!imageOnly && (!createdAt || (now - createdAt) < autoSendThreshold)) {
+                const requiresApprovalDelay = task.workflow?.type !== 'sheet_self' && task.mode !== 'cutout';
+                if (!imageOnly && requiresApprovalDelay && (!createdAt || (now - createdAt) < autoSendThreshold)) {
                     nextAutoQueue.push(task.id);
                     continue;
                 }
@@ -133,7 +141,14 @@ export async function onRequestGet(context) {
                         : freeWebhook;
                 if (!webhookUrl) continue;
 
+                let acquiredSlot = null;
                 try {
+                    acquiredSlot = await acquireStudioRpaSlot(env, task.id, processingQueueIds);
+                    if (!acquiredSlot.acquired) {
+                        nextAutoQueue.push(task.id);
+                        continue;
+                    }
+                    rpaSlot = { busy: true, taskId: task.id };
                     const { payload, pickedSize } = buildRpaPayload(task, origin);
                     if (task.mode === 'free' && taskNeedsRpaTranslation(task)) {
                         payload.params["描述"] = await translateForRpa(env, payload.params["描述"]);
@@ -163,6 +178,8 @@ export async function onRequestGet(context) {
                     task.autoRpaLastAttemptAt = new Date().toISOString();
                     task.autoRpaLastResponse = text.slice(0, 300);
                     task.rpaSentPayload = payload;
+                    task.manualRpaResendQueued = false;
+                    task.manualRpaResendQueuedAt = '';
                     if (!task.size && pickedSize) task.size = pickedSize;
                     await env.SUBMISSIONS.put(task.id, JSON.stringify(task), studioTaskPutOptions(task));
 
@@ -172,6 +189,10 @@ export async function onRequestGet(context) {
                         await notifyAutoSent(env, task).catch(e => console.error('Notify auto-sent failed:', e.message));
                     }
                 } catch (e) {
+                    if (acquiredSlot?.acquired && !acquiredSlot.alreadyOwned) {
+                        await releaseStudioRpaSlot(env, task.id).catch(() => {});
+                        rpaSlot = { busy: false, taskId: '' };
+                    }
                     const errMsg = String(e.message || e).slice(0, 300);
                     autoErrors.push({ id: task.id, error: errMsg });
                     task.autoRpaLastError = errMsg;
@@ -214,7 +235,15 @@ export async function onRequestGet(context) {
             }
             if (task.status !== 'processing' || !task.sentToRpa) continue;
             if (task.overdueNotified) {
+                if (rpaSlot.taskId === task.id) {
+                    await releaseStudioRpaSlot(env, task.id);
+                    rpaSlot = { busy: false, taskId: '' };
+                }
                 deferredProcessingQueue.push(task.id);
+                continue;
+            }
+            if (rpaSlot.taskId !== task.id) {
+                nextProcessingQueue.push(task.id);
                 continue;
             }
             const sentAt = task.sentToRpaAt ? new Date(task.sentToRpaAt).getTime() : 0;
@@ -231,13 +260,19 @@ export async function onRequestGet(context) {
                 if (retryResult.retried) nextProcessingQueue.push(task.id);
                 if (retryResult.retried) autoSent.push(task.id);
                 if (retryResult.error) autoErrors.push({ id: task.id, error: retryResult.error });
-                if (retryResult.exhausted || retryResult.error) deferredProcessingQueue.push(task.id);
+                if (retryResult.exhausted || retryResult.error) {
+                    await releaseStudioRpaSlot(env, task.id);
+                    rpaSlot = { busy: false, taskId: '' };
+                    deferredProcessingQueue.push(task.id);
+                }
                 continue;
             }
 
             if (isRetouchStage) {
                 const result = await markTaskOverdue(env, task, 'retouch');
                 if (result.notified) notified.push(task.id);
+                await releaseStudioRpaSlot(env, task.id);
+                rpaSlot = { busy: false, taskId: '' };
                 (result.settled ? deferredProcessingQueue : nextProcessingQueue).push(task.id);
                 continue;
             }
@@ -259,6 +294,8 @@ export async function onRequestGet(context) {
                     autoErrors.push({ id: task.id, error: errorText });
                     const result = await markTaskOverdue(env, task, 'retry_failed');
                     if (result.notified) notified.push(task.id);
+                    await releaseStudioRpaSlot(env, task.id);
+                    rpaSlot = { busy: false, taskId: '' };
                     (result.settled ? deferredProcessingQueue : nextProcessingQueue).push(task.id);
                 }
                 continue;
@@ -266,6 +303,8 @@ export async function onRequestGet(context) {
 
             const result = await markTaskOverdue(env, task, 'twice');
             if (result.notified) notified.push(task.id);
+            await releaseStudioRpaSlot(env, task.id);
+            rpaSlot = { busy: false, taskId: '' };
             (result.settled ? deferredProcessingQueue : nextProcessingQueue).push(task.id);
         }
 

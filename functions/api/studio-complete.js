@@ -2,6 +2,7 @@ import { markStudioNotificationSent, sendStudioResultImages } from '../_shared/s
 import { completeSilentLibraryReplacement, ensureSilentLibraryReplacement, replaceLibraryImage } from '../_shared/studio-library-replacement.js';
 import { studioTaskPutOptions } from '../_shared/studio-task-storage.js';
 import { advanceSheetSelfWorkflow } from '../_shared/sheet-self-workflow.js';
+import { releaseStudioRpaSlot } from '../_shared/studio-rpa-slot.js';
 
 export async function onRequestPost(context) {
     const { request, env, waitUntil } = context;
@@ -60,6 +61,9 @@ export async function onRequestPost(context) {
         }
 
         await env.SUBMISSIONS.put(taskId, JSON.stringify(task), studioTaskPutOptions(task));
+        if (action === 'complete' || action === 'reject') {
+            await releaseStudioRpaSlot(env, taskId);
+        }
 
         if (action === 'complete' && task.workflow?.type === 'sheet_self') {
             await advanceSheetSelfWorkflow({ env, task, origin: new URL(request.url).origin });

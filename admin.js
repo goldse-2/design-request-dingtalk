@@ -1957,6 +1957,13 @@ async function sendToRpa(taskId, btn, card, knownTask) {
         const json = await res.json();
         btn.disabled = false;
         if (res.ok && json.ok) {
+            if (json.queued) {
+                btn.textContent = '已加入 RPA 队列';
+                btn.style.background = '#64748b';
+                alert('RPA 电脑正在处理其他任务，本任务已加入队列。');
+                setTimeout(loadStudioAdmin, 300);
+                return;
+            }
             showRpaResult(true, json.sentBody, json.status, json.response);
             btn.textContent = wasResend ? '🔄 重新发送RPA' : '✓ 已发送RPA';
             btn.style.background = wasResend ? '#f59e0b' : '#8b5cf6';
@@ -2034,6 +2041,7 @@ async function batchSendStudioTasks(btn) {
     const originalText = btn.textContent;
     btn.disabled = true;
     let sent = 0;
+    let queued = 0;
     const failed = [];
     try {
         for (let i = 0; i < tasks.length; i++) {
@@ -2049,13 +2057,14 @@ async function batchSendStudioTasks(btn) {
                     body: JSON.stringify({ taskId: task.id, webhookUrl: task.mode === 'program' ? programWebhook : task.mode === 'retouch' ? retouchWebhook : freeWebhook })
                 });
                 const json = await res.json().catch(() => ({}));
-                if (res.ok && json.ok) sent++;
+                if (res.ok && json.ok && json.queued) queued++;
+                else if (res.ok && json.ok) sent++;
                 else failed.push(task.id);
             } catch {
                 failed.push(task.id);
             }
         }
-        alert('一键发送完成：成功 ' + sent + ' 个' + (failed.length ? '，失败 ' + failed.length + ' 个' : ''));
+        alert('一键发送完成：已发送 ' + sent + ' 个，已排队 ' + queued + ' 个' + (failed.length ? '，失败 ' + failed.length + ' 个' : ''));
         await loadStudioAdmin();
     } finally {
         btn.disabled = false;

@@ -1,5 +1,6 @@
 import { dispatchStudioTaskToRpa } from '../api/studio-webhook.js';
 import { sendStudioResultImages } from './studio-dingtalk.js';
+import { acquireStudioRpaSlot, queueStudioRpaTask, releaseStudioRpaSlot } from './studio-rpa-slot.js';
 import { RECORD_RETENTION_SECONDS, studioTaskPutOptions } from './studio-task-storage.js';
 
 export const SHEET_SELF_SLOT_COUNT = 8;
@@ -362,8 +363,27 @@ async function createAndDispatchChild(env, task, origin, force = false) {
         const existing = JSON.parse(existingRaw);
         if (existing.status === 'done' || (existing.status === 'processing' && existing.sentToRpa && !force)) return existing;
         task = existing;
-    } else {
+    }
+
+    if (!force) {
+        task.status = 'pending';
+        task.sentToRpa = false;
+        task.workflowError = '';
+        task.workflowQueuedAt = task.workflowQueuedAt || new Date().toISOString();
         await env.SUBMISSIONS.put(task.id, JSON.stringify(task), studioTaskPutOptions(task));
+        await queueStudioRpaTask(env, task.id);
+        return task;
+    }
+
+    const slot = await acquireStudioRpaSlot(env, task.id);
+    if (!slot.acquired) {
+        task.status = 'pending';
+        task.sentToRpa = false;
+        task.workflowError = '';
+        task.workflowQueuedAt = new Date().toISOString();
+        await env.SUBMISSIONS.put(task.id, JSON.stringify(task), studioTaskPutOptions(task));
+        await queueStudioRpaTask(env, task.id);
+        return task;
     }
 
     task.status = 'pending';
@@ -377,6 +397,7 @@ async function createAndDispatchChild(env, task, origin, force = false) {
         try {
             await dispatchStudioTaskToRpa({ env, task, origin, webhookUrl, persistWebhook: false });
             task.workflowDispatchAttempts = Number(task.workflowDispatchAttempts || 0) + attempt;
+            task.workflowQueuedAt = '';
             await env.SUBMISSIONS.put(task.id, JSON.stringify(task), studioTaskPutOptions(task));
             await appendQueue(env.SUBMISSIONS, 'studio:processingQueue:v2', task.id);
             return task;
@@ -391,6 +412,7 @@ async function createAndDispatchChild(env, task, origin, force = false) {
     task.workflowLastAttemptAt = new Date().toISOString();
     task.workflowDispatchAttempts = Number(task.workflowDispatchAttempts || 0) + 3;
     await env.SUBMISSIONS.put(task.id, JSON.stringify(task), studioTaskPutOptions(task));
+    if (!slot.alreadyOwned) await releaseStudioRpaSlot(env, task.id);
     throw lastError;
 }
 
