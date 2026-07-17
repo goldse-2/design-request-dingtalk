@@ -59,13 +59,16 @@ export async function startSheetSelfProgramSlot(env, parent, slot, origin, force
 
 export async function startSheetSelfPhotographySlot(env, parent, slot, sourceKeys, origin) {
     if (!Array.isArray(sourceKeys) || sourceKeys.length !== 2) throw new Error('需要上传两张拍摄原图');
+    const firstStage = slot.skipRetouch ? 'cutout' : 'retouch';
     slot.sourceKeys = sourceKeys;
-    slot.stage = 'retouch';
+    slot.stage = firstStage;
     slot.error = '';
     slot.failedStage = '';
     slot.errorNotifiedAt = '';
     slot.children = slot.children || {};
-    slot.children.retouch = sourceKeys.map((_, index) => sheetSelfChildId(parent.id, slot.index, 'retouch', index));
+    slot.children.retouch = slot.skipRetouch
+        ? []
+        : sourceKeys.map((_, index) => sheetSelfChildId(parent.id, slot.index, 'retouch', index));
     slot.children.cutout = sourceKeys.map((_, index) => sheetSelfChildId(parent.id, slot.index, 'cutout', index));
     slot.children.program = sheetSelfChildId(parent.id, slot.index, 'program');
     await putSheetSelfSlot(env, slot);
@@ -73,11 +76,12 @@ export async function startSheetSelfPhotographySlot(env, parent, slot, sourceKey
     const results = [];
     for (let sourceIndex = 0; sourceIndex < sourceKeys.length; sourceIndex++) {
         const task = makeChildTask(parent, slot, {
-            id: slot.children.retouch[sourceIndex],
-            mode: 'retouch',
+            id: slot.skipRetouch ? slot.children.cutout[sourceIndex] : slot.children.retouch[sourceIndex],
+            mode: slot.skipRetouch ? 'cutout' : 'retouch',
             refKeys: [sourceKeys[sourceIndex]],
-            stage: 'retouch',
-            sourceIndex
+            stage: firstStage,
+            sourceIndex,
+            cutoutOutputFormat: slot.skipRetouch ? 'jpg' : ''
         });
         try {
             results.push({ status: 'fulfilled', value: await createAndDispatchChild(env, task, origin) });
@@ -87,7 +91,7 @@ export async function startSheetSelfPhotographySlot(env, parent, slot, sourceKey
     }
     const failure = results.find(result => result.status === 'rejected');
     if (failure) {
-        await markSlotError(env, slot, 'retouch', failure.reason, origin);
+        await markSlotError(env, slot, firstStage, failure.reason, origin);
         throw failure.reason;
     }
     return results.map(result => result.value);

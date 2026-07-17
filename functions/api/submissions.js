@@ -57,6 +57,9 @@ export async function onRequestDelete(context) {
             if (sub.data?.directPhotoKeys) {
                 for (const k of sub.data.directPhotoKeys) await env.SUBMISSION_FILES.delete(k.key).catch(() => {});
             }
+            if (sub.completionKeys) {
+                for (const k of sub.completionKeys) await env.SUBMISSION_FILES.delete(k.key).catch(() => {});
+            }
         }
     } catch {}
 

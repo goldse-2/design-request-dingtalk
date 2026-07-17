@@ -20,7 +20,7 @@ export async function onRequestPost(context) {
     }
     const maxSize = prefix === 'studio/resize'
         ? 20 * 1024 * 1024
-        : (prefix === 'studio/retouch' || prefix === 'studio/variant')
+        : (prefix === 'studio/retouch' || prefix === 'studio/variant' || prefix === 'shoot/complete')
             ? 15 * 1024 * 1024
             : 8 * 1024 * 1024;
     if (file.size > maxSize) {

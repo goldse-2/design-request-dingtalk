@@ -140,5 +140,8 @@ function submissionObjectKeys(submission) {
     for (const item of Array.isArray(submission.data?.images) ? submission.data.images : []) {
         if (item?.photoKey) keys.add(item.photoKey);
     }
+    for (const item of Array.isArray(submission.completionKeys) ? submission.completionKeys : []) {
+        if (item?.key) keys.add(item.key);
+    }
     return keys;
 }

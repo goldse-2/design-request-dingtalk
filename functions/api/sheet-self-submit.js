@@ -97,6 +97,7 @@ function normalizeSlot(value, index) {
         index,
         displayIndex: Number.isInteger(Number(slot.index)) && Number(slot.index) >= 0 && Number(slot.index) < SHEET_SELF_SLOT_COUNT ? Number(slot.index) : index,
         photographer,
+        skipRetouch: slot.skipRetouch === true,
         size: aPlusDouble ? '1464x1200' : requestedSize,
         aPlusDouble,
         productName: cleanText(slot.productName, 100),

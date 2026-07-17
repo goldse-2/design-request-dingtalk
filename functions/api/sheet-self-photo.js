@@ -23,11 +23,13 @@ export async function onRequestPost(context) {
     if (!['waiting_photos', 'error'].includes(loaded.slot.stage)) {
         return Response.json({ ok: false, error: '该图片位已经进入处理流程' }, { status: 409 });
     }
-    if (files.length !== 2) return Response.json({ ok: false, error: '请一次上传两张拍摄原图' }, { status: 400 });
+    if (files.length < 1 || files.length > 2) return Response.json({ ok: false, error: '请上传一张或两张图片' }, { status: 400 });
 
+    const duplicatedSource = files.length === 1;
+    const processingFiles = duplicatedSource ? [files[0], files[0]] : files;
     const sourceKeys = [];
-    for (let index = 0; index < files.length; index++) {
-        const file = files[index];
+    for (let index = 0; index < processingFiles.length; index++) {
+        const file = processingFiles[index];
         if (!file.type?.startsWith('image/')) return Response.json({ ok: false, error: '只能上传图片文件' }, { status: 400 });
         if (file.size > 15 * 1024 * 1024) return Response.json({ ok: false, error: '拍摄原图单张不能超过 15MB' }, { status: 413 });
         const ext = safeExtension(file.name, file.type);
@@ -42,7 +44,7 @@ export async function onRequestPost(context) {
         const origin = new URL(request.url).origin;
         if (needsProcessing) {
             await startSheetSelfPhotographySlot(env, loaded.parent, loaded.slot, sourceKeys, origin);
-            return Response.json({ ok: true, parentId, slotIndex, stage: 'retouch', needsProcessing: true });
+            return Response.json({ ok: true, parentId, slotIndex, stage: loaded.slot.skipRetouch ? 'cutout' : 'retouch', needsProcessing: true, skipRetouch: loaded.slot.skipRetouch === true, duplicatedSource });
         }
         loaded.slot.sourceKeys = sourceKeys;
         loaded.slot.cutoutKeys = sourceKeys;
@@ -51,7 +53,7 @@ export async function onRequestPost(context) {
         loaded.slot.failedStage = '';
         await putSheetSelfSlot(env, loaded.slot);
         await startSheetSelfProgramSlot(env, loaded.parent, loaded.slot, origin);
-        return Response.json({ ok: true, parentId, slotIndex, stage: 'program', needsProcessing: false });
+        return Response.json({ ok: true, parentId, slotIndex, stage: 'program', needsProcessing: false, duplicatedSource });
     } catch (error) {
         const stageText = needsProcessing ? '精修' : '图生图';
         return Response.json({ ok: false, error: `图片已保存，但发送${stageText}失败：${error.message}` }, { status: 502 });

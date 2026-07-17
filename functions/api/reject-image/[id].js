@@ -6,15 +6,17 @@ export async function onRequestGet(context) {
         return new Response('Not configured', { status: 500 });
     }
 
-    const key = `reject-images/${id}.jpg`;
-    const obj = await env.SUBMISSION_FILES.get(key);
+    const rejectKey = `reject-images/${id}.jpg`;
+    const completeKey = `complete-images/${id}.jpg`;
+    const obj = await env.SUBMISSION_FILES.get(rejectKey)
+        || await env.SUBMISSION_FILES.get(completeKey);
     if (!obj) {
         return new Response('Not found', { status: 404 });
     }
 
     return new Response(obj.body, {
         headers: {
-            'Content-Type': 'image/jpeg',
+            'Content-Type': obj.httpMetadata?.contentType || 'image/jpeg',
             'Cache-Control': 'public, max-age=86400'
         }
     });

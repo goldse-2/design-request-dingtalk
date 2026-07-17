@@ -8,6 +8,7 @@ let loadingState, emptyState, submissionsList, filterSelect, statsEl;
 let rejectModal, rejectModalClose, rejectCancelBtn, rejectConfirmBtn, rejectReason;
 let etaModal, etaModalClose, etaCancelBtn, etaConfirmBtn, etaInput, etaNote;
 let allData = [];
+let shootRequests = [];
 let pendingRejectId = null;
 let pendingEtaId = null;
 let adminInitialized = false;
@@ -145,7 +146,10 @@ async function loadSubmissions() {
 
         if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to load');
 
-        allData = json.submissions || [];
+        const submissions = json.submissions || [];
+        shootRequests = submissions.filter(isShootRequest);
+        allData = submissions.filter(sub => !isShootRequest(sub));
+        renderShootRequests(shootRequests);
         
         // 统计分类（模糊匹配，视频优先）
         const categoryStats = { '图片': 0, '视频': 0, '设计': 0 };
@@ -156,12 +160,201 @@ async function loadSubmissions() {
             else if (type.includes('设计')) categoryStats['设计']++;
         });
         
-        renderStats(json.stats, categoryStats);
+        renderStats({ ...(json.stats || {}), total: allData.length }, categoryStats);
         filterAndRender(filterSelect.value);
     } catch (err) {
         loadingState.hidden = false;
         loadingState.innerHTML = `<p style="color:#ef4444">加载失败：${err.message}</p>`;
+        const shootContainer = document.getElementById('shootAdminContent');
+        if (shootContainer) shootContainer.innerHTML = '<div class="shoot-admin-panel"><div class="shoot-admin-empty">拍摄需求加载失败，请稍后刷新</div></div>';
     }
+}
+
+function isShootRequest(submission) {
+    return String(submission?.taskType || '').trim() === '白底拍摄需求';
+}
+
+function getShootReferenceImages(submission) {
+    const data = submission?.data || {};
+    const direct = Array.isArray(data.directPhotoKeys) ? data.directPhotoKeys : [];
+    const fromRows = Array.isArray(data.images)
+        ? data.images.filter(item => item?.photoKey).map(item => ({ key: item.photoKey, name: item.photoName || '参考图' }))
+        : [];
+    const seen = new Set();
+    return [...direct, ...fromRows].filter(item => {
+        const key = String(item?.key || '').trim();
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+}
+
+function renderShootRequests(requests) {
+    const container = document.getElementById('shootAdminContent');
+    if (!container) return;
+    const list = Array.isArray(requests) ? requests : [];
+    const cards = list.map(submission => {
+        const info = submission.data?.basicInfo || {};
+        const references = getShootReferenceImages(submission);
+        const submitter = submission.submitter || {};
+        const processing = submission.status === 'processing';
+        const created = submission.createdAt
+            ? new Date(submission.createdAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+            : '';
+        return `<article class="shoot-admin-card" id="shoot-card-${submission.id}">
+            <div class="shoot-admin-person">
+                ${submitter.avatar ? `<img class="shoot-admin-avatar" src="${esc(submitter.avatar)}" alt="">` : '<span class="shoot-admin-avatar"></span>'}
+                <div style="min-width:0"><strong>${esc(submitter.name || '未记录提交人')}</strong><small>${esc(created)} 提交</small></div>
+            </div>
+            <div class="shoot-admin-details">
+                <strong class="shoot-admin-product">${esc(info['型号'] || '未填写产品名称')}</strong>
+                ${submission.remarks ? `<div class="shoot-admin-remark">${esc(submission.remarks)}</div>` : ''}
+                ${references.length ? `<div class="shoot-admin-refs">${references.map((image, index) => `<a href="/api/library-file/${encodeURIComponent(image.key)}" target="_blank" title="查看参考图 ${index + 1}"><img src="/api/library-file/${encodeURIComponent(image.key)}" alt="参考图 ${index + 1}" loading="lazy"></a>`).join('')}</div>` : '<div class="shoot-admin-time">没有上传参考图</div>'}
+            </div>
+            <div class="shoot-admin-actions">
+                <span class="shoot-admin-status${processing ? ' is-processing' : ''}">${processing ? '处理中' : '待拍摄'}</span>
+                ${processing ? '' : `<button type="button" class="shoot-admin-btn" onclick="markShootProcessing('${submission.id}', this)">开始处理</button>`}
+                <button type="button" class="shoot-admin-btn shoot-admin-btn--primary" onclick="openShootCompletion('${submission.id}')">上传并提交图片</button>
+            </div>
+        </article>`;
+    }).join('');
+    container.innerHTML = `<section class="shoot-admin-panel">
+        <div class="shoot-admin-panel-head"><div class="shoot-admin-panel-title">白底拍摄需求</div><div class="shoot-admin-panel-count">${list.length} 个待处理</div></div>
+        <div class="shoot-admin-list">${cards || '<div class="shoot-admin-empty">暂无待处理的白底拍摄需求</div>'}</div>
+    </section>`;
+}
+
+async function markShootProcessing(id, button) {
+    if (button) { button.disabled = true; button.textContent = '处理中...'; }
+    try {
+        const response = await fetch('/api/update-status', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ submissionId: id, action: 'processing', message: '' })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.ok) throw new Error(result.error || `操作失败 (${response.status})`);
+        const item = shootRequests.find(request => request.id === id);
+        if (item) item.status = 'processing';
+        renderShootRequests(shootRequests);
+    } catch (error) {
+        if (button) { button.disabled = false; button.textContent = '开始处理'; }
+        alert('操作失败：' + error.message);
+    }
+}
+
+function openShootCompletion(id) {
+    const request = shootRequests.find(item => item.id === id);
+    if (!request) return;
+    document.getElementById('shootCompleteModal')?.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'shootCompleteModal';
+    overlay.className = 'shoot-complete-overlay';
+    overlay.innerHTML = `<div class="shoot-complete-dialog" role="dialog" aria-modal="true" aria-labelledby="shootCompleteTitle">
+        <div class="shoot-complete-head"><h3 id="shootCompleteTitle">提交拍摄成品 · ${esc(request.data?.basicInfo?.['型号'] || '白底拍摄需求')}</h3><button type="button" class="shoot-complete-close" aria-label="关闭">×</button></div>
+        <div class="shoot-complete-body">
+            <label class="shoot-complete-picker"><input type="file" accept="image/jpeg,image/png,image/webp" multiple hidden><span><strong>选择要发给用户的成品图片</strong><small>可多选，最多 20 张，单张不超过 15MB</small></span></label>
+            <div class="shoot-complete-preview"></div>
+            <textarea class="shoot-complete-message" maxlength="300" placeholder="给提交人的说明（可选）"></textarea>
+            <div class="shoot-complete-foot"><div class="shoot-complete-progress">尚未选择图片</div><button type="button" class="shoot-admin-btn shoot-admin-btn--primary" data-submit disabled>提交给用户</button></div>
+        </div>
+    </div>`;
+    document.body.appendChild(overlay);
+
+    const input = overlay.querySelector('input[type="file"]');
+    const preview = overlay.querySelector('.shoot-complete-preview');
+    const progress = overlay.querySelector('.shoot-complete-progress');
+    const submit = overlay.querySelector('[data-submit]');
+    const close = () => overlay.remove();
+    let files = [];
+
+    overlay.querySelector('.shoot-complete-close').onclick = close;
+    overlay.addEventListener('click', event => { if (event.target === overlay) close(); });
+    input.addEventListener('change', () => {
+        files = Array.from(input.files || []).slice(0, 20);
+        const invalid = files.find(file => !file.type.startsWith('image/') || file.size > 15 * 1024 * 1024);
+        if (invalid) {
+            files = [];
+            input.value = '';
+            preview.innerHTML = '';
+            progress.textContent = invalid.size > 15 * 1024 * 1024 ? `${invalid.name} 超过 15MB` : `${invalid.name} 不是图片文件`;
+            progress.style.color = '#b91c1c';
+            submit.disabled = true;
+            return;
+        }
+        preview.innerHTML = '';
+        files.forEach(file => {
+            const image = document.createElement('img');
+            image.src = URL.createObjectURL(file);
+            image.onload = () => URL.revokeObjectURL(image.src);
+            image.alt = file.name;
+            preview.appendChild(image);
+        });
+        progress.style.color = '#64748b';
+        progress.textContent = files.length ? `已选择 ${files.length} 张图片` : '尚未选择图片';
+        submit.disabled = files.length === 0;
+    });
+    submit.addEventListener('click', () => completeShootRequest(id, files, overlay));
+}
+
+async function completeShootRequest(id, files, overlay) {
+    if (!files.length) return;
+    const submit = overlay.querySelector('[data-submit]');
+    const progress = overlay.querySelector('.shoot-complete-progress');
+    const message = overlay.querySelector('.shoot-complete-message').value.trim();
+    submit.disabled = true;
+    submit.textContent = '正在提交...';
+    try {
+        const completionKeys = [];
+        for (let index = 0; index < files.length; index += 1) {
+            progress.textContent = `正在上传图片 ${index + 1}/${files.length}...`;
+            const jpegBlob = await shootFileToJpegBlob(files[index]);
+            const form = new FormData();
+            const baseName = files[index].name.replace(/\.[^.]+$/, '').slice(0, 120) || `拍摄成品-${index + 1}`;
+            form.append('file', jpegBlob, `${baseName}.jpg`);
+            form.append('prefix', 'shoot/complete');
+            const uploadResponse = await fetch('/api/studio-upload', { method: 'POST', body: form });
+            const uploadResult = await uploadResponse.json().catch(() => ({}));
+            if (!uploadResponse.ok || !uploadResult.ok) throw new Error(uploadResult.error || `第 ${index + 1} 张上传失败`);
+            completionKeys.push({ key: uploadResult.key, name: `${baseName}.jpg` });
+        }
+        progress.textContent = '正在发送给用户钉钉...';
+        const response = await fetch('/api/update-status', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ submissionId: id, action: 'complete', message, completionKeys })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.ok) throw new Error(result.error || `提交失败 (${response.status})`);
+        shootRequests = shootRequests.filter(request => request.id !== id);
+        renderShootRequests(shootRequests);
+        historyLoaded = false;
+        progress.textContent = '提交成功';
+        setTimeout(() => overlay.remove(), 500);
+    } catch (error) {
+        progress.style.color = '#b91c1c';
+        progress.textContent = '提交失败：' + error.message;
+        submit.disabled = false;
+        submit.textContent = '重新提交';
+    }
+}
+
+async function shootFileToJpegBlob(file) {
+    if (/image\/jpe?g/i.test(file.type)) {
+        return file;
+    }
+    const source = await createImageBitmap(file);
+    const canvas = document.createElement('canvas');
+    canvas.width = source.width;
+    canvas.height = source.height;
+    const context = canvas.getContext('2d');
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(source, 0, 0);
+    source.close();
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.94));
+    if (!blob) throw new Error(`${file.name} 转换失败`);
+    return blob;
 }
 
 function renderStats(stats, categoryStats) {
@@ -1642,9 +1835,9 @@ function renderSheetSelfAdminSlot(task, slot) {
     if (slot.stage === 'waiting_photos') {
         const uploadButton = document.createElement('button');
         uploadButton.type = 'button';
-        uploadButton.textContent = '上传两张原图';
+        uploadButton.textContent = '上传原图';
         uploadButton.style.cssText = 'border:0;border-radius:6px;background:#111827;color:#fff;padding:7px 11px;font-size:.74rem;font-weight:700;cursor:pointer;white-space:nowrap';
-        uploadButton.onclick = () => uploadSheetSelfPhotos(task.id, slot.index, uploadButton);
+        uploadButton.onclick = () => uploadSheetSelfPhotos(task.id, slot.index, uploadButton, slot.skipRetouch === true);
         actions.appendChild(uploadButton);
     }
     const failed = slot.stage === 'error' || (slot.stage === 'done' && !slot.resultNotified);
@@ -1691,13 +1884,18 @@ function ensureSheetSelfAdminStyles() {
 function renderSheetSelfProgress(slot) {
     const usesFullWorkflow = slot.photographer === true && slot.processingSkipped !== true;
     const steps = usesFullWorkflow
-        ? [
+        ? (slot.skipRetouch === true ? [
+            { key: 'waiting_photos', label: '等待原图' },
+            { key: 'cutout', label: '白底抠图' },
+            { key: 'program', label: '图生图' },
+            { key: 'done', label: slot.stage === 'done' && slot.resultNotified ? '已发送' : '发给用户' }
+        ] : [
             { key: 'waiting_photos', label: '等待原图' },
             { key: 'retouch', label: '精修' },
             { key: 'cutout', label: '白底抠图' },
             { key: 'program', label: '图生图' },
             { key: 'done', label: slot.stage === 'done' && slot.resultNotified ? '已发送' : '发给用户' }
-        ]
+        ])
         : [
             { key: 'queued', label: '排队' },
             { key: 'program', label: '图生图' },
@@ -1734,20 +1932,20 @@ function renderSheetSelfProgress(slot) {
     </div>`;
 }
 
-function uploadSheetSelfPhotos(parentId, slotIndex, button) {
+function uploadSheetSelfPhotos(parentId, slotIndex, button, skipRetouch = false) {
     document.getElementById('sheetSelfPhotoModal')?.remove();
     const modal = document.createElement('div');
     modal.id = 'sheetSelfPhotoModal';
     modal.style.cssText = 'position:fixed;inset:0;z-index:12000;display:grid;place-items:center;padding:16px;background:rgba(17,24,39,.5)';
     modal.innerHTML = `<div style="width:min(460px,100%);padding:24px;border-radius:10px;background:#fff;box-shadow:0 20px 60px rgba(0,0,0,.22)">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px"><strong style="font-size:1rem;color:#111827">上传两张图片</strong><button type="button" data-photo-close style="display:grid;place-items:center;width:30px;height:30px;border:0;border-radius:6px;background:#f3f4f6;color:#4b5563;font-size:19px;cursor:pointer" title="关闭">×</button></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px"><strong style="font-size:1rem;color:#111827">上传一张或两张图片</strong><button type="button" data-photo-close style="display:grid;place-items:center;width:30px;height:30px;border:0;border-radius:6px;background:#f3f4f6;color:#4b5563;font-size:19px;cursor:pointer" title="关闭">×</button></div>
         <label style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px;border:1px solid #e5e7eb;border-radius:8px;background:#f9fafb;cursor:pointer">
-            <span><strong style="display:block;color:#374151;font-size:.82rem">需要精修和白底抠图</strong><small id="sheetPhotoModeCopy" style="display:block;margin-top:3px;color:#6b7280;font-size:.72rem;line-height:1.45">默认开启：上传两张拍摄原图，分别完成精修和抠图后再图生图</small></span>
+            <span><strong style="display:block;color:#374151;font-size:.82rem">${skipRetouch ? '需要白底抠图' : '需要精修和白底抠图'}</strong><small id="sheetPhotoModeCopy" style="display:block;margin-top:3px;color:#6b7280;font-size:.72rem;line-height:1.45">${skipRetouch ? '用户已关闭精修：上传原图后直接完成白底抠图，再进入图生图' : '默认开启：上传一张或两张拍摄原图，分别完成精修和抠图后再图生图'}</small></span>
             <span style="position:relative;width:42px;height:24px;flex-shrink:0"><input id="sheetPhotoNeedsProcessing" type="checkbox" checked style="position:absolute;opacity:0"><span id="sheetPhotoSwitchTrack" style="position:absolute;inset:0;border-radius:999px;background:#111827"><i style="position:absolute;top:3px;left:21px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:left .15s"></i></span></span>
         </label>
         <label for="sheetPhotoFiles" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:110px;margin-top:12px;padding:16px;border:1px dashed #cbd5e1;border-radius:8px;background:#fff;color:#6b7280;font-size:.8rem;text-align:center;cursor:pointer">
             <svg viewBox="0 0 24 24" width="25" height="25" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 16V4m0 0L7 9m5-5 5 5"/><path d="M5 14v5h14v-5"/></svg>
-            <span id="sheetPhotoFileText" style="margin-top:7px">选择两张拍摄原图</span><small style="margin-top:3px;color:#9ca3af">单张最大 15MB</small>
+            <span id="sheetPhotoFileText" style="margin-top:7px">选择一张或两张拍摄原图</span><small style="margin-top:3px;color:#9ca3af">只选一张时会自动复制成两张 · 单张最大 15MB</small>
         </label>
         <input id="sheetPhotoFiles" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden>
         <div id="sheetPhotoStatus" style="min-height:20px;margin-top:9px;color:#6b7280;font-size:.76rem"></div>
@@ -1768,22 +1966,26 @@ function uploadSheetSelfPhotos(parentId, slotIndex, button) {
         track.style.background = enabled ? '#111827' : '#cbd5e1';
         track.querySelector('i').style.left = enabled ? '21px' : '3px';
         copy.textContent = enabled
-            ? '默认开启：上传两张拍摄原图，分别完成精修和抠图后再图生图'
-            : '已关闭：上传两张已经精修并抠好的图片，直接进入图生图';
-        fileText.textContent = enabled ? '选择两张拍摄原图' : '选择两张已处理好的图片';
+            ? (skipRetouch ? '用户已关闭精修：上传原图后直接完成白底抠图，再进入图生图' : '默认开启：上传一张或两张拍摄原图，分别完成精修和抠图后再图生图')
+            : '已关闭：上传一张或两张已经处理好的图片，直接进入图生图';
+        fileText.textContent = enabled ? '选择一张或两张拍摄原图' : '选择一张或两张已处理好的图片';
     };
     fileInput.onchange = () => {
-        const files = Array.from(fileInput.files || []);
-        fileText.textContent = files.length ? `已选择 ${files.length} 张：${files.map(file => file.name).join('、')}` : (processingInput.checked ? '选择两张拍摄原图' : '选择两张已处理好的图片');
+        const files = Array.from(fileInput.files || []).slice(0, 2);
+        fileText.textContent = files.length === 1
+            ? `已选择 1 张：${files[0].name}（将作为两张处理）`
+            : (files.length === 2
+                ? `已选择 2 张：${files.map(file => file.name).join('、')}`
+                : (processingInput.checked ? '选择一张或两张拍摄原图' : '选择一张或两张已处理好的图片'));
     };
     modal.querySelector('#sheetPhotoSubmit').onclick = async event => {
         const submit = event.currentTarget;
         const files = Array.from(fileInput.files || []);
-        if (files.length !== 2) { status.textContent = '请一次选择两张图片'; status.style.color = '#b91c1c'; return; }
+        if (files.length < 1 || files.length > 2) { status.textContent = '请选择一张或两张图片'; status.style.color = '#b91c1c'; return; }
         if (files.some(file => file.size > 15 * 1024 * 1024)) { status.textContent = '图片单张不能超过 15MB'; status.style.color = '#b91c1c'; return; }
         submit.disabled = true;
         submit.textContent = '上传并启动中...';
-        status.textContent = '正在上传两张图片，请不要关闭';
+        status.textContent = files.length === 1 ? '正在上传，系统会把这张图作为两张处理' : '正在上传两张图片，请不要关闭';
         status.style.color = '#6b7280';
         try {
             const form = new FormData();
@@ -1794,7 +1996,9 @@ function uploadSheetSelfPhotos(parentId, slotIndex, button) {
             const response = await fetch('/api/sheet-self-photo', { method: 'POST', body: form });
             const result = await response.json().catch(() => ({}));
             if (!response.ok || !result.ok) throw new Error(result.error || `操作失败 (${response.status})`);
-            status.textContent = result.needsProcessing ? '已启动精修流程' : '已跳过精修和抠图，直接进入图生图';
+            status.textContent = result.needsProcessing
+                ? (result.duplicatedSource ? '已把同一张图作为两张并启动处理' : (result.skipRetouch ? '已跳过精修并启动白底抠图' : '已启动精修流程'))
+                : '已跳过精修和抠图，直接进入图生图';
             status.style.color = '#047857';
             button.textContent = result.needsProcessing ? '已启动精修' : '已启动图生图';
             setTimeout(() => { close(); loadStudioAdmin(); }, 800);

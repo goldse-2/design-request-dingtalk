@@ -7,6 +7,12 @@ export async function onRequestPost(context) {
     catch { return Response.json({ ok: false, error: 'Invalid JSON' }, { status: 400 }); }
 
     const { submissionId, action, message, eta, images, direction } = body;
+    const completionKeys = Array.isArray(body.completionKeys)
+        ? body.completionKeys.slice(0, 20).map(item => ({
+            key: String(item?.key || '').trim(),
+            name: String(item?.name || '拍摄成品.jpg').trim().slice(0, 160)
+        })).filter(item => item.key.startsWith('shoot/complete/'))
+        : [];
     const imageBase64 = (images && images.length) ? images[0] : (body.imageBase64 || null);
     if (!submissionId || !action)
         return Response.json({ ok: false, error: 'Missing fields' }, { status: 400 });
@@ -81,6 +87,7 @@ export async function onRequestPost(context) {
             submission.archived = true;
             submission.archivedAt = Date.now();
             if (message) submission.resultMessage = message;
+            if (action === 'complete' && completionKeys.length) submission.completionKeys = completionKeys;
             await env.SUBMISSIONS.put(submissionId, JSON.stringify(submission), {
                 metadata: { taskType: submission.taskType, timestamp: submission.timestamp, archived: true, archivedAt: submission.archivedAt },
                 expirationTtl: RECORD_RETENTION_SECONDS
@@ -89,7 +96,7 @@ export async function onRequestPost(context) {
         await env.SUBMISSIONS.put('__lastUpdated', String(Date.now()));
 
         if (submission.submitter?.unionId && env.DINGTALK_APPKEY && env.DINGTALK_APPSECRET) {
-            const p = sendWorkNotice(env, submission, action, message, eta, images && images.length ? images : (imageBase64 ? [imageBase64] : []))
+            const p = sendWorkNotice(env, submission, action, message, eta, images && images.length ? images : (imageBase64 ? [imageBase64] : []), completionKeys)
                 .catch(e => console.error('Notify failed:', e.message));
             if (waitUntil) waitUntil(p);
         }
@@ -136,7 +143,7 @@ async function uploadImage(accessToken, imageBase64) {
     return data.media_id;
 }
 
-async function sendWorkNotice(env, submission, action, message, eta, images = []) {
+async function sendWorkNotice(env, submission, action, message, eta, images = [], completionKeys = []) {
     const accessToken = await getAccessToken(env.DINGTALK_APPKEY, env.DINGTALK_APPSECRET);
     const staffId = await getStaffId(accessToken, submission.submitter.unionId);
 
@@ -205,10 +212,10 @@ async function sendWorkNotice(env, submission, action, message, eta, images = []
         }
     }
 
-    if (action === 'complete' && images.length > 0 && env.SUBMISSION_FILES) {
+    if (action === 'complete' && (images.length > 0 || completionKeys.length > 0) && env.SUBMISSION_FILES) {
         try {
             const origin = env.SITE_ORIGIN || 'https://design-request-dingtalk.pages.dev';
-            const imgUrls = [];
+            const imgUrls = completionKeys.map(item => `${origin}/api/library-file/${encodeURIComponent(item.key)}`);
             for (let i = 0; i < images.length; i++) {
                 const binary = atob(images[i]);
                 const bytes = new Uint8Array(binary.length);

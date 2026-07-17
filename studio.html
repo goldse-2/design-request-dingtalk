@@ -255,8 +255,9 @@
         .sheet-self-image-badge { position:absolute; left:4px; bottom:4px; max-width:calc(100% - 8px); padding:2px 5px; border-radius:4px; background:rgba(17,24,39,.78); color:#fff; font-size:.62rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
         .sheet-self-image-remove { position:absolute; top:4px; right:4px; display:grid; place-items:center; width:23px; height:23px; padding:0; border:0; border-radius:50%; background:rgba(17,24,39,.82); color:#fff; font-size:15px; cursor:pointer; }
         .sheet-self-image-slot.is-loading { opacity:.58; pointer-events:none; }
-        .sheet-self-setting { min-width:0; padding-left:14px; border-left:1px solid #edf0f4; }
+        .sheet-self-setting { display:grid; gap:12px; min-width:0; padding-left:14px; border-left:1px solid #edf0f4; }
         .sheet-self-photo-row { display:flex; flex-direction:column; align-items:flex-start; gap:10px; margin:0; padding:0; }
+        .sheet-self-photo-row + .sheet-self-photo-row { padding-top:12px; border-top:1px solid #edf0f4; }
         .sheet-self-photo-copy strong { display:block; color:#374151; font-size:.74rem; }
         .sheet-self-photo-copy small { display:block; margin-top:2px; color:#9ca3af; font-size:.66rem; line-height:1.35; }
         .sheet-self-switch { position:relative; width:38px; height:22px; flex-shrink:0; }

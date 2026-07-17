@@ -707,7 +707,7 @@ const aPlusDoubleState = {
 
 function createEmptySheetSelfState() {
     return {
-        version: 2,
+        version: 3,
         productName: '',
         savedAt: '',
         slots: Array.from({ length: SHEET_SELF_DEFAULT_SLOT_COUNT }, (_, index) => createSheetSelfSlot(index))
@@ -718,6 +718,7 @@ function createSheetSelfSlot(index) {
     return {
         index,
         photographer: true,
+        skipRetouch: false,
         size: '1600x1600',
         aPlusDouble: false,
         title: '',
@@ -1415,6 +1416,12 @@ function initSheetSelfMode() {
             renderSheetSelfGrid();
             return;
         }
+        if (event.target.matches('[data-sheet-skip-retouch]')) {
+            sheetSelfState.slots[slotIndex].skipRetouch = event.target.checked;
+            persistSheetSelfDraft();
+            renderSheetSelfGrid();
+            return;
+        }
         const uploadType = event.target.dataset.sheetUpload;
         if (uploadType) {
             const files = Array.from(event.target.files || []);
@@ -1543,6 +1550,10 @@ function renderSheetSelfSlot(slot, slotIndex) {
             <div class="sheet-self-photo-row">
                 <div class="sheet-self-photo-copy"><strong>由摄影师决定</strong><small>开启后，此图片位暂时不需要用户上传两张白底图</small></div>
                 <label class="sheet-self-switch" title="由摄影师提供两张拍摄原图"><input type="checkbox" data-sheet-photographer data-slot-index="${slotIndex}"${slot.photographer ? ' checked' : ''}><span></span></label>
+            </div>
+            <div class="sheet-self-photo-row">
+                <div class="sheet-self-photo-copy"><strong>关闭精修</strong><small>效果更真实、速度更快，如果是场景图可以不用精修</small></div>
+                <label class="sheet-self-switch" title="摄影原图跳过精修，直接进入白底抠图"><input type="checkbox" data-sheet-skip-retouch data-slot-index="${slotIndex}"${slot.skipRetouch ? ' checked' : ''}><span></span></label>
             </div>
             <div class="sheet-self-slot-status${slot.status?.startsWith('失败') ? ' err' : ''}">${sheetSelfEsc(slot.status || (slot.uploading ? '图片上传中，请稍候...' : ''))}</div>
         </div>
@@ -1973,6 +1984,7 @@ function normalizeSheetSelfDraft(value) {
         return {
             ...empty,
             photographer: sheetSelfDraftSlotHasContent(slot) ? slot.photographer === true : true,
+            skipRetouch: slot.skipRetouch === true,
             size: aPlusDouble ? A_PLUS_DOUBLE_SIZE : requestedSize,
             aPlusDouble,
             title: String(slot.title || '').slice(0, 100),
@@ -1993,13 +2005,14 @@ function normalizeSheetSelfFileKey(value) {
 
 function sheetSelfDraftPayload() {
     return {
-        version: 2,
+        version: 3,
         productName: sheetSelfState.productName,
         visibleSlotCount: sheetSelfState.slots.length,
         savedAt: sheetSelfState.savedAt || new Date().toISOString(),
         slots: sheetSelfState.slots.map(slot => ({
             index: slot.index,
             photographer: slot.photographer === true,
+            skipRetouch: slot.skipRetouch === true,
             size: normalizeSheetSelfSize(slot.size),
             aPlusDouble: slot.aPlusDouble === true,
             title: slot.title,
@@ -2052,6 +2065,7 @@ async function submitSheetSelf() {
             body: JSON.stringify({ submitter: currentUser, slots: activeSlots.map(slot => ({
                 index: slot.index,
                 photographer: slot.photographer,
+                skipRetouch: slot.skipRetouch === true,
                 productName: sheetSelfState.productName,
                 size: normalizeSheetSelfSize(slot.size),
                 aPlusDouble: slot.aPlusDouble === true,
