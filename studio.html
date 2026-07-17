@@ -212,9 +212,11 @@
         .sheet-self-save { flex-shrink:0; min-width:110px; padding-top:3px; color:#6b7280; font-size:.74rem; text-align:right; }
         .sheet-self-save.is-saving { color:#b45309; }
         .sheet-self-save.is-saved { color:#047857; }
-        .sheet-self-global-product { display:grid; grid-template-columns:minmax(140px,190px) minmax(260px,560px) 1fr; align-items:center; gap:16px; padding:14px 24px; border-bottom:1px solid #e5e7eb; background:#fbfcfe; }
+        .sheet-self-global-product { display:grid; grid-template-columns:minmax(140px,190px) minmax(320px,620px) 1fr; align-items:start; gap:16px; padding:14px 24px; border-bottom:1px solid #e5e7eb; background:#fbfcfe; }
         .sheet-self-global-product label { color:#374151; font-size:.78rem; font-weight:800; }
         .sheet-self-global-product label span { color:#dc2626; }
+        .sheet-self-global-input { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:7px 8px; min-width:0; }
+        .sheet-self-global-input .program-ai-status { grid-column:1/-1; margin:0; }
         .sheet-self-global-product input { width:100%; padding:10px 12px; border:1px solid #d8dde5; border-radius:6px; background:#fff; color:#111827; font-size:.82rem; outline:none; }
         .sheet-self-global-product input:focus { border-color:#6366f1; box-shadow:0 0 0 3px rgba(99,102,241,.1); }
         .sheet-self-global-product small { color:#9ca3af; font-size:.69rem; line-height:1.45; }
@@ -229,6 +231,9 @@
         .sheet-self-fixed-size { color:#047857; font-size:.63rem; font-weight:700; line-height:1.35; }
         .sheet-self-product { display:grid; gap:9px; min-width:0; }
         .sheet-self-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
+        .sheet-self-copy-tools { grid-column:1/-1; display:flex; align-items:center; gap:8px; min-width:0; }
+        .sheet-self-copy-tools .program-ai-btn { flex-shrink:0; }
+        .sheet-self-copy-tools .program-ai-status { min-width:0; margin:0; }
         .sheet-self-field { min-width:0; }
         .sheet-self-field.full { grid-column:1/-1; }
         .sheet-self-field label { display:block; margin-bottom:4px; color:#4b5563; font-size:.72rem; font-weight:700; }
@@ -310,6 +315,8 @@
             .sheet-self-save { text-align:left; }
             .sheet-self-fields { grid-template-columns:minmax(0,1fr); }
             .sheet-self-field.full { grid-column:auto; }
+            .sheet-self-copy-tools { grid-column:auto; align-items:flex-start; flex-direction:column; }
+            .sheet-self-copy-tools .program-ai-btn { width:100%; }
             .sheet-self-image-slot { height:auto; aspect-ratio:1; }
             .sheet-self-submit { width:100%; }
         }
@@ -515,6 +522,6 @@
     帮助中心
 </button>
 
-    <script src="studio.js?v=20260717-program-ai"></script>
+    <script src="studio.js?v=20260717-sheet-ai"></script>
 </body>
 </html>

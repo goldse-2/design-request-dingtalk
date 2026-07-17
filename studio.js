@@ -483,7 +483,14 @@ const SHEET_SELF_FORM = `
             </div>
             <div class="sheet-self-global-product">
                 <label for="sheetSelfProductName">统一产品名称 <span>*</span></label>
-                <input id="sheetSelfProductName" maxlength="100" placeholder="例如：S10 电池款">
+                <div class="sheet-self-global-input">
+                    <input id="sheetSelfProductName" maxlength="100" placeholder="例如：S10 电池款">
+                    <button type="button" class="program-ai-btn" id="sheetSelfIdentifyProductBtn" disabled>
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l1.3 4.2L17.5 8.5l-4.2 1.3L12 14l-1.3-4.2-4.2-1.3 4.2-1.3L12 3Z"/><path d="M18.5 14l.8 2.7 2.7.8-2.7.8-.8 2.7-.8-2.7-2.7-.8 2.7-.8.8-2.7Z"/></svg>
+                        <span>AI 识别产品</span>
+                    </button>
+                    <div class="program-ai-status" id="sheetSelfProductAiStatus">上传白底产品图后自动识别</div>
+                </div>
                 <small>只需填写一次，提交时会自动用于下面所有已填写的图片位。</small>
             </div>
             <div class="sheet-self-table-head" aria-hidden="true"><span>图片</span><span>其他文案</span><span>标题与副标题</span><span>素材图片</span><span>设置</span></div>
@@ -670,6 +677,8 @@ let sheetSelfDirty = false;
 let sheetSelfServerLoadedUnionId = '';
 let sheetSelfPagehideWired = false;
 let sheetLibraryTarget = null;
+let sheetSelfProductAiBusy = false;
+let sheetSelfProductAiRequestId = 0;
 let programProductAiTimer = null;
 let programProductAiBusy = false;
 let programCopyAiBusy = false;
@@ -707,7 +716,11 @@ function createEmptySheetSelfState() {
             referenceKey: null,
             productKeys: [],
             uploading: false,
-            status: ''
+            status: '',
+            copyAiBusy: false,
+            copyAiStatus: '',
+            copyAiState: '',
+            copyAiRequestId: 0
         }))
     };
 }
@@ -1354,9 +1367,12 @@ function initSheetSelfMode() {
     productNameInput.value = sheetSelfState.productName;
     productNameInput.addEventListener('input', event => {
         sheetSelfState.productName = event.target.value;
+        event.target.dataset.aiGenerated = 'false';
         persistSheetSelfDraft();
     });
+    document.getElementById('sheetSelfIdentifyProductBtn')?.addEventListener('click', () => runSheetSelfProductRecognition(true));
     renderSheetSelfGrid();
+    updateSheetSelfProductAiControls();
 
     const grid = document.getElementById('sheetSelfGrid');
     grid.addEventListener('input', event => {
@@ -1383,6 +1399,11 @@ function initSheetSelfMode() {
         }
     });
     grid.addEventListener('click', event => {
+        const copyButton = event.target.closest('[data-sheet-generate-copy]');
+        if (copyButton) {
+            runSheetSelfCopyGeneration(Number(copyButton.dataset.slotIndex));
+            return;
+        }
         const sourceButton = event.target.closest('[data-sheet-source]');
         if (sourceButton) {
             openSheetImageSource(Number(sourceButton.dataset.slotIndex), sourceButton.dataset.uploadType);
@@ -1393,11 +1414,18 @@ function initSheetSelfMode() {
         const slotIndex = Number(button.dataset.slotIndex);
         const slot = sheetSelfState.slots[slotIndex];
         if (!slot) return;
-        if (button.dataset.sheetRemove === 'reference') slot.referenceKey = null;
-        else slot.productKeys.splice(Number(button.dataset.productIndex), 1);
+        if (button.dataset.sheetRemove === 'reference') {
+            slot.referenceKey = null;
+            resetSheetSelfCopyAiState(slot);
+        } else {
+            slot.productKeys.splice(Number(button.dataset.productIndex), 1);
+            sheetSelfProductAiRequestId += 1;
+            sheetSelfProductAiBusy = false;
+        }
         slot.status = '';
         persistSheetSelfDraft(400);
         renderSheetSelfGrid();
+        updateSheetSelfProductAiControls();
     });
     document.getElementById('sheetSelfSubmit').addEventListener('click', submitSheetSelf);
 
@@ -1428,6 +1456,9 @@ function renderSheetSelfSlot(slot, slotIndex) {
         ? ''
         : [0, 1].map(index => renderSheetSelfImage(slot.productKeys[index], slotIndex, 'product', index, `白底产品图 ${index + 1}`)).join('');
     const uploadDisabled = slot.uploading ? ' disabled' : '';
+    const copyDisabled = !slot.referenceKey?.key || slot.copyAiBusy ? ' disabled' : '';
+    const copyStatus = slot.copyAiStatus || (slot.referenceKey?.key ? '参考图已上传，可以生成' : '请先上传要模仿的图');
+    const copyState = slot.copyAiState || (slot.referenceKey?.key ? 'success' : '');
     return `<section class="sheet-self-slot" data-sheet-slot="${slotIndex}">
         <div class="sheet-self-slot-head">
             <div class="sheet-self-slot-title"><span class="sheet-self-slot-number">${slotIndex + 1}</span><span>第 ${slotIndex + 1} 张图片</span></div>
@@ -1437,6 +1468,13 @@ function renderSheetSelfSlot(slot, slotIndex) {
             <div class="sheet-self-field"><label>其他文案</label><textarea data-sheet-field="otherText" data-slot-index="${slotIndex}" maxlength="300" placeholder="可选，多个卖点可用分号分隔">${sheetSelfEsc(slot.otherText)}</textarea></div>
         </div>
         <div class="sheet-self-fields">
+            <div class="sheet-self-copy-tools">
+                <button type="button" class="program-ai-btn${slot.copyAiBusy ? ' loading' : ''}" data-sheet-generate-copy data-slot-index="${slotIndex}"${copyDisabled}>
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l1.3 4.2L17.5 8.5l-4.2 1.3L12 14l-1.3-4.2-4.2-1.3 4.2-1.3L12 3Z"/><path d="M18.5 14l.8 2.7 2.7.8-2.7.8-.8 2.7-.8-2.7-2.7-.8 2.7-.8.8-2.7Z"/></svg>
+                    <span>${slot.copyAiBusy ? '正在生成...' : 'AI 自动标题和文案'}</span>
+                </button>
+                <div class="program-ai-status${copyState ? ' ' + copyState : ''}">${sheetSelfEsc(copyStatus)}</div>
+            </div>
             <div class="sheet-self-field"><label>标题</label><input data-sheet-field="title" data-slot-index="${slotIndex}" maxlength="100" value="${sheetSelfEsc(slot.title)}" placeholder="可选"></div>
             <div class="sheet-self-field"><label>副标题</label><input data-sheet-field="subtitle" data-slot-index="${slotIndex}" maxlength="100" value="${sheetSelfEsc(slot.subtitle)}" placeholder="可选"></div>
         </div>
@@ -1530,10 +1568,17 @@ async function handleSheetSelfFiles(slotIndex, type, files) {
     slot.uploading = true;
     slot.status = `正在上传 ${selected.length} 张图片...`;
     renderSheetSelfGrid();
+    let shouldIdentifyProduct = false;
     try {
         const keys = await uploadImages(selected.map(file => ({ file, name: file.name })), 'studio/sheet-self');
-        if (type === 'reference') slot.referenceKey = keys[0];
-        else slot.productKeys = [...slot.productKeys, ...keys].slice(0, 2);
+        if (type === 'reference') {
+            slot.referenceKey = keys[0];
+            resetSheetSelfCopyAiState(slot);
+        }
+        else {
+            slot.productKeys = [...slot.productKeys, ...keys].slice(0, 2);
+            shouldIdentifyProduct = true;
+        }
         slot.status = '图片已上传并保存';
         persistSheetSelfDraft(300);
     } catch (error) {
@@ -1541,13 +1586,121 @@ async function handleSheetSelfFiles(slotIndex, type, files) {
     } finally {
         slot.uploading = false;
         renderSheetSelfGrid();
+        updateSheetSelfProductAiControls();
     }
+    if (shouldIdentifyProduct) queueSheetSelfProductRecognition();
 }
 
 function validateSheetSelfFile(file) {
     if (!file?.type?.startsWith('image/')) return '请选择图片文件';
     if (file.size > MAX_STUDIO_FILE_SIZE) return `${file.name} 超过 8MB`;
     return '';
+}
+
+function resetSheetSelfCopyAiState(slot) {
+    slot.copyAiRequestId = (Number(slot.copyAiRequestId) || 0) + 1;
+    slot.copyAiBusy = false;
+    slot.copyAiStatus = '';
+    slot.copyAiState = '';
+}
+
+function findSheetSelfProductImageKey() {
+    for (const slot of sheetSelfState.slots) {
+        const key = slot.productKeys?.find(file => file?.key)?.key;
+        if (key) return key;
+    }
+    return '';
+}
+
+function updateSheetSelfProductAiControls() {
+    const button = document.getElementById('sheetSelfIdentifyProductBtn');
+    const status = document.getElementById('sheetSelfProductAiStatus');
+    if (!button || !status) return;
+    const hasProductImage = Boolean(findSheetSelfProductImageKey());
+    button.disabled = sheetSelfProductAiBusy || !hasProductImage;
+    button.classList.toggle('loading', sheetSelfProductAiBusy);
+    const label = button.querySelector('span');
+    if (label) label.textContent = sheetSelfProductAiBusy ? '正在识别...' : 'AI 识别产品';
+    if (!sheetSelfProductAiBusy && !hasProductImage) setProgramAiStatus(status, '上传白底产品图后自动识别', '');
+    else if (!sheetSelfProductAiBusy && status.textContent === '正在分析白底产品图...') {
+        setProgramAiStatus(status, '白底产品图已更新，可以重新识别', 'success');
+    }
+}
+
+function queueSheetSelfProductRecognition() {
+    setTimeout(() => runSheetSelfProductRecognition(false), 250);
+}
+
+async function runSheetSelfProductRecognition(force) {
+    const imageKey = findSheetSelfProductImageKey();
+    const input = document.getElementById('sheetSelfProductName');
+    const status = document.getElementById('sheetSelfProductAiStatus');
+    if (!imageKey || !input || !status || sheetSelfProductAiBusy) return;
+    if (!force && input.value.trim() && input.dataset.aiGenerated !== 'true') {
+        setProgramAiStatus(status, '已保留手动填写，可点击“AI 识别产品”覆盖', '');
+        return;
+    }
+
+    const baseline = input.value;
+    const requestId = ++sheetSelfProductAiRequestId;
+    sheetSelfProductAiBusy = true;
+    setProgramAiStatus(status, '正在分析白底产品图...', '');
+    updateSheetSelfProductAiControls();
+    try {
+        const data = await callProgramAi({ action: 'identify_product', imageKey });
+        if (requestId !== sheetSelfProductAiRequestId || currentMode !== 'sheet') return;
+        if (!force && input.value !== baseline && input.dataset.aiGenerated !== 'true') {
+            setProgramAiStatus(status, '已保留手动填写，可点击“AI 识别产品”覆盖', '');
+            return;
+        }
+        sheetSelfState.productName = data.productName;
+        input.value = data.productName;
+        input.dataset.aiGenerated = 'true';
+        persistSheetSelfDraft(300);
+        setProgramAiStatus(status, `已识别：${data.productName}（今日剩余 ${data.remaining} 次）`, 'success');
+    } catch (error) {
+        if (requestId === sheetSelfProductAiRequestId) setProgramAiStatus(status, error.message || 'AI 识别失败，请重试', 'error');
+    } finally {
+        if (requestId === sheetSelfProductAiRequestId) {
+            sheetSelfProductAiBusy = false;
+            updateSheetSelfProductAiControls();
+        }
+    }
+}
+
+async function runSheetSelfCopyGeneration(slotIndex) {
+    const slot = sheetSelfState.slots[slotIndex];
+    if (!slot?.referenceKey?.key || slot.copyAiBusy) return;
+    const requestId = (Number(slot.copyAiRequestId) || 0) + 1;
+    slot.copyAiRequestId = requestId;
+    slot.copyAiBusy = true;
+    slot.copyAiStatus = '正在分析参考图...';
+    slot.copyAiState = '';
+    renderSheetSelfGrid();
+    try {
+        const data = await callProgramAi({
+            action: 'generate_copy',
+            imageKey: slot.referenceKey.key,
+            productName: sheetSelfState.productName.trim()
+        });
+        if (sheetSelfState.slots[slotIndex] !== slot || slot.copyAiRequestId !== requestId) return;
+        slot.title = data.title || '';
+        slot.subtitle = data.subtitle || '';
+        slot.otherText = data.otherText || '';
+        slot.copyAiStatus = `标题和文案已生成（今日剩余 ${data.remaining} 次）`;
+        slot.copyAiState = 'success';
+        persistSheetSelfDraft(300);
+    } catch (error) {
+        if (sheetSelfState.slots[slotIndex] === slot && slot.copyAiRequestId === requestId) {
+            slot.copyAiStatus = error.message || 'AI 文案生成失败，请重试';
+            slot.copyAiState = 'error';
+        }
+    } finally {
+        if (sheetSelfState.slots[slotIndex] === slot && slot.copyAiRequestId === requestId) {
+            slot.copyAiBusy = false;
+            renderSheetSelfGrid();
+        }
+    }
 }
 
 function persistSheetSelfDraft(delay = 5000) {
@@ -1598,6 +1751,7 @@ async function loadSheetSelfServerDraft(unionId) {
                 const productNameInput = document.getElementById('sheetSelfProductName');
                 if (productNameInput) productNameInput.value = sheetSelfState.productName;
                 renderSheetSelfGrid();
+                updateSheetSelfProductAiControls();
             }
         }
         setSheetSelfSaveStatus('已自动保存', 'is-saved');
@@ -3165,14 +3319,14 @@ async function runProgramCopyGeneration() {
 }
 
 async function callProgramAi(payload) {
+    const requestBody = { ...payload, userId: currentUser?.unionId || '' };
+    if (payload.image) {
+        requestBody.image = { base64: payload.image.base64, mimeType: payload.image.mimeType };
+    }
     const response = await fetch('/api/program-ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            ...payload,
-            userId: currentUser?.unionId || '',
-            image: { base64: payload.image.base64, mimeType: payload.image.mimeType }
-        })
+        body: JSON.stringify(requestBody)
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data.ok) throw new Error(data.error || 'AI 请求失败，请稍后重试');
@@ -3608,6 +3762,7 @@ async function importSheetLibraryFile(libraryFile, modal) {
     slot.uploading = true;
     slot.status = '正在从资料库导入图片...';
     renderSheetSelfGrid();
+    let shouldIdentifyProduct = false;
     try {
         const response = await fetch('/api/library-file/' + encodeURIComponent(libraryFile.key));
         if (!response.ok) throw new Error(`读取资料库图片失败 (${response.status})`);
@@ -3627,8 +3782,14 @@ async function importSheetLibraryFile(libraryFile, modal) {
         if (invalid) throw new Error(invalid);
 
         const [uploaded] = await uploadImages([{ file, name: file.name }], 'studio/sheet-self');
-        if (target.type === 'reference') slot.referenceKey = uploaded;
-        else slot.productKeys = [...slot.productKeys, uploaded].slice(0, 2);
+        if (target.type === 'reference') {
+            slot.referenceKey = uploaded;
+            resetSheetSelfCopyAiState(slot);
+        }
+        else {
+            slot.productKeys = [...slot.productKeys, uploaded].slice(0, 2);
+            shouldIdentifyProduct = true;
+        }
         slot.status = '已从资料库导入并保存';
         persistSheetSelfDraft(300);
         modal.remove();
@@ -3639,7 +3800,9 @@ async function importSheetLibraryFile(libraryFile, modal) {
     } finally {
         slot.uploading = false;
         renderSheetSelfGrid();
+        updateSheetSelfProductAiControls();
     }
+    if (shouldIdentifyProduct) queueSheetSelfProductRecognition();
 }
 
 function showSuccessModal(task, estimateText = '') {

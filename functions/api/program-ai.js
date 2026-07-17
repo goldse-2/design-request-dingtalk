@@ -18,7 +18,9 @@ export async function onRequestPost({ request, env }) {
     if (!userId) return jsonError('请先登录后使用 AI 功能', 401);
     if (!['identify_product', 'generate_copy'].includes(action)) return jsonError('不支持的 AI 操作', 400);
 
-    const image = normalizeImage(body.image);
+    const image = body.imageKey
+        ? await loadStoredImage(env, body.imageKey)
+        : normalizeImage(body.image);
     if (image.error) return jsonError(image.error, 400);
 
     const quota = await consumeDailyQuota(env.SUBMISSIONS, userId);
@@ -65,6 +67,49 @@ export async function onRequestPost({ request, env }) {
                     : String(error?.message || 'AI 识别失败，请稍后重试').slice(0, 100);
         return jsonError(message, 503, quota.previousRemaining);
     }
+}
+
+async function loadStoredImage(env, value) {
+    const key = String(value || '').trim();
+    if (!key.startsWith('studio/sheet-self/')) return { error: '不允许读取该图片' };
+    if (!env.SUBMISSION_FILES) return { error: '图片存储尚未配置' };
+
+    try {
+        const object = await env.SUBMISSION_FILES.get(key);
+        if (!object) return { error: '图片不存在，请重新上传' };
+        const bytes = await object.arrayBuffer();
+        if (bytes.byteLength > MAX_IMAGE_BYTES) return { error: '图片单张不能超过 8MB' };
+        const mimeType = detectImageMimeType(bytes, object.httpMetadata?.contentType, key);
+        if (!mimeType) return { error: '请选择 JPG、PNG 或 WebP 图片' };
+        return normalizeImage({ mimeType, base64: arrayBufferToBase64(bytes) });
+    } catch (error) {
+        console.error('Program AI stored image error', error?.message || '');
+        return { error: '读取图片失败，请重新上传后再试' };
+    }
+}
+
+function detectImageMimeType(bytes, contentType, key) {
+    const declared = String(contentType || '').toLowerCase().split(';')[0].trim();
+    if (/^image\/(?:jpeg|png|webp)$/.test(declared)) return declared;
+    const view = new Uint8Array(bytes, 0, Math.min(bytes.byteLength, 12));
+    if (view[0] === 0xff && view[1] === 0xd8 && view[2] === 0xff) return 'image/jpeg';
+    if (view[0] === 0x89 && view[1] === 0x50 && view[2] === 0x4e && view[3] === 0x47) return 'image/png';
+    if (view[0] === 0x52 && view[1] === 0x49 && view[2] === 0x46 && view[3] === 0x46
+        && view[8] === 0x57 && view[9] === 0x45 && view[10] === 0x42 && view[11] === 0x50) return 'image/webp';
+    if (/\.jpe?g$/i.test(key)) return 'image/jpeg';
+    if (/\.png$/i.test(key)) return 'image/png';
+    if (/\.webp$/i.test(key)) return 'image/webp';
+    return '';
+}
+
+function arrayBufferToBase64(bytes) {
+    const view = new Uint8Array(bytes);
+    let binary = '';
+    const chunkSize = 0x8000;
+    for (let offset = 0; offset < view.length; offset += chunkSize) {
+        binary += String.fromCharCode(...view.subarray(offset, offset + chunkSize));
+    }
+    return btoa(binary);
 }
 
 function normalizeImage(value) {
