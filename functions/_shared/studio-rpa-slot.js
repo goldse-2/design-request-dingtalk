@@ -79,7 +79,59 @@ export async function queueStudioRpaTask(env, taskId) {
     if (!ids.includes(id)) ids.push(id);
     const limited = ids.slice(-500);
     await kv.put(STUDIO_RPA_QUEUE_KEY, JSON.stringify(limited));
-    return { queued: true, position: limited.indexOf(id) + 1 };
+    return { queued: true, position: limited.indexOf(id) + 1, queueIds: limited };
+}
+
+export async function getStudioRpaQueueInfo(env, task, queueIds = null) {
+    const kv = env?.SUBMISSIONS;
+    if (!kv || !task?.id) return emptyQueueInfo(task?.mode);
+
+    const ids = Array.isArray(queueIds) ? queueIds : await readQueue(kv, STUDIO_RPA_QUEUE_KEY);
+    const currentIndex = ids.indexOf(task.id);
+    const queuedAheadIds = (currentIndex >= 0 ? ids.slice(0, currentIndex) : ids)
+        .filter(id => id && id !== task.id);
+    const activeSlot = parseSlot(await kv.get(STUDIO_RPA_ACTIVE_KEY).catch(() => null));
+    const activeTaskId = activeSlot?.taskId && activeSlot.taskId !== task.id ? activeSlot.taskId : '';
+    const taskIds = [...new Set([activeTaskId, ...queuedAheadIds].filter(Boolean))];
+    const tasks = await Promise.all(taskIds.map(id => readTask(kv, id)));
+    const taskById = new Map(tasks.filter(Boolean).map(item => [item.id, item]));
+    const ahead = [];
+
+    if (activeTaskId) {
+        const activeTask = taskById.get(activeTaskId);
+        if (taskHoldsRpaSlot(activeTask)) {
+            ahead.push({
+                id: activeTaskId,
+                mode: activeTask.mode || '',
+                minutes: remainingActiveMinutes(activeTask)
+            });
+        }
+    }
+
+    for (const id of queuedAheadIds) {
+        if (id === activeTaskId) continue;
+        const queuedTask = taskById.get(id);
+        if (!queuedTask || queuedTask.status !== 'pending' || queuedTask.sentToRpa === true) continue;
+        ahead.push({ id, mode: queuedTask.mode || '', minutes: studioRpaModeMinutes(queuedTask.mode) });
+    }
+
+    const waitMinutes = ahead.reduce((total, item) => total + item.minutes, 0);
+    const ownMinutes = studioRpaModeMinutes(task.mode);
+    return {
+        aheadCount: ahead.length,
+        queuePosition: ahead.length + 1,
+        waitMinutes,
+        ownMinutes,
+        completionMinutes: waitMinutes + ownMinutes
+    };
+}
+
+export function studioRpaModeMinutes(mode) {
+    if (mode === 'free') return 8;
+    if (mode === 'program') return 15;
+    if (mode === 'retouch') return 20;
+    if (mode === 'cutout') return 8;
+    return 10;
 }
 
 function taskHoldsRpaSlot(task) {
@@ -93,6 +145,19 @@ function taskHoldsRpaSlot(task) {
 function sentTimestamp(task) {
     const value = new Date(task?.sentToRpaAt || task?.createdAt || 0).getTime();
     return Number.isFinite(value) ? value : Number.MAX_SAFE_INTEGER;
+}
+
+function remainingActiveMinutes(task) {
+    const duration = studioRpaModeMinutes(task?.mode);
+    const sentAt = new Date(task?.sentToRpaAt || 0).getTime();
+    if (!Number.isFinite(sentAt) || sentAt <= 0) return duration;
+    const elapsed = Math.max(0, Math.floor((Date.now() - sentAt) / 60000));
+    return Math.max(1, duration - elapsed);
+}
+
+function emptyQueueInfo(mode) {
+    const ownMinutes = studioRpaModeMinutes(mode);
+    return { aheadCount: 0, queuePosition: 1, waitMinutes: 0, ownMinutes, completionMinutes: ownMinutes };
 }
 
 function makeBusySlot(taskId, source) {

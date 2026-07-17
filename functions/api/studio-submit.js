@@ -1,6 +1,6 @@
 import { studioTaskPutOptions } from '../_shared/studio-task-storage.js';
 import { normalizeLibraryReplacement } from '../_shared/studio-library-replacement.js';
-import { queueStudioRpaTask } from '../_shared/studio-rpa-slot.js';
+import { getStudioRpaQueueInfo, queueStudioRpaTask, studioRpaModeMinutes } from '../_shared/studio-rpa-slot.js';
 
 export async function onRequestPost(context) {
     const { request, env, waitUntil, internalTaskOptions } = context;
@@ -83,17 +83,19 @@ export async function onRequestPost(context) {
 
     let autoSent = false;
     let autoSendError = '';
+    let rpaQueueResult = null;
     try {
         await env.SUBMISSIONS.put(taskId, JSON.stringify(task), studioTaskPutOptions(task));
         const isBackgroundImageTask = mode === 'variant' || mode === 'resize_ai';
         if (isBackgroundImageTask) await appendQueue(env.SUBMISSIONS, 'studio:imageQueue:v2', taskId);
-        else await queueStudioRpaTask(env, taskId);
+        else rpaQueueResult = await queueStudioRpaTask(env, taskId);
     } catch (err) {
         return Response.json({ ok: false, error: 'Storage failed' }, { status: 500 });
     }
 
-    // 统计当前排队任务数量（用于计算预计等待时间）
-    let queueCount = 0;
+    const queueInfo = rpaQueueResult && !task.silent
+        ? await getStudioRpaQueueInfo(env, task, rpaQueueResult.queueIds).catch(() => defaultQueueInfo(mode))
+        : null;
 
     // 发送钉钉通知给管理员
     if (['free', 'program', 'retouch'].includes(mode)
@@ -123,8 +125,6 @@ export async function onRequestPost(context) {
             const token = await getAccessToken(env).catch(() => null);
             if (!token) return;
             
-            const queuePosition = queueCount + 1; // 当前任务的排队位置（前面有queueCount个，所以是第queueCount+1个）
-            const estimateTime = queueCount * 6; // 每个任务平均6分钟
             const modeText = studioModeText(mode);
             const titleText = imageName ? imageName.replace(/^[^-]+-/, '') : '新任务';
             
@@ -134,12 +134,8 @@ export async function onRequestPost(context) {
             
             if (mode === 'retouch') {
                 content += `🖼️ 精修任务已进入处理队列\n`;
-                content += `⏱ 预计等待：约 30 分钟\n\n`;
             } else if (mode === 'cutout') {
-                content += autoSent
-                    ? `🖼️ 白底抠图任务已自动发送处理\n`
-                    : `🖼️ 白底抠图任务已保存，系统会自动重试发送\n`;
-                content += `⏱ 完成后会通过钉钉通知，页面可以先关闭\n\n`;
+                content += `🖼️ 白底抠图任务已进入处理队列\n`;
             } else if (mode === 'variant') {
                 content += `🎨 改色任务已进入处理队列\n`;
                 content += `⏱ 完成后会通过钉钉通知，页面可以先关闭\n\n`;
@@ -147,12 +143,16 @@ export async function onRequestPost(context) {
                 content += `🖼️ 尺寸修改任务已进入后台处理\n`;
                 content += `目标尺寸：${resizeTarget || size || '-'}\n`;
                 content += `⏱ 完成后会通过钉钉通知，页面可以先关闭\n\n`;
-            } else if (queueCount === 0) {
-                content += `🎉 当前无人排队，您的任务将立即处理\n`;
-                content += `⏱ 预计等待：4-8 分钟\n\n`;
-            } else {
-                content += `📊 您是第 ${queuePosition} 个排队中\n`;
-                content += `⏱ 预计等待：${estimateTime} 分钟\n\n`;
+            }
+
+            if (queueInfo) {
+                if (queueInfo.aheadCount > 0) {
+                    content += `📊 前面还有 ${queueInfo.aheadCount} 个任务，您排在第 ${queueInfo.queuePosition} 位\n`;
+                    content += `⏱ 预计约 ${queueInfo.waitMinutes} 分钟后开始处理\n`;
+                } else {
+                    content += `📊 当前前面没有其他任务\n`;
+                }
+                content += `本任务通常需要约 ${queueInfo.ownMinutes} 分钟，预计约 ${queueInfo.completionMinutes} 分钟完成\n\n`;
             }
             
             content += `生图完成后会自动通知您\n`;
@@ -163,7 +163,12 @@ export async function onRequestPost(context) {
         if (waitUntil) waitUntil(p2);
     }
 
-    return Response.json({ ok: true, id: taskId, autoSent, autoSendError, queued: !autoSent });
+    return Response.json({ ok: true, id: taskId, autoSent, autoSendError, queued: !autoSent, queueInfo });
+}
+
+function defaultQueueInfo(mode) {
+    const ownMinutes = studioRpaModeMinutes(mode);
+    return { aheadCount: 0, queuePosition: 1, waitMinutes: 0, ownMinutes, completionMinutes: ownMinutes };
 }
 
 function studioModeText(mode) {

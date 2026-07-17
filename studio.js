@@ -4007,6 +4007,7 @@ async function importSheetLibraryFile(libraryFile, modal) {
 }
 
 function showSuccessModal(task, estimateText = '') {
+    const queueText = estimateText || formatStudioQueueInfo(task?.queueInfo);
     const overlay = document.createElement('div');
     overlay.setAttribute('role', 'dialog');
     overlay.setAttribute('aria-modal', 'true');
@@ -4018,7 +4019,7 @@ function showSuccessModal(task, estimateText = '') {
         + '<svg viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5" width="28" height="28"><polyline points="20 6 9 17 4 12"/></svg></div>'
         + '<div style="font-size:1.15rem;font-weight:700;color:#111827;margin-bottom:10px">任务提交成功</div>'
         + '<div style="font-size:0.88rem;color:#6b7280;line-height:1.7">网站已收到你的任务并进入处理队列。<br>可在「我的任务」查看进度，完成后会通过钉钉通知。</div>'
-        + (estimateText ? '<div style="margin-top:12px;padding:9px 12px;border-radius:7px;background:#eff6ff;color:#1d4ed8;font-size:.84rem;font-weight:700">' + estimateText + '</div>' : '')
+        + (queueText ? '<div style="margin-top:12px;padding:9px 12px;border-radius:7px;background:#eff6ff;color:#1d4ed8;font-size:.84rem;font-weight:700">' + queueText + '</div>' : '')
         + (task && task.id ? '<div style="margin-top:12px;color:#9ca3af;font-size:.72rem">任务编号：' + String(task.id).replace(/[<>&]/g, '') + '</div>' : '')
         + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:24px">'
         + '<button type="button" id="successContinueBtn" style="padding:11px;background:#fff;color:#374151;border:1px solid #d1d5db;border-radius:8px;font-size:.92rem;font-weight:600;cursor:pointer">继续制作</button>'
@@ -4028,6 +4029,18 @@ function showSuccessModal(task, estimateText = '') {
     overlay.appendChild(box);
     overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
     document.body.appendChild(overlay);
+}
+
+function formatStudioQueueInfo(queueInfo) {
+    if (!queueInfo || !Number.isFinite(Number(queueInfo.completionMinutes))) return '';
+    const aheadCount = Math.max(0, Number(queueInfo.aheadCount) || 0);
+    const waitMinutes = Math.max(0, Number(queueInfo.waitMinutes) || 0);
+    const ownMinutes = Math.max(1, Number(queueInfo.ownMinutes) || 1);
+    const completionMinutes = Math.max(ownMinutes, Number(queueInfo.completionMinutes) || ownMinutes);
+    if (aheadCount > 0) {
+        return `前面还有 ${aheadCount} 个任务，预计约 ${waitMinutes} 分钟后开始处理；本任务通常需要 ${ownMinutes} 分钟，预计约 ${completionMinutes} 分钟完成。`;
+    }
+    return `当前前面没有其他任务；本任务通常需要 ${ownMinutes} 分钟，预计约 ${completionMinutes} 分钟完成。`;
 }
 
 
@@ -4187,9 +4200,15 @@ async function submitImageBatch({ mode, uploadKey, inputId, selectedId, hintId, 
 
     if (submittedTasks.length) {
         const formatLabel = mode === 'cutout' ? String(extraPayload.cutoutOutputFormat || 'png').toUpperCase() : '';
+        const firstQueueInfo = submittedTasks[0]?.queueInfo;
+        const lastQueueInfo = submittedTasks[submittedTasks.length - 1]?.queueInfo;
+        const aheadText = firstQueueInfo?.aheadCount > 0
+            ? `前面已有 ${firstQueueInfo.aheadCount} 个任务`
+            : '当前前面没有其他任务';
+        const batchMinutes = Math.max(1, Number(lastQueueInfo?.completionMinutes) || 1);
         const message = mode === 'retouch'
-            ? `已提交 ${submittedTasks.length} 个精修任务，每张图片独立处理，预计约 30 分钟完成`
-            : `已提交 ${submittedTasks.length} 个白底抠图任务，将逐张处理并导出 ${formatLabel}，完成后会通过钉钉通知`;
+            ? `已提交 ${submittedTasks.length} 个精修任务，${aheadText}；每张通常需要 20 分钟，预计这一批约 ${batchMinutes} 分钟完成`
+            : `已提交 ${submittedTasks.length} 个白底抠图任务，${aheadText}；将逐张处理并导出 ${formatLabel}，预计这一批约 ${batchMinutes} 分钟完成`;
         showSuccessModal(null, failures.length ? `${message}；另有 ${failures.length} 张提交失败，可关闭弹窗后重试` : message);
         if (mode === 'retouch') loadRetouchQueue();
     }
