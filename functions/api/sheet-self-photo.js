@@ -7,7 +7,7 @@ export async function onRequestPost(context) {
     }
 
     const contentType = request.headers.get('content-type') || '';
-    if (contentType.includes('application/json')) return retrySlot(context);
+    if (contentType.includes('application/json')) return handleJsonRequest(context);
 
     let form;
     try { form = await request.formData(); }
@@ -60,11 +60,19 @@ export async function onRequestPost(context) {
     }
 }
 
-async function retrySlot(context) {
+async function handleJsonRequest(context) {
     const { request, env } = context;
     let body;
     try { body = await request.json(); }
     catch { return Response.json({ ok: false, error: '请求格式错误' }, { status: 400 }); }
+    if (body.action === 'library') return useLibraryImages(context, body);
+    if (body.action !== 'retry') return Response.json({ ok: false, error: '不支持的操作' }, { status: 400 });
+
+    return retrySlot(context, body);
+}
+
+async function retrySlot(context, body) {
+    const { request, env } = context;
     const parentId = String(body.parentId || '').trim();
     const slotIndex = Number(body.slotIndex);
     const loaded = await loadParentAndSlot(env, parentId, slotIndex);
@@ -74,6 +82,65 @@ async function retrySlot(context) {
         return Response.json({ ok: true, parentId, slotIndex, ...result });
     } catch (error) {
         return Response.json({ ok: false, error: error.message }, { status: 502 });
+    }
+}
+
+async function useLibraryImages(context, body) {
+    const { request, env } = context;
+    const parentId = String(body.parentId || '').trim();
+    const slotIndex = Number(body.slotIndex);
+    const libraryKeys = Array.isArray(body.libraryKeys) ? body.libraryKeys : [];
+    const loaded = await loadParentAndSlot(env, parentId, slotIndex);
+    if (loaded.error) return loaded.error;
+    if (!loaded.slot.photographer) return Response.json({ ok: false, error: '该图片位不需要摄影师提供图片' }, { status: 400 });
+    if (!['waiting_photos', 'error'].includes(loaded.slot.stage)) {
+        return Response.json({ ok: false, error: '该图片位已经进入处理流程' }, { status: 409 });
+    }
+    if (libraryKeys.length < 1 || libraryKeys.length > 2) {
+        return Response.json({ ok: false, error: '请从去白底资料库选择一张或两张图片' }, { status: 400 });
+    }
+
+    const selectedKeys = [];
+    for (const item of libraryKeys) {
+        const key = String(item?.key || '').trim();
+        const name = cleanLibraryFileName(item?.name, key);
+        if (!key.startsWith('library/') || !isSupportedLibraryImage(name)) {
+            return Response.json({ ok: false, error: '只能选择去白底资料库中的 JPG、PNG 或 WebP 图片' }, { status: 400 });
+        }
+        const object = await env.SUBMISSION_FILES.head(key);
+        if (!object) return Response.json({ ok: false, error: `资料库图片不存在：${name}` }, { status: 404 });
+        selectedKeys.push({ key, name });
+    }
+
+    const duplicatedSource = selectedKeys.length === 1;
+    const sourceKeys = duplicatedSource
+        ? [{ ...selectedKeys[0] }, { ...selectedKeys[0] }]
+        : selectedKeys;
+
+    try {
+        loaded.slot.sourceKeys = sourceKeys;
+        loaded.slot.cutoutKeys = sourceKeys;
+        loaded.slot.processingSkipped = true;
+        loaded.slot.error = '';
+        loaded.slot.failedStage = '';
+        loaded.slot.children = {
+            ...(loaded.slot.children || {}),
+            retouch: [],
+            cutout: []
+        };
+        await putSheetSelfSlot(env, loaded.slot);
+        await startSheetSelfProgramSlot(env, loaded.parent, loaded.slot, new URL(request.url).origin);
+        return Response.json({
+            ok: true,
+            parentId,
+            slotIndex,
+            stage: 'program',
+            needsProcessing: false,
+            duplicatedSource,
+            source: 'library'
+        });
+    } catch (error) {
+        return Response.json({ ok: false, error: `资料库图片已选入，但发送图生图失败：${error.message}` }, { status: 502 });
     }
 }
 
@@ -94,4 +161,14 @@ function safeExtension(name, mimeType) {
     const fromName = String(name || '').match(/\.([a-z0-9]{2,5})$/i)?.[1]?.toLowerCase();
     if (['jpg', 'jpeg', 'png', 'webp'].includes(fromName)) return fromName === 'jpeg' ? 'jpg' : fromName;
     return mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg';
+}
+
+function cleanLibraryFileName(name, key) {
+    let fallback = String(key || '').split('/').pop() || '资料库图片.jpg';
+    try { fallback = decodeURIComponent(fallback); } catch {}
+    return String(name || fallback).replace(/[\\/:*?"<>|\r\n]/g, '_').slice(0, 160) || '资料库图片.jpg';
+}
+
+function isSupportedLibraryImage(name) {
+    return /\.(?:jpe?g|png|webp)$/i.test(String(name || ''));
 }

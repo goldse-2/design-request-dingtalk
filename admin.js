@@ -2259,6 +2259,11 @@ function uploadSheetSelfPhotos(parentId, slotIndex, button, skipRetouch = false)
             <span id="sheetPhotoFileText" style="margin-top:7px">选择一张或两张拍摄原图</span><small style="margin-top:3px;color:#9ca3af">只选一张时会自动复制成两张 · 单张最大 15MB</small>
         </label>
         <input id="sheetPhotoFiles" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden>
+        <button id="sheetPhotoLibraryOpen" type="button" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;height:40px;margin-top:10px;border:1px solid #d1d5db;border-radius:7px;background:#fff;color:#374151;font-size:.8rem;font-weight:700;cursor:pointer">
+            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7h6l2 2h10v10H3z"/><path d="M3 7V5h6l2 2"/></svg>
+            <span>从去白底资料库选择</span>
+        </button>
+        <div id="sheetPhotoLibraryPreview" hidden style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:9px"></div>
         <div id="sheetPhotoStatus" style="min-height:20px;margin-top:9px;color:#6b7280;font-size:.76rem"></div>
         <button id="sheetPhotoSubmit" type="button" style="width:100%;height:42px;margin-top:5px;border:0;border-radius:7px;background:#111827;color:#fff;font-size:.84rem;font-weight:700;cursor:pointer">上传并启动</button>
     </div>`;
@@ -2272,6 +2277,25 @@ function uploadSheetSelfPhotos(parentId, slotIndex, button, skipRetouch = false)
     const fileInput = modal.querySelector('#sheetPhotoFiles');
     const fileText = modal.querySelector('#sheetPhotoFileText');
     const status = modal.querySelector('#sheetPhotoStatus');
+    const submit = modal.querySelector('#sheetPhotoSubmit');
+    const libraryPreview = modal.querySelector('#sheetPhotoLibraryPreview');
+    let selectedLibraryFiles = [];
+    const setProcessingState = (enabled, disabled = false) => {
+        processingInput.checked = enabled;
+        processingInput.disabled = disabled;
+        processingInput.closest('label').style.opacity = disabled ? '.64' : '1';
+        processingInput.closest('label').style.cursor = disabled ? 'default' : 'pointer';
+        track.style.background = enabled ? '#111827' : '#cbd5e1';
+        track.querySelector('i').style.left = enabled ? '21px' : '3px';
+    };
+    const renderLibrarySelection = () => {
+        libraryPreview.innerHTML = selectedLibraryFiles.map(file => `
+            <div style="display:flex;align-items:center;gap:8px;min-width:0;padding:7px;border:1px solid #e5e7eb;border-radius:7px;background:#f9fafb">
+                <img src="/api/library-file/${encodeURIComponent(file.key)}" alt="" style="width:38px;height:38px;flex:0 0 38px;object-fit:cover;border-radius:5px;background:#e5e7eb">
+                <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#374151;font-size:.72rem">${esc(file.name)}</span>
+            </div>`).join('');
+        libraryPreview.hidden = selectedLibraryFiles.length === 0;
+    };
     processingInput.onchange = () => {
         const enabled = processingInput.checked;
         track.style.background = enabled ? '#111827' : '#cbd5e1';
@@ -2283,28 +2307,68 @@ function uploadSheetSelfPhotos(parentId, slotIndex, button, skipRetouch = false)
     };
     fileInput.onchange = () => {
         const files = Array.from(fileInput.files || []).slice(0, 2);
+        if (files.length) {
+            selectedLibraryFiles = [];
+            renderLibrarySelection();
+            setProcessingState(true);
+            copy.textContent = skipRetouch
+                ? '用户已关闭精修：上传原图后直接完成白底抠图，再进入图生图'
+                : '默认开启：上传一张或两张拍摄原图，分别完成精修和抠图后再图生图';
+            submit.textContent = '上传并启动';
+            status.textContent = '';
+        }
         fileText.textContent = files.length === 1
             ? `已选择 1 张：${files[0].name}（将作为两张处理）`
             : (files.length === 2
                 ? `已选择 2 张：${files.map(file => file.name).join('、')}`
                 : (processingInput.checked ? '选择一张或两张拍摄原图' : '选择一张或两张已处理好的图片'));
     };
-    modal.querySelector('#sheetPhotoSubmit').onclick = async event => {
-        const submit = event.currentTarget;
+    modal.querySelector('#sheetPhotoLibraryOpen').onclick = () => {
+        openSheetPhotoLibraryPicker(selectedLibraryFiles, files => {
+            selectedLibraryFiles = files;
+            fileInput.value = '';
+            setProcessingState(false, true);
+            copy.textContent = '已选择去白底资料库图片，将跳过精修和抠图，直接进入图生图';
+            fileText.textContent = files.length === 1
+                ? `资料库已选择 1 张：${files[0].name}（将作为两张使用）`
+                : `资料库已选择 2 张：${files.map(file => file.name).join('、')}`;
+            submit.textContent = '启动图生图';
+            status.textContent = '';
+            renderLibrarySelection();
+        });
+    };
+    submit.onclick = async event => {
+        const submitButton = event.currentTarget;
         const files = Array.from(fileInput.files || []);
-        if (files.length < 1 || files.length > 2) { status.textContent = '请选择一张或两张图片'; status.style.color = '#b91c1c'; return; }
+        if (!selectedLibraryFiles.length && (files.length < 1 || files.length > 2)) { status.textContent = '请上传图片，或从去白底资料库选择'; status.style.color = '#b91c1c'; return; }
         if (files.some(file => file.size > 15 * 1024 * 1024)) { status.textContent = '图片单张不能超过 15MB'; status.style.color = '#b91c1c'; return; }
-        submit.disabled = true;
-        submit.textContent = '上传并启动中...';
-        status.textContent = files.length === 1 ? '正在上传，系统会把这张图作为两张处理' : '正在上传两张图片，请不要关闭';
+        submitButton.disabled = true;
+        submitButton.textContent = selectedLibraryFiles.length ? '正在启动图生图...' : '上传并启动中...';
+        status.textContent = selectedLibraryFiles.length
+            ? (selectedLibraryFiles.length === 1 ? '正在把这张资料库图片作为两张使用' : '正在使用两张资料库图片启动任务')
+            : (files.length === 1 ? '正在上传，系统会把这张图作为两张处理' : '正在上传两张图片，请不要关闭');
         status.style.color = '#6b7280';
         try {
-            const form = new FormData();
-            form.append('parentId', parentId);
-            form.append('slotIndex', String(slotIndex));
-            form.append('needsProcessing', String(processingInput.checked));
-            files.forEach(file => form.append('files', file, file.name));
-            const response = await fetch('/api/sheet-self-photo', { method: 'POST', body: form });
+            let response;
+            if (selectedLibraryFiles.length) {
+                response = await fetch('/api/sheet-self-photo', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'library',
+                        parentId,
+                        slotIndex,
+                        libraryKeys: selectedLibraryFiles.map(({ key, name }) => ({ key, name }))
+                    })
+                });
+            } else {
+                const form = new FormData();
+                form.append('parentId', parentId);
+                form.append('slotIndex', String(slotIndex));
+                form.append('needsProcessing', String(processingInput.checked));
+                files.forEach(file => form.append('files', file, file.name));
+                response = await fetch('/api/sheet-self-photo', { method: 'POST', body: form });
+            }
             const result = await response.json().catch(() => ({}));
             if (!response.ok || !result.ok) throw new Error(result.error || `操作失败 (${response.status})`);
             status.textContent = result.needsProcessing
@@ -2316,10 +2380,146 @@ function uploadSheetSelfPhotos(parentId, slotIndex, button, skipRetouch = false)
         } catch (error) {
             status.textContent = error.message;
             status.style.color = '#b91c1c';
-            submit.disabled = false;
-            submit.textContent = '上传并启动';
+            submitButton.disabled = false;
+            submitButton.textContent = selectedLibraryFiles.length ? '启动图生图' : '上传并启动';
         }
     };
+}
+
+async function openSheetPhotoLibraryPicker(initialSelection, onConfirm) {
+    document.getElementById('sheetPhotoLibraryPicker')?.remove();
+    const selected = Array.isArray(initialSelection) ? [...initialSelection] : [];
+    const overlay = document.createElement('div');
+    overlay.id = 'sheetPhotoLibraryPicker';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:12100;display:grid;place-items:center;padding:12px;background:rgba(17,24,39,.58)';
+    overlay.innerHTML = `<div role="dialog" aria-modal="true" aria-labelledby="sheetPhotoLibraryTitle" style="display:flex;flex-direction:column;width:min(720px,100%);max-height:min(86vh,760px);overflow:hidden;border-radius:10px;background:#fff;box-shadow:0 24px 70px rgba(0,0,0,.28)">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px 20px 12px;border-bottom:1px solid #e5e7eb">
+            <div><strong id="sheetPhotoLibraryTitle" style="display:block;color:#111827;font-size:1rem">从去白底资料库选择</strong><small style="display:block;margin-top:4px;color:#6b7280;font-size:.75rem">选择一张或两张图片，已选图片将直接进入图生图</small></div>
+            <button type="button" data-library-close style="display:grid;place-items:center;width:30px;height:30px;flex:0 0 30px;border:0;border-radius:6px;background:#f3f4f6;color:#4b5563;font-size:19px;cursor:pointer" title="关闭">×</button>
+        </div>
+        <div data-library-body style="min-height:250px;overflow:auto;padding:16px 20px"><div style="padding:32px;text-align:center;color:#9ca3af;font-size:.82rem">正在加载资料库...</div></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 20px;border-top:1px solid #e5e7eb;background:#f9fafb">
+            <span data-library-count style="color:#6b7280;font-size:.78rem">已选择 ${selected.length}/2 张</span>
+            <div style="display:flex;gap:8px"><button type="button" data-library-cancel style="height:36px;padding:0 16px;border:1px solid #d1d5db;border-radius:7px;background:#fff;color:#374151;font-size:.78rem;font-weight:700;cursor:pointer">取消</button><button type="button" data-library-confirm style="height:36px;padding:0 18px;border:0;border-radius:7px;background:#111827;color:#fff;font-size:.78rem;font-weight:700;cursor:pointer">使用所选图片</button></div>
+        </div>
+    </div>`;
+    document.body.appendChild(overlay);
+    const body = overlay.querySelector('[data-library-body]');
+    const count = overlay.querySelector('[data-library-count]');
+    const confirm = overlay.querySelector('[data-library-confirm]');
+    const close = () => overlay.remove();
+    const updateFooter = () => {
+        count.textContent = `已选择 ${selected.length}/2 张`;
+        confirm.disabled = selected.length === 0;
+        confirm.style.opacity = selected.length ? '1' : '.45';
+        confirm.style.cursor = selected.length ? 'pointer' : 'not-allowed';
+    };
+    const breadcrumb = (label, back) => {
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;gap:10px;margin-bottom:13px;color:#6b7280;font-size:.78rem';
+        if (back) {
+            const backButton = document.createElement('button');
+            backButton.type = 'button';
+            backButton.textContent = '‹ 返回';
+            backButton.style.cssText = 'height:30px;padding:0 11px;border:0;border-radius:6px;background:#f3f4f6;color:#374151;font-size:.76rem;font-weight:700;cursor:pointer';
+            backButton.onclick = back;
+            row.appendChild(backButton);
+        }
+        const text = document.createElement('span');
+        text.textContent = label;
+        row.appendChild(text);
+        return row;
+    };
+    const imageFile = file => /\.(?:jpe?g|png|webp)$/i.test(String(file?.name || ''));
+    let categories = {};
+
+    const renderCategories = () => {
+        body.innerHTML = '';
+        body.appendChild(breadcrumb('全部分类'));
+        const entries = Object.entries(categories).filter(([category, products]) =>
+            category !== '模特' && category !== '说明书'
+            && Object.values(products || {}).some(files => files.some(imageFile)));
+        if (!entries.length) {
+            body.insertAdjacentHTML('beforeend', '<div style="padding:40px;text-align:center;color:#9ca3af;font-size:.82rem">去白底资料库暂无可用图片</div>');
+            return;
+        }
+        const grid = document.createElement('div');
+        grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px';
+        entries.forEach(([category, products]) => {
+            const files = Object.values(products).flat().filter(imageFile);
+            const card = document.createElement('button');
+            card.type = 'button';
+            card.style.cssText = 'overflow:hidden;padding:0;border:1px solid #e5e7eb;border-radius:8px;background:#fff;text-align:left;cursor:pointer';
+            card.innerHTML = `<img src="/api/library-file/${encodeURIComponent(files[0].key)}" alt="" loading="lazy" style="display:block;width:100%;aspect-ratio:1.45;object-fit:cover;background:#f3f4f6"><span style="display:block;padding:9px 10px"><strong style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#111827;font-size:.8rem">${esc(category)}</strong><small style="display:block;margin-top:2px;color:#9ca3af;font-size:.7rem">${Object.keys(products).length} 个产品</small></span>`;
+            card.onclick = () => renderProducts(category);
+            grid.appendChild(card);
+        });
+        body.appendChild(grid);
+    };
+    const renderProducts = category => {
+        body.innerHTML = '';
+        body.appendChild(breadcrumb(category, renderCategories));
+        const entries = Object.entries(categories[category] || {}).filter(([, files]) => files.some(imageFile));
+        const grid = document.createElement('div');
+        grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px';
+        entries.forEach(([product, files]) => {
+            const images = files.filter(imageFile);
+            const card = document.createElement('button');
+            card.type = 'button';
+            card.style.cssText = 'overflow:hidden;padding:0;border:1px solid #e5e7eb;border-radius:8px;background:#fff;text-align:left;cursor:pointer';
+            card.innerHTML = `<img src="/api/library-file/${encodeURIComponent(images[0].key)}" alt="" loading="lazy" style="display:block;width:100%;aspect-ratio:1.45;object-fit:cover;background:#f3f4f6"><span style="display:block;padding:9px 10px"><strong style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#111827;font-size:.8rem">${esc(product)}</strong><small style="display:block;margin-top:2px;color:#9ca3af;font-size:.7rem">${images.length} 张图片</small></span>`;
+            card.onclick = () => renderImages(category, product);
+            grid.appendChild(card);
+        });
+        body.appendChild(grid);
+    };
+    const renderImages = (category, product) => {
+        body.innerHTML = '';
+        body.appendChild(breadcrumb(`${category} / ${product}`, () => renderProducts(category)));
+        const grid = document.createElement('div');
+        grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(105px,1fr));gap:9px';
+        (categories[category]?.[product] || []).filter(imageFile).forEach(file => {
+            const chosen = selected.some(item => item.key === file.key);
+            const card = document.createElement('button');
+            card.type = 'button';
+            card.style.cssText = `position:relative;overflow:hidden;padding:0;border:2px solid ${chosen ? '#111827' : 'transparent'};border-radius:8px;background:#f9fafb;text-align:left;cursor:pointer`;
+            card.innerHTML = `<img src="/api/library-file/${encodeURIComponent(file.key)}" alt="" loading="lazy" style="display:block;width:100%;aspect-ratio:1;object-fit:cover"><span style="display:block;overflow:hidden;padding:6px;text-overflow:ellipsis;white-space:nowrap;color:#6b7280;font-size:.68rem">${esc(file.name)}</span>${chosen ? '<i style="position:absolute;top:6px;right:6px;display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:#111827;color:#fff;font-style:normal;font-size:.72rem">✓</i>' : ''}`;
+            card.onclick = () => {
+                const index = selected.findIndex(item => item.key === file.key);
+                if (index >= 0) selected.splice(index, 1);
+                else if (selected.length < 2) selected.push({ key: file.key, name: file.name });
+                else {
+                    count.textContent = '最多选择两张图片';
+                    count.style.color = '#b45309';
+                    setTimeout(() => { count.style.color = '#6b7280'; updateFooter(); }, 1100);
+                    return;
+                }
+                updateFooter();
+                renderImages(category, product);
+            };
+            grid.appendChild(card);
+        });
+        body.appendChild(grid);
+    };
+
+    overlay.querySelector('[data-library-close]').onclick = close;
+    overlay.querySelector('[data-library-cancel]').onclick = close;
+    overlay.onclick = event => { if (event.target === overlay) close(); };
+    confirm.onclick = () => {
+        if (!selected.length) return;
+        onConfirm(selected.map(item => ({ key: item.key, name: item.name })));
+        close();
+    };
+    updateFooter();
+    try {
+        const response = await fetch('/api/library');
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.ok) throw new Error(result.error || `加载失败 (${response.status})`);
+        categories = result.categories || {};
+        renderCategories();
+    } catch (error) {
+        body.innerHTML = `<div style="padding:40px;text-align:center;color:#b91c1c;font-size:.82rem">资料库加载失败：${esc(error.message)}</div>`;
+    }
 }
 
 async function retrySheetSelfAdminSlot(parentId, slotIndex, button, confirmActive = false) {
