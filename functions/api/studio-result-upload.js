@@ -4,6 +4,7 @@ import { studioTaskPutOptions } from '../_shared/studio-task-storage.js';
 import { advanceSheetSelfWorkflow } from '../_shared/sheet-self-workflow.js';
 import { releaseStudioRpaSlot } from '../_shared/studio-rpa-slot.js';
 import { wakeStudioRpaQueue } from '../_shared/studio-rpa-wakeup.js';
+import { enqueueRetouchLibraryReviews } from '../_shared/retouch-library-review.js';
 
 export async function onRequestPut(context) {
     const { request, env } = context;
@@ -61,6 +62,12 @@ export async function onRequestPost(context) {
         ? task.resultUploadBatches.find(batch => batch?.id === uploadId)
         : null;
     if (previousBatch) {
+        try {
+            await enqueueRetouchLibraryReviews(env, task, previousBatch.uploaded || []);
+        } catch (error) {
+            console.error('Retouch library review sync failed:', taskId, error.message);
+            return Response.json({ ok: false, error: '精修成品待审核同步失败，请重试上传' }, { status: 503 });
+        }
         return Response.json({ ok: true, taskId, uploaded: previousBatch.uploaded || [], duplicate: true });
     }
 
@@ -139,6 +146,13 @@ export async function onRequestPost(context) {
     if (!libraryReplacement) {
         task.dingtalkNotificationState = canNotify ? 'sending' : 'pending';
         task.dingtalkNotificationStartedAt = canNotify ? new Date().toISOString() : '';
+    }
+
+    try {
+        await enqueueRetouchLibraryReviews(env, task, uploaded);
+    } catch (error) {
+        console.error('Retouch library review sync failed:', taskId, error.message);
+        return Response.json({ ok: false, error: '精修成品待审核同步失败，请重试上传' }, { status: 503 });
     }
 
     await env.SUBMISSIONS.put(taskId, JSON.stringify(task), studioTaskPutOptions(task));

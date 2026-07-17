@@ -4,6 +4,7 @@ import { studioTaskPutOptions } from '../_shared/studio-task-storage.js';
 import { advanceSheetSelfWorkflow } from '../_shared/sheet-self-workflow.js';
 import { releaseStudioRpaSlot } from '../_shared/studio-rpa-slot.js';
 import { wakeStudioRpaQueue } from '../_shared/studio-rpa-wakeup.js';
+import { enqueueRetouchLibraryReviews } from '../_shared/retouch-library-review.js';
 
 export async function onRequestPost(context) {
     const { request, env, waitUntil } = context;
@@ -61,6 +62,9 @@ export async function onRequestPost(context) {
             if (message) task.completeNote = message;
         }
 
+        if (action === 'complete') {
+            await enqueueRetouchLibraryReviews(env, task, task.resultKeys);
+        }
         await env.SUBMISSIONS.put(taskId, JSON.stringify(task), studioTaskPutOptions(task));
         if (action === 'complete' || action === 'reject') {
             await releaseStudioRpaSlot(env, taskId);

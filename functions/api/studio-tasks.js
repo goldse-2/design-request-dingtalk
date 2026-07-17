@@ -2,6 +2,7 @@ import { markStudioNotificationSent, sendStudioResultImages } from '../_shared/s
 import { RECORD_RETENTION_MS, studioTaskPutOptions, studioTaskRetentionAnchor } from '../_shared/studio-task-storage.js';
 import { parseResizeTarget, transformToExactJpeg } from './studio-check-overdue.js';
 import { advanceSheetSelfWorkflow, getSheetSelfSlots } from '../_shared/sheet-self-workflow.js';
+import { enqueueRetouchLibraryReviews } from '../_shared/retouch-library-review.js';
 
 export async function onRequestPatch(context) {
     const { request, env } = context;
@@ -248,6 +249,12 @@ async function syncR2StudioResults(env, request, listedKeys) {
         task.completeNote = task.completeNote || 'R2 成品图已自动同步';
         task.r2AutoCompleted = true;
 
+        try {
+            await enqueueRetouchLibraryReviews(env, task, task.resultKeys);
+        } catch (error) {
+            console.error('Retouch library review sync failed:', task.id, error.message);
+            continue;
+        }
         await env.SUBMISSIONS.put(task.id, JSON.stringify(task), studioTaskPutOptions(task));
 
         if (task.workflow?.type === 'sheet_self') {

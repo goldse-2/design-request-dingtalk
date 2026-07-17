@@ -87,6 +87,46 @@
     .shoot-admin-actions { justify-content: flex-start; }
     .shoot-complete-foot { align-items: stretch; flex-direction: column; }
 }
+.retouch-library-review { margin-bottom: 18px; overflow: hidden; border: 1px solid #dbe3ee; border-radius: 8px; background: #fff; box-shadow: 0 1px 4px rgba(15, 23, 42, .06); }
+.retouch-library-review-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 15px 17px; border-bottom: 1px solid #e8edf3; background: #f8fafc; }
+.retouch-library-review-title { display: flex; align-items: center; gap: 9px; color: #111827; font-size: .92rem; font-weight: 800; }
+.retouch-library-review-dot { width: 8px; height: 8px; border-radius: 50%; background: #d97706; box-shadow: 0 0 0 4px #fef3c7; }
+.retouch-library-review-copy { margin-top: 3px; color: #64748b; font-size: .75rem; }
+.retouch-library-review-count { min-width: 32px; padding: 4px 9px; border-radius: 999px; background: #fff7ed; color: #c2410c; font-size: .72rem; font-weight: 800; text-align: center; }
+.retouch-library-review-status { min-height: 18px; padding: 0 17px; color: #047857; font-size: .76rem; }
+.retouch-library-review-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; padding: 16px; }
+.retouch-library-review-empty { padding: 24px 16px; color: #94a3b8; font-size: .82rem; text-align: center; }
+.retouch-review-card { min-width: 0; overflow: hidden; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; }
+.retouch-review-image { position: relative; display: block; width: 100%; aspect-ratio: 4 / 3; padding: 0; overflow: hidden; border: 0; border-bottom: 1px solid #e2e8f0; background: #f1f5f9; cursor: zoom-in; }
+.retouch-review-image img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.retouch-review-image span { position: absolute; right: 8px; bottom: 8px; padding: 4px 7px; border-radius: 6px; background: rgba(15, 23, 42, .72); color: #fff; font-size: .68rem; }
+.retouch-review-body { padding: 12px; }
+.retouch-review-name { overflow: hidden; color: #111827; font-size: .82rem; font-weight: 750; text-overflow: ellipsis; white-space: nowrap; }
+.retouch-review-meta { margin-top: 4px; color: #64748b; font-size: .72rem; }
+.retouch-review-actions { display: grid; grid-template-columns: 1fr 1.35fr; gap: 8px; margin-top: 11px; }
+.retouch-review-btn { min-height: 34px; padding: 7px 9px; border: 1px solid #cbd5e1; border-radius: 7px; background: #fff; color: #475569; font-size: .75rem; font-weight: 750; cursor: pointer; }
+.retouch-review-btn:disabled { cursor: wait; opacity: .55; }
+.retouch-review-btn--primary { border-color: #0f766e; background: #0f766e; color: #fff; }
+.retouch-review-modal { position: fixed; inset: 0; z-index: 15500; display: grid; place-items: center; padding: 20px; background: rgba(15, 23, 42, .66); }
+.retouch-review-dialog { width: min(620px, 100%); max-height: 90vh; overflow: auto; border-radius: 8px; background: #fff; box-shadow: 0 24px 70px rgba(0, 0, 0, .3); }
+.retouch-review-dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 18px; border-bottom: 1px solid #e5e7eb; }
+.retouch-review-dialog-head h3 { margin: 0; color: #111827; font-size: 1rem; }
+.retouch-review-dialog-close { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 6px; background: #f1f5f9; color: #475569; font-size: 20px; cursor: pointer; }
+.retouch-review-dialog-body { display: grid; grid-template-columns: 160px minmax(0, 1fr); gap: 18px; padding: 18px; }
+.retouch-review-dialog-image { width: 160px; aspect-ratio: 1; overflow: hidden; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; cursor: zoom-in; }
+.retouch-review-dialog-image img { width: 100%; height: 100%; object-fit: cover; }
+.retouch-review-form { display: grid; gap: 11px; min-width: 0; }
+.retouch-review-field label { display: block; margin-bottom: 5px; color: #374151; font-size: .76rem; font-weight: 700; }
+.retouch-review-field input { width: 100%; min-height: 38px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 7px; outline: none; font: inherit; font-size: .82rem; }
+.retouch-review-field input:focus { border-color: #0f766e; box-shadow: 0 0 0 3px rgba(15, 118, 110, .12); }
+.retouch-review-field small { display: block; margin-top: 4px; color: #94a3b8; font-size: .68rem; }
+.retouch-review-dialog-status { min-height: 18px; color: #dc2626; font-size: .74rem; }
+.retouch-review-dialog-foot { display: flex; justify-content: flex-end; gap: 8px; }
+@media (max-width: 620px) {
+    .retouch-library-review-grid { grid-template-columns: 1fr; }
+    .retouch-review-dialog-body { grid-template-columns: minmax(0, 1fr); }
+    .retouch-review-dialog-image { width: 100%; aspect-ratio: 16 / 9; }
+}
 </style>
 </head>
 <body class="has-sidebar">
@@ -199,6 +239,18 @@
         </div>
         <a href="library.html" target="_blank" style="font-size:0.8rem;color:#6366f1;text-decoration:none">查看资料库 →</a>
     </div>
+
+    <section id="retouchLibraryReviewPanel" class="retouch-library-review" aria-labelledby="retouchLibraryReviewTitle">
+        <div class="retouch-library-review-head">
+            <div>
+                <div id="retouchLibraryReviewTitle" class="retouch-library-review-title"><span class="retouch-library-review-dot"></span>精修图片待收录</div>
+                <div class="retouch-library-review-copy">确认需要的图片并命名后，再收录到正式资料库</div>
+            </div>
+            <span id="retouchLibraryReviewCount" class="retouch-library-review-count">0</span>
+        </div>
+        <div id="retouchLibraryReviewStatus" class="retouch-library-review-status" aria-live="polite"></div>
+        <div id="retouchLibraryReviewContent" class="retouch-library-review-empty">正在读取待审核图片...</div>
+    </section>
 
     <div style="display:flex;gap:8px;margin-bottom:14px">
         <button class="lib-admin-tab active" data-cat="" onclick="setLibAdminTab(this,'')">全部</button>
@@ -337,7 +389,7 @@ function setLibAdminTab(btn, tabKey) {
     });
 }
 </script>
-<script src="admin.js?v=20260717-sheet-self"></script>
+<script src="admin.js?v=20260717-retouch-library-review"></script>
 </div>
 </body>
 </html>

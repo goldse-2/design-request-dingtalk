@@ -915,6 +915,7 @@ function initLibrary() {
         await doLibUpload();
     });
 
+    loadRetouchLibraryReviews();
     loadLibraryAdmin();
 }
 
@@ -1012,6 +1013,269 @@ async function doLibUpload() {
     } catch (e) {
         status.textContent = '上传失败：' + e.message;
     }
+}
+
+async function loadRetouchLibraryReviews() {
+    const container = document.getElementById('retouchLibraryReviewContent');
+    const count = document.getElementById('retouchLibraryReviewCount');
+    if (!container || !count) return;
+
+    container.className = 'retouch-library-review-empty';
+    container.textContent = '正在读取待审核图片...';
+    try {
+        const response = await fetch('/api/admin-retouch-library-review', { cache: 'no-store' });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.ok) throw new Error(result.error || `加载失败 (${response.status})`);
+        renderRetouchLibraryReviews(Array.isArray(result.reviews) ? result.reviews : []);
+    } catch (error) {
+        count.textContent = '—';
+        container.className = 'retouch-library-review-empty';
+        container.textContent = '待审核图片加载失败：' + error.message;
+    }
+}
+
+function renderRetouchLibraryReviews(reviews) {
+    const container = document.getElementById('retouchLibraryReviewContent');
+    const count = document.getElementById('retouchLibraryReviewCount');
+    if (!container || !count) return;
+
+    count.textContent = String(reviews.length);
+    if (!reviews.length) {
+        container.className = 'retouch-library-review-empty';
+        container.textContent = '目前没有等待收录的精修图片';
+        return;
+    }
+
+    container.className = 'retouch-library-review-grid';
+    container.innerHTML = '';
+    reviews.forEach(review => container.appendChild(createRetouchLibraryReviewCard(review)));
+}
+
+function createRetouchLibraryReviewCard(review) {
+    const card = document.createElement('article');
+    card.className = 'retouch-review-card';
+    card.dataset.reviewId = review.id;
+    const imageUrl = retouchReviewImageUrl(review);
+    const completedAt = formatRetouchReviewTime(review.createdAt);
+    card.innerHTML = `
+        <button type="button" class="retouch-review-image" aria-label="放大查看 ${retouchReviewEsc(review.sourceName || '精修图片')}">
+            <img src="${imageUrl}" alt="${retouchReviewEsc(review.sourceName || '精修图片')}" loading="lazy">
+            <span>点击放大</span>
+        </button>
+        <div class="retouch-review-body">
+            <div class="retouch-review-name" title="${retouchReviewEsc(review.sourceName || '')}">${retouchReviewEsc(review.sourceName || '精修图片')}</div>
+            <div class="retouch-review-meta">${retouchReviewEsc(review.submitterName || '未记录提交人')} 提交${completedAt ? ` · ${retouchReviewEsc(completedAt)}` : ''}</div>
+            <div class="retouch-review-actions">
+                <button type="button" class="retouch-review-btn" data-action="reject">不收录</button>
+                <button type="button" class="retouch-review-btn retouch-review-btn--primary" data-action="approve">收录到资料库</button>
+            </div>
+        </div>`;
+
+    card.querySelector('.retouch-review-image').onclick = () => {
+        openAdminImagePreview(imageUrl, review.sourceName || '精修图片');
+    };
+    card.querySelector('[data-action="approve"]').onclick = () => openRetouchLibraryApproval(review, card);
+    card.querySelector('[data-action="reject"]').onclick = () => rejectRetouchLibraryReview(review, card);
+    return card;
+}
+
+async function rejectRetouchLibraryReview(review, card) {
+    if (!confirm('确认不收录这张精修图片吗？原任务中的成品图仍会保留。')) return;
+    setRetouchReviewCardBusy(card, true);
+    try {
+        await submitRetouchLibraryReview({ id: review.id, decision: 'reject' });
+        removeRetouchLibraryReviewCard(card, '已标记为不收录');
+    } catch (error) {
+        setRetouchReviewCardBusy(card, false);
+        setRetouchLibraryReviewStatus('操作失败：' + error.message, true);
+    }
+}
+
+function openRetouchLibraryApproval(review, card) {
+    document.getElementById('retouchLibraryApprovalModal')?.remove();
+    const imageUrl = retouchReviewImageUrl(review);
+    const categories = availableLibraryCategories();
+    const previousOverflow = document.body.style.overflow;
+    const overlay = document.createElement('div');
+    overlay.id = 'retouchLibraryApprovalModal';
+    overlay.className = 'retouch-review-modal';
+    overlay.innerHTML = `
+        <div class="retouch-review-dialog" role="dialog" aria-modal="true" aria-labelledby="retouchReviewDialogTitle">
+            <div class="retouch-review-dialog-head">
+                <h3 id="retouchReviewDialogTitle">收录精修图片</h3>
+                <button type="button" class="retouch-review-dialog-close" aria-label="关闭">×</button>
+            </div>
+            <div class="retouch-review-dialog-body">
+                <button type="button" class="retouch-review-dialog-image" aria-label="放大查看精修图片"><img src="${imageUrl}" alt="${retouchReviewEsc(review.sourceName || '精修图片')}"></button>
+                <form class="retouch-review-form">
+                    <div class="retouch-review-field">
+                        <label for="retouchReviewCategory">分类</label>
+                        <input id="retouchReviewCategory" list="retouchReviewCategoryList" maxlength="60" autocomplete="off" required>
+                        <datalist id="retouchReviewCategoryList">${categories.map(category => `<option value="${retouchReviewEsc(category)}"></option>`).join('')}</datalist>
+                    </div>
+                    <div class="retouch-review-field">
+                        <label for="retouchReviewProduct">产品名称 / 文件夹名称</label>
+                        <input id="retouchReviewProduct" maxlength="80" autocomplete="off" required>
+                    </div>
+                    <div class="retouch-review-field">
+                        <label for="retouchReviewFileName">图片名称</label>
+                        <input id="retouchReviewFileName" maxlength="120" autocomplete="off" required>
+                        <small>不用填写格式，系统会保留原图格式</small>
+                    </div>
+                    <div class="retouch-review-dialog-status" aria-live="polite"></div>
+                    <div class="retouch-review-dialog-foot">
+                        <button type="button" class="retouch-review-btn" data-action="cancel">取消</button>
+                        <button type="submit" class="retouch-review-btn retouch-review-btn--primary">确认收录</button>
+                    </div>
+                </form>
+            </div>
+        </div>`;
+
+    const form = overlay.querySelector('form');
+    const categoryInput = overlay.querySelector('#retouchReviewCategory');
+    const productInput = overlay.querySelector('#retouchReviewProduct');
+    const fileNameInput = overlay.querySelector('#retouchReviewFileName');
+    const submitButton = form.querySelector('[type="submit"]');
+    const status = overlay.querySelector('.retouch-review-dialog-status');
+    const currentCategory = document.getElementById('libCategory')?.value || '';
+    categoryInput.value = currentCategory && currentCategory !== '__add__' ? currentCategory : (categories[0] || '');
+    productInput.value = review.suggestedProduct || '';
+    fileNameInput.value = review.suggestedName || String(review.sourceName || '').replace(/\.[^.]+$/, '');
+
+    const close = () => {
+        document.removeEventListener('keydown', onKeyDown);
+        document.body.style.overflow = previousOverflow;
+        overlay.remove();
+    };
+    const onKeyDown = event => { if (event.key === 'Escape') close(); };
+    overlay.querySelector('.retouch-review-dialog-close').onclick = close;
+    overlay.querySelector('[data-action="cancel"]').onclick = close;
+    overlay.querySelector('.retouch-review-dialog-image').onclick = () => openAdminImagePreview(imageUrl, review.sourceName || '精修图片');
+    overlay.onclick = event => { if (event.target === overlay) close(); };
+    form.onsubmit = async event => {
+        event.preventDefault();
+        if (submitButton.disabled) return;
+        const category = categoryInput.value.trim();
+        const product = productInput.value.trim();
+        const fileName = fileNameInput.value.trim();
+        if (!category || !product || !fileName) {
+            status.textContent = '请完整填写分类、产品名称和图片名称';
+            return;
+        }
+        submitButton.disabled = true;
+        submitButton.textContent = '正在收录...';
+        status.textContent = '';
+        try {
+            const result = await submitRetouchLibraryReview({
+                id: review.id,
+                decision: 'approve',
+                category,
+                product,
+                fileName
+            });
+            rememberLibraryCategory(category);
+            close();
+            removeRetouchLibraryReviewCard(card, `已收录：${result.file?.name || fileName}`);
+            loadLibraryAdmin();
+        } catch (error) {
+            status.textContent = error.message;
+            submitButton.disabled = false;
+            submitButton.textContent = '确认收录';
+        }
+    };
+
+    document.addEventListener('keydown', onKeyDown);
+    document.body.style.overflow = 'hidden';
+    document.body.appendChild(overlay);
+    categoryInput.focus();
+}
+
+async function submitRetouchLibraryReview(payload) {
+    const response = await fetch('/api/admin-retouch-library-review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok) throw new Error(result.error || `操作失败 (${response.status})`);
+    return result;
+}
+
+function retouchReviewImageUrl(review) {
+    return `/api/library-file/${encodeURIComponent(review.sourceKey)}?v=${encodeURIComponent(review.createdAt || '')}`;
+}
+
+function retouchReviewEsc(value) {
+    return String(value || '').replace(/[&<>"']/g, character => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    }[character]));
+}
+
+function availableLibraryCategories() {
+    const select = document.getElementById('libCategory');
+    const categories = select
+        ? Array.from(select.options).map(option => option.value).filter(value => value && value !== '__add__')
+        : [];
+    return [...new Set(categories)];
+}
+
+function rememberLibraryCategory(category) {
+    let categories = availableLibraryCategories();
+    try {
+        const saved = JSON.parse(localStorage.getItem('lib_categories'));
+        if (Array.isArray(saved) && saved.length) categories = saved;
+    } catch {}
+    if (!categories.includes(category)) {
+        categories.push(category);
+        localStorage.setItem('lib_categories', JSON.stringify(categories));
+    }
+    const select = document.getElementById('libCategory');
+    if (select && !Array.from(select.options).some(option => option.value === category)) {
+        const option = document.createElement('option');
+        option.value = category;
+        option.textContent = category;
+        select.insertBefore(option, select.querySelector('option[value="__add__"]'));
+    }
+}
+
+function setRetouchReviewCardBusy(card, busy) {
+    card.querySelectorAll('button').forEach(button => { button.disabled = busy; });
+}
+
+function removeRetouchLibraryReviewCard(card, message) {
+    card.remove();
+    const container = document.getElementById('retouchLibraryReviewContent');
+    const remaining = container?.querySelectorAll('.retouch-review-card').length || 0;
+    document.getElementById('retouchLibraryReviewCount').textContent = String(remaining);
+    if (!remaining && container) {
+        container.className = 'retouch-library-review-empty';
+        container.textContent = '目前没有等待收录的精修图片';
+    }
+    setRetouchLibraryReviewStatus(message, false);
+}
+
+function setRetouchLibraryReviewStatus(message, isError) {
+    const status = document.getElementById('retouchLibraryReviewStatus');
+    if (!status) return;
+    status.textContent = message || '';
+    status.style.color = isError ? '#dc2626' : '#047857';
+}
+
+function formatRetouchReviewTime(value) {
+    const date = new Date(value || '');
+    if (!Number.isFinite(date.getTime())) return '';
+    return date.toLocaleString('zh-CN', {
+        timeZone: 'Asia/Shanghai',
+        month: 'numeric',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+    });
 }
 
 async function loadLibraryAdmin() {
