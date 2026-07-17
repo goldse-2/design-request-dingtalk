@@ -18,7 +18,8 @@ export async function onRequestGet(context) {
         const rpaOnly = url.searchParams.get('rpaOnly') === '1';
         const imageOnly = url.searchParams.get('imageOnly') === '1';
         const autoSendThreshold = 2 * 60 * 1000;
-        const overdueThreshold = 15 * 60 * 1000;
+        const resultTimeoutThreshold = 10 * 60 * 1000;
+        const retouchTimeoutThreshold = 30 * 60 * 1000;
         const autoSent = [];
         const autoErrors = [];
         const notified = [];
@@ -212,12 +213,15 @@ export async function onRequestGet(context) {
                 continue;
             }
             if (task.status !== 'processing' || !task.sentToRpa) continue;
-            if (task.overdueNotified) continue;
+            if (task.overdueNotified) {
+                deferredProcessingQueue.push(task.id);
+                continue;
+            }
             const sentAt = task.sentToRpaAt ? new Date(task.sentToRpaAt).getTime() : 0;
-            const workflowOverdueThreshold = task.workflow?.type === 'sheet_self'
-                ? (task.workflow.stage === 'retouch' ? 40 * 60 * 1000 : 20 * 60 * 1000)
-                : overdueThreshold;
-            if (!sentAt || (now - sentAt) < workflowOverdueThreshold) {
+            const isRetouchStage = task.mode === 'retouch'
+                || (task.workflow?.type === 'sheet_self' && task.workflow.stage === 'retouch');
+            const timeoutThreshold = isRetouchStage ? retouchTimeoutThreshold : resultTimeoutThreshold;
+            if (!sentAt || (now - sentAt) < timeoutThreshold) {
                 nextProcessingQueue.push(task.id);
                 continue;
             }
@@ -227,18 +231,42 @@ export async function onRequestGet(context) {
                 if (retryResult.retried) nextProcessingQueue.push(task.id);
                 if (retryResult.retried) autoSent.push(task.id);
                 if (retryResult.error) autoErrors.push({ id: task.id, error: retryResult.error });
+                if (retryResult.exhausted || retryResult.error) deferredProcessingQueue.push(task.id);
                 continue;
             }
 
-            if (!isAdminLibraryCutoutTask(task) && !task.silent && env.DINGTALK_APPKEY && env.DINGTALK_APPSECRET && env.ADMIN_USER_ID) {
-                const p = notifyOverdue(env, task).then(() => {
-                    task.overdueNotified = true;
-                    return env.SUBMISSIONS.put(task.id, JSON.stringify(task), studioTaskPutOptions(task));
-                }).catch(e => console.error('Notify overdue failed:', e.message));
-                if (waitUntil) waitUntil(p);
-                else await p;
-                notified.push(task.id);
+            if (isRetouchStage) {
+                const result = await markTaskOverdue(env, task, 'retouch');
+                if (result.notified) notified.push(task.id);
+                (result.settled ? deferredProcessingQueue : nextProcessingQueue).push(task.id);
+                continue;
             }
+
+            const timeoutRetries = Math.max(0, Number(task.resultTimeoutRetryCount || 0));
+            if (timeoutRetries < 1) {
+                task.resultTimeoutRetryCount = 1;
+                task.resultTimeoutFirstAt = new Date().toISOString();
+                try {
+                    await resendStudioTaskAfterResultTimeout(env, task, new URL(request.url).origin);
+                    autoSent.push(task.id);
+                    nextProcessingQueue.push(task.id);
+                } catch (error) {
+                    const errorText = String(error?.message || error).slice(0, 300);
+                    task.status = 'processing';
+                    task.sentToRpa = true;
+                    task.resultTimeoutRetryError = errorText;
+                    task.resultTimeoutRetryFailedAt = new Date().toISOString();
+                    autoErrors.push({ id: task.id, error: errorText });
+                    const result = await markTaskOverdue(env, task, 'retry_failed');
+                    if (result.notified) notified.push(task.id);
+                    (result.settled ? deferredProcessingQueue : nextProcessingQueue).push(task.id);
+                }
+                continue;
+            }
+
+            const result = await markTaskOverdue(env, task, 'twice');
+            if (result.notified) notified.push(task.id);
+            (result.settled ? deferredProcessingQueue : nextProcessingQueue).push(task.id);
         }
 
         const finalAutoQueue = unique([...nextAutoQueue, ...deferredAutoQueue]);
@@ -367,8 +395,7 @@ async function migrateQueues(env) {
             }
 
             if (status === 'processing'
-                && meta.sentToRpa
-                && !meta.overdueNotified) {
+                && meta.sentToRpa) {
                 processingQueueIds.push(key.name);
             }
         }
@@ -752,13 +779,103 @@ function studioModeText(mode) {
     return mode === 'free' ? '自由模式' : '程序模式';
 }
 
+async function resendStudioTaskAfterResultTimeout(env, task, origin) {
+    const webhookUrl = await resolveRpaWebhookUrl(env, task);
+    let payload = task.rpaSentPayload;
+    let pickedSize = '';
+
+    if (!payload?.params) {
+        const built = buildRpaPayload(task, origin);
+        payload = built.payload;
+        pickedSize = built.pickedSize;
+        if (task.mode === 'free' && taskNeedsRpaTranslation(task)) {
+            payload.params["描述"] = await translateForRpa(env, payload.params["描述"]);
+        } else if (task.mode === 'program') {
+            const translatedFields = await translateProgramFieldsForRpa(env, {
+                productName: task.productName || '-',
+                title: task.title || '-',
+                subtitle: task.subtitle || '-',
+                otherText: task.otherText || '-'
+            });
+            payload.params["产品名称"] = translatedFields.productName;
+            payload.params["标题"] = translatedFields.title;
+            payload.params["副标题"] = translatedFields.subtitle;
+            payload.params["其他文案"] = translatedFields.otherText;
+        }
+    }
+
+    const response = await fetchWithTimeout(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    }, 12000);
+    const responseText = await response.text();
+    if (!response.ok) throw new Error(`RPA webhook HTTP ${response.status}: ${responseText.slice(0, 300)}`);
+
+    const retriedAt = new Date().toISOString();
+    task.status = 'processing';
+    task.sentToRpa = true;
+    task.sentToRpaAt = retriedAt;
+    task.resultTimeoutRetriedAt = retriedAt;
+    task.resultTimeoutRetryError = '';
+    task.autoRpaLastAttemptAt = retriedAt;
+    task.autoRpaLastResponse = responseText.slice(0, 300);
+    task.rpaSentPayload = payload;
+    if (!task.size && pickedSize) task.size = pickedSize;
+    await env.SUBMISSIONS.put(task.id, JSON.stringify(task), studioTaskPutOptions(task));
+}
+
+async function resolveRpaWebhookUrl(env, task) {
+    if (task.mode === 'program') {
+        return await safeKvGet(env.SUBMISSIONS, 'studio:rpaWebhookUrl:program')
+            || env.RPA_WEBHOOK_URL_PROGRAM
+            || 'https://api-rpa.bazhuayu.com/api/v1/bots/webhooks/6a3a40ac622e84b667229fde/invoke';
+    }
+    if (task.mode === 'cutout') {
+        return env.RPA_WEBHOOK_URL_CUTOUT
+            || 'https://api-rpa.bazhuayu.com/api/v1/bots/webhooks/6a573bbfc272480ce63d81d4/invoke';
+    }
+    if (task.mode === 'free') {
+        return env.RPA_WEBHOOK_URL_FREE
+            || await safeKvGet(env.SUBMISSIONS, 'studio:rpaWebhookUrl:free')
+            || 'https://api-rpa.bazhuayu.com/api/v1/bots/webhooks/6a31134a622e84b6672263ee/invoke';
+    }
+    throw new Error(`不支持自动重发的任务模式：${task.mode || 'unknown'}`);
+}
+
+async function markTaskOverdue(env, task, reason) {
+    const shouldNotify = !isAdminLibraryCutoutTask(task)
+        && !task.silent
+        && env.DINGTALK_APPKEY
+        && env.DINGTALK_APPSECRET
+        && env.ADMIN_USER_ID;
+    let notified = false;
+
+    if (shouldNotify) {
+        try {
+            await notifyOverdue(env, task, reason);
+            task.overdueNotified = true;
+            task.overdueNotifiedAt = new Date().toISOString();
+            notified = true;
+        } catch (error) {
+            console.error('Notify overdue failed:', task.id, error.message);
+        }
+    } else {
+        task.overdueNotified = true;
+        task.overdueNotifiedAt = new Date().toISOString();
+    }
+
+    await env.SUBMISSIONS.put(task.id, JSON.stringify(task), studioTaskPutOptions(task));
+    return { notified, settled: task.overdueNotified === true };
+}
+
 async function notifyAutoSent(env, task) {
     const token = await getAccessToken(env);
     const modeText = studioModeText(task.mode);
     const submitterName = task.submitter?.name || '匿名';
     const desc = task.desc ? task.desc.slice(0, 50) + (task.desc.length > 50 ? '...' : '') : '-';
     const content = `✅ 图片制作任务已自动发送\n\n任务 ID：${task.id}\n模式：${modeText}\n提交人：${submitterName}\n描述：${desc}\n\n已自动发送到 RPA，请等待出图。`;
-    return fetch('https://api.dingtalk.com/v1.0/robot/oToMessages/batchSend', {
+    const response = await fetch('https://api.dingtalk.com/v1.0/robot/oToMessages/batchSend', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-acs-dingtalk-access-token': token },
         body: JSON.stringify({
@@ -768,13 +885,20 @@ async function notifyAutoSent(env, task) {
             msgParam: JSON.stringify({ content })
         })
     });
+    if (!response.ok) throw new Error(`DingTalk HTTP ${response.status}`);
+    return response;
 }
 
-async function notifyOverdue(env, task) {
+async function notifyOverdue(env, task, reason = 'twice') {
     const token = await getAccessToken(env);
     const modeText = studioModeText(task.mode);
-    const content = `⏰ RPA 任务超时提醒\n\n任务 ID：${task.id}\n模式：${modeText}\n提交人：${task.submitter?.name || '匿名'}\n已发送 RPA 超过 15 分钟，但尚未收到成品图。\n\n请检查 RPA 执行情况。`;
-    return fetch('https://api.dingtalk.com/v1.0/robot/oToMessages/batchSend', {
+    const detail = reason === 'retouch'
+        ? '精修任务已等待 30 分钟仍未收到成品图。系统没有自动重发，任务继续保留在处理队列。'
+        : reason === 'retry_failed'
+            ? '首次发送 10 分钟未收到成品图，自动重发时又发生错误。系统已停止继续自动重发，任务继续保留在处理队列。'
+            : '首次发送和自动重发后，连续两次各等待 10 分钟仍未收到成品图。系统已停止继续自动重发，任务继续保留在处理队列。';
+    const content = `⏰ RPA 任务超时提醒\n\n任务 ID：${task.id}\n模式：${modeText}\n提交人：${task.submitter?.name || '匿名'}\n${detail}\n\n请检查 RPA 执行情况，必要时在管理台手动重新发送。`;
+    const response = await fetch('https://api.dingtalk.com/v1.0/robot/oToMessages/batchSend', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-acs-dingtalk-access-token': token },
         body: JSON.stringify({
@@ -784,6 +908,8 @@ async function notifyOverdue(env, task) {
             msgParam: JSON.stringify({ content })
         })
     });
+    if (!response.ok) throw new Error(`DingTalk HTTP ${response.status}`);
+    return response;
 }
 
 async function getAccessToken(env) {

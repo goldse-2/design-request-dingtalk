@@ -114,6 +114,17 @@ export async function dispatchStudioTaskToRpa({ env, task, origin, webhookUrl, p
     task.rpaSentPayload = payload;
     task.autoRpaLastError = '';
     task.autoRpaLastAttemptAt = task.sentToRpaAt;
+    if (persistWebhook) {
+        task.overdueNotified = false;
+        task.overdueNotifiedAt = '';
+        task.resultTimeoutRetryCount = 0;
+        task.resultTimeoutFirstAt = '';
+        task.resultTimeoutRetriedAt = '';
+        task.resultTimeoutRetryError = '';
+        task.resultTimeoutRetryFailedAt = '';
+        task.workflowTimeoutRetries = 0;
+        task.workflowLastTimeoutAt = '';
+    }
     if (!task.size && pickedSize) task.size = pickedSize;
     return { status: response.status, payload, response: responseText.slice(0, 500), webhookUrl: effectiveWebhookUrl };
 }

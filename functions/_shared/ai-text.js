@@ -1,5 +1,5 @@
 const DEFAULT_API_BASE = 'https://jojocode.com';
-const DEFAULT_MODEL = 'claude-opus-4-7';
+const DEFAULT_MODEL = 'gpt-5.6-terra';
 
 export async function generateAiText(env, options) {
     const apiBase = String(env.AI_API_BASE || DEFAULT_API_BASE).replace(/\/+$/, '');

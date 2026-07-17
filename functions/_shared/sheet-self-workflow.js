@@ -32,7 +32,7 @@ export async function putSheetSelfSlot(env, slot, completed = false) {
     return slot;
 }
 
-export async function startSheetSelfProgramSlot(env, parent, slot, origin) {
+export async function startSheetSelfProgramSlot(env, parent, slot, origin, force = false) {
     slot.stage = 'program';
     slot.error = '';
     slot.failedStage = '';
@@ -49,7 +49,7 @@ export async function startSheetSelfProgramSlot(env, parent, slot, origin) {
         stage: 'program'
     });
     try {
-        return await createAndDispatchChild(env, task, origin);
+        return await createAndDispatchChild(env, task, origin, force);
     } catch (error) {
         await markSlotError(env, slot, 'program', error, origin);
         throw error;
@@ -181,6 +181,7 @@ export async function retrySheetSelfSlot(env, parent, slot, origin) {
     const retouchTasks = await readTasks(env, slot.children?.retouch || []);
     const pendingRetouch = retouchTasks.find(task => task.status !== 'done');
     if (pendingRetouch) {
+        await resetChildTimeoutForManualRetry(env, pendingRetouch);
         slot.stage = 'retouch';
         slot.error = '';
         slot.errorNotifiedAt = '';
@@ -192,6 +193,7 @@ export async function retrySheetSelfSlot(env, parent, slot, origin) {
     const cutoutTasks = await readTasks(env, slot.children?.cutout || []);
     const pendingCutout = cutoutTasks.find(task => task.status !== 'done');
     if (pendingCutout) {
+        await resetChildTimeoutForManualRetry(env, pendingCutout);
         slot.stage = 'cutout';
         slot.error = '';
         slot.errorNotifiedAt = '';
@@ -210,11 +212,12 @@ export async function retrySheetSelfSlot(env, parent, slot, origin) {
         await finishSheetSelfParent(env, parent);
         return { stage: 'done', notified: true };
     }
+    if (programTasks[0]) await resetChildTimeoutForManualRetry(env, programTasks[0]);
 
     if (slot.photographer) {
         if (!Array.isArray(slot.cutoutKeys) || slot.cutoutKeys.length !== 2) throw new Error('两张白底抠图尚未完成');
     }
-    await startSheetSelfProgramSlot(env, parent, slot, origin);
+    await startSheetSelfProgramSlot(env, parent, slot, origin, true);
     return { stage: 'program' };
 }
 
@@ -222,10 +225,18 @@ export async function retrySheetSelfChildAfterTimeout(env, task, origin) {
     if (task?.workflow?.type !== 'sheet_self') return { handled: false };
     const slot = await getSheetSelfSlot(env, task.workflow.parentId, task.workflow.slotIndex);
     if (!slot) return { handled: false };
-    const retries = Number(task.workflowTimeoutRetries || 0);
-    if (retries >= 2) {
-        await markSlotError(env, slot, task.workflow.stage, new Error('当前环节自动重试 2 次后仍未收到结果'), origin);
+    if (task.workflow.stage === 'retouch' || task.mode === 'retouch') {
+        await markSlotError(env, slot, 'retouch', new Error('精修环节等待 30 分钟仍未收到结果，未自动重发'), origin);
         task.overdueNotified = true;
+        task.overdueNotifiedAt = new Date().toISOString();
+        await env.SUBMISSIONS.put(task.id, JSON.stringify(task), studioTaskPutOptions(task));
+        return { handled: true, exhausted: true, retrySkipped: true };
+    }
+    const retries = Number(task.workflowTimeoutRetries || 0);
+    if (retries >= 1) {
+        await markSlotError(env, slot, task.workflow.stage, new Error('首次发送和自动重发后，连续两次各等待 10 分钟仍未收到结果'), origin);
+        task.overdueNotified = true;
+        task.overdueNotifiedAt = new Date().toISOString();
         await env.SUBMISSIONS.put(task.id, JSON.stringify(task), studioTaskPutOptions(task));
         return { handled: true, exhausted: true };
     }
@@ -244,6 +255,12 @@ export async function retrySheetSelfChildAfterTimeout(env, task, origin) {
         return { handled: true, retried: true, retries: retries + 1 };
     } catch (error) {
         await markSlotError(env, slot, task.workflow.stage, error, origin);
+        task.status = 'processing';
+        task.sentToRpa = true;
+        task.overdueNotified = true;
+        task.overdueNotifiedAt = new Date().toISOString();
+        task.resultTimeoutRetryError = String(error?.message || error).slice(0, 300);
+        await env.SUBMISSIONS.put(task.id, JSON.stringify(task), studioTaskPutOptions(task));
         return { handled: true, error: String(error?.message || error) };
     }
 }
@@ -399,6 +416,16 @@ async function markSlotError(env, slot, stage, error, origin = '') {
 async function readTasks(env, ids) {
     const raws = await Promise.all((ids || []).map(id => env.SUBMISSIONS.get(id).catch(() => null)));
     return raws.filter(Boolean).map(raw => JSON.parse(raw));
+}
+
+async function resetChildTimeoutForManualRetry(env, task) {
+    task.overdueNotified = false;
+    task.overdueNotifiedAt = '';
+    task.workflowTimeoutRetries = 0;
+    task.workflowLastTimeoutAt = '';
+    task.resultTimeoutRetryError = '';
+    task.workflowError = '';
+    await env.SUBMISSIONS.put(task.id, JSON.stringify(task), studioTaskPutOptions(task));
 }
 
 async function appendQueue(kv, key, taskId) {
