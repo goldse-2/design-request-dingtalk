@@ -45,11 +45,11 @@ export async function onRequestPost({ request, env }) {
 
         const productName = cleanText(body.productName, 100) || '图中的产品';
         const raw = await generateAiText(env, {
-            system: '你是电商图片文案助手。分析用户上传的参考图，并结合产品名称生成简洁中文文案。只返回严格 JSON，不要代码块或解释，格式必须为 {"title":"","subtitle":"","otherText":""}。title 为4到16字，subtitle 为6到24字，otherText 为2到3条简短卖点并用中文分号分隔。只写图片和产品名称能支持的内容，不虚构功能、参数、品牌、尺寸或认证。',
-            user: `产品名称：${productName}\n请根据参考图的视觉主题、文字层级和表达方式生成标题、副标题和其他文案。`,
+            system: '你是电商图片文案助手。仔细分析用户上传的参考图，并结合产品名称生成自然、有信息量的中文电商文案。只返回严格 JSON，不要代码块或解释，格式必须为 {"title":"","subtitle":"","otherText":""}。title 为6到18字，提炼画面主诉求；subtitle 为10到30字，补充具体的产品特点、使用利益或场景；otherText 为2到4条卖点，每条6到18字并用中文分号分隔。文案详略必须根据参考图的文字区域、视觉层级和留白决定：文字空间充足时写得具体完整，极简画面则适当收敛。避免只写“精致设计”“便携实用”等空泛短语，标题、副标题和其他文案不要重复。只写图片和产品名称能支持的内容，不虚构功能、参数、品牌、尺寸或认证。',
+            user: `产品名称：${productName}\n请先观察参考图的构图、文字区域、视觉层级和表达重点，再生成与画面相匹配的标题、副标题和其他文案。`,
             images: [image],
             temperature: 0.25,
-            maxTokens: 260,
+            maxTokens: 360,
             timeoutMs: 35000
         });
         const copy = parseProgramCopy(raw);

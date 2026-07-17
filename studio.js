@@ -492,7 +492,7 @@ const SHEET_SELF_FORM = `
                 </div>
                 <small>只需填写一次，提交时会自动用于下面所有已填写的图片位。</small>
             </div>
-            <div class="sheet-self-table-head" aria-hidden="true"><span>图片 / 尺寸</span><span>其他文案</span><span>标题与副标题</span><span>素材图片</span><span>设置</span></div>
+            <div class="sheet-self-table-head" aria-hidden="true"><span>图片 / 尺寸</span><span class="sheet-self-table-title">其他文案 <small>可选，输入中文会自动翻译成英语，英语默认</small></span><span class="sheet-self-table-title">标题与副标题 <small>可选，输入中文会自动翻译成英语，英语默认</small></span><span>素材图片</span><span>设置</span></div>
             <div class="sheet-self-grid" id="sheetSelfGrid"></div>
             <div class="sheet-self-add-row">
                 <button type="button" class="sheet-self-add" id="sheetSelfAddSlot"><span aria-hidden="true">+</span> 添加图片位 <small id="sheetSelfSlotCount">3/8</small></button>
@@ -1430,6 +1430,11 @@ function initSheetSelfMode() {
         }
     });
     grid.addEventListener('click', event => {
+        const previewButton = event.target.closest('[data-sheet-image-preview]');
+        if (previewButton) {
+            openSheetSelfImagePreview(previewButton.dataset.sheetImagePreview, previewButton.dataset.previewLabel);
+            return;
+        }
         const copyButton = event.target.closest('[data-sheet-generate-copy]');
         if (copyButton) {
             runSheetSelfCopyGeneration(Number(copyButton.dataset.slotIndex));
@@ -1524,7 +1529,7 @@ function renderSheetSelfSlot(slot, slotIndex) {
             </select></label>
         </div>
         <div class="sheet-self-product">
-            <div class="sheet-self-field"><label>其他文案</label><textarea data-sheet-field="otherText" data-slot-index="${slotIndex}" maxlength="300" placeholder="可选，多个卖点可用分号分隔">${sheetSelfEsc(slot.otherText)}</textarea></div>
+            <div class="sheet-self-field"><label>其他文案 <span class="sheet-self-field-note">可选，中文自动翻译成英语</span></label><textarea data-sheet-field="otherText" data-slot-index="${slotIndex}" maxlength="300" placeholder="可选，多个卖点可用分号分隔">${sheetSelfEsc(slot.otherText)}</textarea></div>
         </div>
         <div class="sheet-self-fields">
             <div class="sheet-self-copy-tools">
@@ -1534,8 +1539,8 @@ function renderSheetSelfSlot(slot, slotIndex) {
                 </button>
                 <div class="program-ai-status${copyState ? ' ' + copyState : ''}">${sheetSelfEsc(copyStatus)}</div>
             </div>
-            <div class="sheet-self-field"><label>标题</label><input data-sheet-field="title" data-slot-index="${slotIndex}" maxlength="100" value="${sheetSelfEsc(slot.title)}" placeholder="可选"></div>
-            <div class="sheet-self-field"><label>副标题</label><input data-sheet-field="subtitle" data-slot-index="${slotIndex}" maxlength="100" value="${sheetSelfEsc(slot.subtitle)}" placeholder="可选"></div>
+            <div class="sheet-self-field"><label>标题 <span class="sheet-self-field-note">可选，中文自动翻译成英语</span></label><input data-sheet-field="title" data-slot-index="${slotIndex}" maxlength="100" value="${sheetSelfEsc(slot.title)}" placeholder="可选"></div>
+            <div class="sheet-self-field"><label>副标题 <span class="sheet-self-field-note">可选，中文自动翻译成英语</span></label><input data-sheet-field="subtitle" data-slot-index="${slotIndex}" maxlength="100" value="${sheetSelfEsc(slot.subtitle)}" placeholder="可选"></div>
         </div>
         <div class="sheet-self-media">
             <div class="sheet-self-images${slot.photographer ? ' is-photographer' : ''}">
@@ -1562,11 +1567,12 @@ function renderSheetSelfSlot(slot, slotIndex) {
 
 function renderSheetSelfImage(file, slotIndex, type, productIndex, label, sourceType = type) {
     if (file?.key) {
+        const imageUrl = sheetSelfImageUrl(file.key);
         const removeAttrs = type === 'reference'
             ? `data-sheet-remove="reference" data-slot-index="${slotIndex}"`
             : `data-sheet-remove="product" data-slot-index="${slotIndex}" data-product-index="${productIndex}"`;
         return `<div class="sheet-self-image-slot ${type === 'reference' ? 'is-reference' : 'is-product'}">
-            <img src="${sheetSelfImageUrl(file.key)}" alt="${sheetSelfEsc(label)}" loading="lazy">
+            <button type="button" class="sheet-self-image-preview" data-sheet-image-preview="${sheetSelfEsc(imageUrl)}" data-preview-label="${sheetSelfEsc(label)}" title="点击放大查看" aria-label="放大查看${sheetSelfEsc(label)}"><img src="${sheetSelfEsc(imageUrl)}" alt="${sheetSelfEsc(label)}" loading="lazy"></button>
             <span class="sheet-self-image-badge">${sheetSelfEsc(label)}</span>
             <button type="button" class="sheet-self-image-remove" ${removeAttrs} title="移除${sheetSelfEsc(label)}" aria-label="移除${sheetSelfEsc(label)}">×</button>
         </div>`;
@@ -1577,6 +1583,44 @@ function renderSheetSelfImage(file, slotIndex, type, productIndex, label, source
             <span>${label}<br>${sourceType === 'a_plus' ? '上传上下两张 1464 × 600' : '单张最大 8 MB'}</span>
         </button>
     </div>`;
+}
+
+function openSheetSelfImagePreview(imageUrl, label) {
+    if (!imageUrl) return;
+    const existing = document.getElementById('sheetSelfImagePreview');
+    if (existing?.closePreview) existing.closePreview();
+
+    const previousOverflow = document.body.style.overflow;
+    const overlay = document.createElement('div');
+    const previewLabel = label || '素材图片';
+    overlay.id = 'sheetSelfImagePreview';
+    overlay.className = 'sheet-image-preview-overlay';
+    overlay.innerHTML = `<div class="sheet-image-preview-dialog" role="dialog" aria-modal="true" aria-label="${sheetSelfEsc(previewLabel)}">
+        <div class="sheet-image-preview-head"><strong>${sheetSelfEsc(previewLabel)}</strong><button type="button" class="sheet-image-preview-close" aria-label="关闭大图">×</button></div>
+        <div class="sheet-image-preview-stage"><span class="sheet-image-preview-status">图片加载中...</span><img src="${sheetSelfEsc(imageUrl)}" alt="${sheetSelfEsc(previewLabel)}"></div>
+    </div>`;
+
+    const close = () => {
+        document.removeEventListener('keydown', onKeydown);
+        document.body.style.overflow = previousOverflow;
+        overlay.remove();
+    };
+    const onKeydown = event => { if (event.key === 'Escape') close(); };
+    overlay.closePreview = close;
+    overlay.querySelector('.sheet-image-preview-close').addEventListener('click', close);
+    overlay.addEventListener('click', event => { if (event.target === overlay) close(); });
+    const image = overlay.querySelector('img');
+    const status = overlay.querySelector('.sheet-image-preview-status');
+    image.addEventListener('load', () => { status.hidden = true; });
+    image.addEventListener('error', () => { status.textContent = '图片加载失败，请稍后重试'; });
+    document.addEventListener('keydown', onKeydown);
+    document.body.style.overflow = 'hidden';
+    document.body.appendChild(overlay);
+    if (image.complete) {
+        if (image.naturalWidth > 0) status.hidden = true;
+        else status.textContent = '图片加载失败，请稍后重试';
+    }
+    overlay.querySelector('.sheet-image-preview-close').focus();
 }
 
 function normalizeSheetSelfSize(value) {

@@ -219,6 +219,8 @@
         .sheet-self-global-product input:focus { border-color:#6366f1; box-shadow:0 0 0 3px rgba(99,102,241,.1); }
         .sheet-self-global-product small { color:#9ca3af; font-size:.69rem; line-height:1.45; }
         .sheet-self-table-head { display:grid; grid-template-columns:110px minmax(160px,.9fr) minmax(220px,1.1fr) minmax(300px,1.5fr) minmax(125px,.7fr); gap:18px; padding:10px 20px; border-bottom:1px solid #e5e7eb; background:#f8fafc; color:#6b7280; font-size:.67rem; font-weight:700; }
+        .sheet-self-table-title { display:flex; align-items:baseline; gap:5px; flex-wrap:wrap; }
+        .sheet-self-table-title small { color:#9ca3af; font-size:.59rem; font-weight:500; line-height:1.35; }
         .sheet-self-grid { display:grid; grid-template-columns:minmax(0,1fr); }
         .sheet-self-slot { display:grid; grid-template-columns:110px minmax(160px,.9fr) minmax(220px,1.1fr) minmax(300px,1.5fr) minmax(125px,.7fr); gap:18px; align-items:start; min-width:0; padding:16px 20px; border-bottom:1px solid #e9edf2; background:#fff; transition:background .15s; }
         .sheet-self-slot:last-child { border-bottom:0; }
@@ -238,6 +240,7 @@
         .sheet-self-field { min-width:0; }
         .sheet-self-field.full { grid-column:1/-1; }
         .sheet-self-field label { display:block; margin-bottom:4px; color:#4b5563; font-size:.72rem; font-weight:700; }
+        .sheet-self-field-note { display:none; color:#9ca3af; font-size:.61rem; font-weight:500; }
         .sheet-self-field input, .sheet-self-field textarea { width:100%; padding:8px 9px; border:1px solid #d8dde5; border-radius:6px; background:#fbfcfe; color:#111827; font-size:.76rem; outline:none; }
         .sheet-self-field textarea { min-height:56px; resize:vertical; line-height:1.45; }
         .sheet-self-field input:focus, .sheet-self-field textarea:focus { border-color:#6366f1; box-shadow:0 0 0 3px rgba(99,102,241,.1); }
@@ -252,9 +255,20 @@
         .sheet-self-image-choice { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; width:100%; height:100%; padding:6px; border:0; background:transparent; color:#6b7280; font:inherit; font-size:.63rem; line-height:1.3; text-align:center; cursor:pointer; }
         .sheet-self-image-choice:hover { background:#f5f7ff; color:#4338ca; }
         .sheet-self-image-slot img { width:100%; height:100%; object-fit:cover; display:block; }
-        .sheet-self-image-badge { position:absolute; left:4px; bottom:4px; max-width:calc(100% - 8px); padding:2px 5px; border-radius:4px; background:rgba(17,24,39,.78); color:#fff; font-size:.62rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-        .sheet-self-image-remove { position:absolute; top:4px; right:4px; display:grid; place-items:center; width:23px; height:23px; padding:0; border:0; border-radius:50%; background:rgba(17,24,39,.82); color:#fff; font-size:15px; cursor:pointer; }
+        .sheet-self-image-preview { display:block; width:100%; height:100%; padding:0; border:0; background:transparent; cursor:zoom-in; }
+        .sheet-self-image-preview:focus-visible { outline:2px solid #2563eb; outline-offset:-3px; }
+        .sheet-self-image-preview:hover img { filter:brightness(.94); }
+        .sheet-self-image-badge { position:absolute; z-index:2; left:4px; bottom:4px; max-width:calc(100% - 8px); padding:2px 5px; border-radius:4px; background:rgba(17,24,39,.78); color:#fff; font-size:.62rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; pointer-events:none; }
+        .sheet-self-image-remove { position:absolute; z-index:3; top:4px; right:4px; display:grid; place-items:center; width:23px; height:23px; padding:0; border:0; border-radius:50%; background:rgba(17,24,39,.82); color:#fff; font-size:15px; cursor:pointer; }
         .sheet-self-image-slot.is-loading { opacity:.58; pointer-events:none; }
+        .sheet-image-preview-overlay { position:fixed; inset:0; z-index:14000; display:grid; place-items:center; padding:24px; background:rgba(15,23,42,.78); backdrop-filter:blur(2px); }
+        .sheet-image-preview-dialog { display:grid; grid-template-rows:auto minmax(0,1fr); width:min(1120px,94vw); height:min(820px,90vh); overflow:hidden; border-radius:8px; background:#fff; box-shadow:0 24px 70px rgba(0,0,0,.35); }
+        .sheet-image-preview-head { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:12px 14px 12px 18px; border-bottom:1px solid #e5e7eb; }
+        .sheet-image-preview-head strong { overflow:hidden; color:#111827; font-size:.88rem; text-overflow:ellipsis; white-space:nowrap; }
+        .sheet-image-preview-close { display:grid; place-items:center; width:34px; height:34px; flex:0 0 34px; padding:0; border:0; border-radius:6px; background:#f1f5f9; color:#475569; font-size:21px; cursor:pointer; }
+        .sheet-image-preview-stage { position:relative; display:grid; place-items:center; min-height:0; padding:18px; overflow:auto; background:#f8fafc; }
+        .sheet-image-preview-stage img { display:block; max-width:100%; max-height:100%; object-fit:contain; }
+        .sheet-image-preview-status { position:absolute; color:#64748b; font-size:.8rem; }
         .sheet-self-setting { display:grid; gap:12px; min-width:0; padding-left:14px; border-left:1px solid #edf0f4; }
         .sheet-self-photo-row { display:flex; flex-direction:column; align-items:flex-start; gap:10px; margin:0; padding:0; }
         .sheet-self-photo-row + .sheet-self-photo-row { padding-top:12px; border-top:1px solid #edf0f4; }
@@ -293,6 +307,7 @@
         }
         @media (max-width: 1080px) {
             .sheet-self-table-head { display:none; }
+            .sheet-self-field-note { display:inline; }
             .sheet-self-slot { grid-template-columns:120px minmax(0,1fr) minmax(280px,.9fr); }
             .sheet-self-slot-head { grid-row:1/3; }
             .sheet-self-product { grid-column:2; }
@@ -535,6 +550,6 @@
     帮助中心
 </button>
 
-    <script src="studio.js?v=20260717-sheet8-sizes"></script>
+    <script src="studio.js?v=20260717-sheet-copy-preview"></script>
 </body>
 </html>
