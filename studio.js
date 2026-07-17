@@ -475,7 +475,7 @@ const SHEET_SELF_FORM = `
             <div class="sheet-self-table-head" aria-hidden="true"><span>图片</span><span>其他文案</span><span>标题与副标题</span><span>素材图片</span><span>设置</span></div>
             <div class="sheet-self-grid" id="sheetSelfGrid"></div>
             <div class="sheet-self-actions">
-                <p>开启“由摄影师决定”后，该图片位无需上传白底图；提交后由摄影师补传两张原图，系统自动完成精修、抠图和图生图。</p>
+                <p>整个流程时间需要1-3小时才能完成，请耐心等待</p>
                 <button class="sf-submit sheet-self-submit" id="sheetSelfSubmit">提交已填写图片</button>
             </div>
             <div id="sheetSelfStatus" class="studio-status" style="margin-top:10px"></div>
