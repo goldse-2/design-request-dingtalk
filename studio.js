@@ -1398,17 +1398,19 @@ function renderSheetSelfSlot(slot, slotIndex) {
             <div class="sheet-self-field"><label>副标题</label><input data-sheet-field="subtitle" data-slot-index="${slotIndex}" maxlength="100" value="${sheetSelfEsc(slot.subtitle)}" placeholder="可选"></div>
             <div class="sheet-self-field full"><label>其他文案</label><textarea data-sheet-field="otherText" data-slot-index="${slotIndex}" maxlength="300" placeholder="可选，多个卖点可用分号分隔">${sheetSelfEsc(slot.otherText)}</textarea></div>
         </div>
-        <div class="sheet-self-images">
-            ${reference}
-            ${products}
+        <div class="sheet-self-media">
+            <div class="sheet-self-images">
+                ${reference}
+                ${products}
+            </div>
+            <input type="file" accept="image/*" data-sheet-upload="reference" data-slot-index="${slotIndex}" id="sheetRefInput-${slotIndex}" hidden${uploadDisabled}>
+            <input type="file" accept="image/*" data-sheet-upload="product" data-slot-index="${slotIndex}" id="sheetProductInput-${slotIndex}" multiple hidden${uploadDisabled}>
+            <div class="sheet-self-photo-row">
+                <div class="sheet-self-photo-copy"><strong>由摄影师决定</strong><small>开启后，此图片位暂时不需要用户上传两张白底图</small></div>
+                <label class="sheet-self-switch" title="由摄影师提供两张拍摄原图"><input type="checkbox" data-sheet-photographer data-slot-index="${slotIndex}"${slot.photographer ? ' checked' : ''}><span></span></label>
+            </div>
+            <div class="sheet-self-slot-status${slot.status?.startsWith('失败') ? ' err' : ''}">${sheetSelfEsc(slot.status || (slot.uploading ? '图片上传中，请稍候...' : ''))}</div>
         </div>
-        <input type="file" accept="image/*" data-sheet-upload="reference" data-slot-index="${slotIndex}" id="sheetRefInput-${slotIndex}" hidden${uploadDisabled}>
-        <input type="file" accept="image/*" data-sheet-upload="product" data-slot-index="${slotIndex}" id="sheetProductInput-${slotIndex}" multiple hidden${uploadDisabled}>
-        <div class="sheet-self-photo-row">
-            <div class="sheet-self-photo-copy"><strong>由摄影师决定</strong><small>开启后，此图片位暂时不需要用户上传两张白底图</small></div>
-            <label class="sheet-self-switch" title="由摄影师提供两张拍摄原图"><input type="checkbox" data-sheet-photographer data-slot-index="${slotIndex}"${slot.photographer ? ' checked' : ''}><span></span></label>
-        </div>
-        <div class="sheet-self-slot-status${slot.status?.startsWith('失败') ? ' err' : ''}">${sheetSelfEsc(slot.status || (slot.uploading ? '图片上传中，请稍候...' : ''))}</div>
     </section>`;
 }
 
