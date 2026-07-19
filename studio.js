@@ -280,14 +280,37 @@ function renderAPlusDoubleLauncher(mode) {
                 </div>`;
 }
 
-function renderShootRequestLauncher() {
+function renderShootRequestLauncher(mode) {
     return `
-                <div class="studio-shoot-request">
-                    <button type="button" class="studio-shoot-request-btn" onclick="openShootModal()">
-                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M14.5 5 13 3h-2L9.5 5H6a3 3 0 0 0-3 3v9a3 3 0 0 0 3 3h12a3 3 0 0 0 3-3V8a3 3 0 0 0-3-3h-3.5Z"/><circle cx="12" cy="12.5" r="3.5"/></svg>
-                        <span>提交拍摄需求</span>
-                    </button>
-                    <div class="studio-shoot-request-copy">需要白底图和角度可以提交拍摄申请，我会立刻拍给你</div>
+                <div class="studio-photographer-decision" data-studio-photographer="${mode}">
+                    <div class="studio-photographer-decision-row">
+                        <div class="studio-photographer-decision-copy"><strong>由摄影师决定</strong><small>需要白底图或更多角度时可以开启</small></div>
+                        <div class="sheet-self-switch-control">
+                            <span class="sheet-self-switch-state is-off" id="${mode}PhotographerState">已关闭</span>
+                            <label class="sheet-self-switch" title="开启摄影需求补充"><input type="checkbox" id="${mode}PhotographerToggle" data-studio-photographer-toggle="${mode}" aria-controls="${mode}PhotographerPanel" aria-expanded="false"><span></span></label>
+                        </div>
+                    </div>
+                    <div class="studio-photographer-panel" id="${mode}PhotographerPanel" hidden>
+                        <div class="studio-photographer-grid">
+                            <div class="studio-photographer-upload-wrap">
+                                <label class="studio-photographer-upload" id="${mode}PhotographerUpload" for="${mode}PhotographerInput">
+                                    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 16V4m0 0L7 9m5-5 5 5"/><path d="M5 14v5h14v-5"/></svg>
+                                    <strong>上传拍摄案例图</strong>
+                                    <small>可选，留空则按参考图拍摄</small>
+                                </label>
+                                <button type="button" class="studio-photographer-remove" id="${mode}PhotographerRemove" aria-label="移除拍摄案例图" title="移除拍摄案例图" hidden>×</button>
+                                <input type="file" id="${mode}PhotographerInput" accept="image/*" hidden>
+                            </div>
+                            <div class="studio-photographer-note">
+                                <label for="${mode}PhotographerNote">拍摄备注 <span>可选</span></label>
+                                <textarea id="${mode}PhotographerNote" maxlength="300" placeholder="例如：参考这个角度、光线或摆放方式"></textarea>
+                            </div>
+                        </div>
+                        <div class="studio-photographer-actions">
+                            <div class="studio-photographer-status" id="${mode}PhotographerStatus"></div>
+                            <button type="button" class="studio-photographer-submit" id="${mode}PhotographerSubmit">提交拍摄需求</button>
+                        </div>
+                    </div>
                 </div>`;
 }
 
@@ -341,7 +364,7 @@ const FREE_FORM = `
                 </div>
                 <div class="prompt-mention-hint">提示：上传图片后，可在提示词中输入 <strong>@</strong> 引用图片，例如 <strong>@参考图1</strong></div>
 ${renderAPlusDoubleLauncher('free')}
-${renderShootRequestLauncher()}
+${renderShootRequestLauncher('free')}
             </div>
             <div class="sf-section">
                 <div class="sf-label">图片 <span class="sf-sub">（可选）</span> <span class="sf-sub" id="freeImgCount">(0/4)</span></div>
@@ -445,7 +468,7 @@ ${renderAPlusDoubleLauncher('program')}
                     </div>
                     <div class="sf-preview-list" id="progProductThumbs"></div>
                 </div>
-${renderShootRequestLauncher()}
+${renderShootRequestLauncher('program')}
             </div>
             <div class="sf-section" id="progSizeSection">
                 <div class="sf-label">尺寸 <span class="sf-req">*</span></div>
@@ -669,6 +692,10 @@ const VARIANT_FORM = `
     </div>`;
 
 const uploads = { freeImages: [], freeModel: null, freeScene: null, freeProduct: [], freeProduct1: null, freeProduct2: null, progRef: [], progProduct: [], retouchImages: [], cutoutImages: [], variantImages: [] };
+const inlineShootRequestState = {
+    free: { enabled: false, image: null, busy: false },
+    program: { enabled: false, image: null, busy: false }
+};
 const SHEET_SELF_DEFAULT_SLOT_COUNT = 3;
 const SHEET_SELF_SLOT_COUNT = 8;
 const SHEET_SELF_LOCAL_PREFIX = 'sheet_self_draft_v1:';
@@ -1069,6 +1096,155 @@ function openAPlusDoubleModal(mode) {
     document.body.appendChild(overlay);
 }
 
+function resetInlineShootRequestState(mode) {
+    const state = inlineShootRequestState[mode];
+    if (!state) return;
+    state.enabled = false;
+    state.image = null;
+    state.busy = false;
+}
+
+function initInlineShootRequest(mode) {
+    const state = inlineShootRequestState[mode];
+    const toggle = document.getElementById(`${mode}PhotographerToggle`);
+    const panel = document.getElementById(`${mode}PhotographerPanel`);
+    const input = document.getElementById(`${mode}PhotographerInput`);
+    const remove = document.getElementById(`${mode}PhotographerRemove`);
+    const submit = document.getElementById(`${mode}PhotographerSubmit`);
+    if (!state || !toggle || !panel || !input || !remove || !submit) return;
+
+    const applyToggleState = () => {
+        state.enabled = toggle.checked;
+        panel.hidden = !state.enabled;
+        toggle.setAttribute('aria-expanded', String(state.enabled));
+        const label = document.getElementById(`${mode}PhotographerState`);
+        if (label) {
+            label.textContent = state.enabled ? '已开启' : '已关闭';
+            label.classList.toggle('is-off', !state.enabled);
+        }
+    };
+
+    toggle.checked = false;
+    applyToggleState();
+    toggle.addEventListener('change', applyToggleState);
+    input.addEventListener('change', event => {
+        const file = event.target.files?.[0];
+        event.target.value = '';
+        if (!file) return;
+        const error = validateSheetSelfFile(file);
+        if (error) {
+            setInlineShootStatus(mode, error, true);
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => {
+            state.image = { file, name: file.name, mimeType: file.type, dataUrl: reader.result };
+            renderInlineShootImage(mode);
+            setInlineShootStatus(mode, '拍摄案例图已选择');
+        };
+        reader.onerror = () => setInlineShootStatus(mode, '图片读取失败，请重新选择', true);
+        reader.readAsDataURL(file);
+    });
+    remove.addEventListener('click', () => {
+        state.image = null;
+        renderInlineShootImage(mode);
+        setInlineShootStatus(mode, '');
+    });
+    submit.addEventListener('click', () => submitInlineShootRequest(mode));
+}
+
+function renderInlineShootImage(mode) {
+    const state = inlineShootRequestState[mode];
+    const upload = document.getElementById(`${mode}PhotographerUpload`);
+    const remove = document.getElementById(`${mode}PhotographerRemove`);
+    if (!state || !upload || !remove) return;
+    if (state.image?.dataUrl) {
+        upload.classList.add('has-image');
+        upload.innerHTML = `<img src="${sheetSelfEsc(state.image.dataUrl)}" alt="拍摄案例图"><span>拍摄案例图 · 点击更换</span>`;
+        remove.hidden = false;
+        return;
+    }
+    upload.classList.remove('has-image');
+    upload.innerHTML = `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 16V4m0 0L7 9m5-5 5 5"/><path d="M5 14v5h14v-5"/></svg><strong>上传拍摄案例图</strong><small>可选，留空则按参考图拍摄</small>`;
+    remove.hidden = true;
+}
+
+function setInlineShootStatus(mode, message, isError = false) {
+    const status = document.getElementById(`${mode}PhotographerStatus`);
+    if (!status) return;
+    status.textContent = message;
+    status.classList.toggle('is-error', isError);
+}
+
+function getInlineShootReference(mode) {
+    const explicit = inlineShootRequestState[mode]?.image;
+    if (explicit) return explicit;
+    if (mode === 'program') return uploads.progRef?.[0] || null;
+    return uploads.freeImages?.find(image => image && !image.isAPlusDouble) || uploads.freeImages?.[0] || null;
+}
+
+async function submitInlineShootRequest(mode) {
+    const state = inlineShootRequestState[mode];
+    const button = document.getElementById(`${mode}PhotographerSubmit`);
+    const noteInput = document.getElementById(`${mode}PhotographerNote`);
+    if (!state || !button || !noteInput || state.busy) return;
+    if (!currentUser) { showLoginModal(); return; }
+    if (!hasAgreed()) { openGuide(); guideShowPage(2); return; }
+
+    const note = noteInput.value.trim();
+    const reference = getInlineShootReference(mode);
+    if (!reference && !note) {
+        setInlineShootStatus(mode, '请上传拍摄案例图、当前参考图，或填写拍摄备注', true);
+        noteInput.focus();
+        return;
+    }
+
+    const product = mode === 'program'
+        ? (document.getElementById('progProductName')?.value.trim() || '图生图拍摄需求')
+        : (document.getElementById('freeFileName')?.value.trim() || document.getElementById('freeDesc')?.value.trim().slice(0, 40) || '自由模式拍摄需求');
+    const description = note || '请由摄影师参考案例图决定拍摄角度、光线和摆放方式';
+    state.busy = true;
+    button.disabled = true;
+    button.textContent = '提交中...';
+    setInlineShootStatus(mode, reference ? '正在上传拍摄参考图...' : '正在提交拍摄需求...');
+    try {
+        const photoKeys = reference ? await uploadImages([reference], 'shoot/ref') : [];
+        const data = {
+            fileName: '白底拍摄需求',
+            submitTime: new Date().toLocaleString('zh-CN'),
+            basicInfo: { '型号': product, '图片数量': `${photoKeys.length} 张` },
+            images: photoKeys.map((image, index) => ({
+                序号: `图${index + 1}`,
+                区域: '拍摄参考',
+                图片要求: description,
+                photoKey: image.key,
+                photoName: image.name
+            })),
+            directPhotoKeys: photoKeys,
+            directDesc: description
+        };
+        const response = await fetch('/api/submit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ taskType: '白底拍摄需求', remarks: description, submitter: currentUser, data })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.ok) throw new Error(result.error || `提交失败 (${response.status})`);
+        state.image = null;
+        noteInput.value = '';
+        renderInlineShootImage(mode);
+        setInlineShootStatus(mode, '拍摄需求已提交，我会尽快拍给你');
+        button.textContent = '已提交';
+    } catch (error) {
+        setInlineShootStatus(mode, `提交失败：${error.message}`, true);
+        button.textContent = '重新提交';
+    } finally {
+        state.busy = false;
+        button.disabled = false;
+        if (button.textContent === '提交中...') button.textContent = '提交拍摄需求';
+    }
+}
+
 let shootImages = [];
 
 function setShootStatus(message, type = '') {
@@ -1307,6 +1483,7 @@ function renderForm() {
     programCopyAiBusy = false;
     resetAPlusDoubleState();
     uploads.freeImages = []; uploads.freeModel = null; uploads.freeScene = null; uploads.freeProduct = []; uploads.freeProduct1 = null; uploads.freeProduct2 = null; uploads.progRef = []; uploads.progProduct = []; uploads.variantImages = [];
+    if (currentMode === 'free' || currentMode === 'program') resetInlineShootRequestState(currentMode);
     let galleryWasReady = false;
     if (currentMode === 'free') {
         galleryWasReady = renderGenerationMode(area, FREE_FORM);
@@ -1315,6 +1492,7 @@ function renderForm() {
         wirePromptOptimizer();
         loadPromptQuota();
         initSizePicker('freeSizeSelect', 'freeSizeHint');
+        initInlineShootRequest('free');
         document.getElementById('freeSubmit').addEventListener('click', submitFree);
     } else if (currentMode === 'program') {
         galleryWasReady = renderGenerationMode(area, PROGRAM_FORM);
@@ -1322,6 +1500,7 @@ function renderForm() {
         wireDrop('progProductDrop', 'progProductInput', 'progProductThumbs', 'progProduct');
         wireProgramAiTools();
         initSizePicker('progSizeSelect', 'progSizeHint');
+        initInlineShootRequest('program');
         document.getElementById('progSubmit').addEventListener('click', submitProgram);
     } else if (currentMode === 'sheet') {
         if (attachedGallery) attachedGallery.remove();
