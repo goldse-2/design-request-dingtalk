@@ -10,6 +10,7 @@ export default {
         const url = new URL(request.url);
         const width = Number.parseInt(url.searchParams.get('width'), 10);
         const height = Number.parseInt(url.searchParams.get('height'), 10);
+        const gravity = normalizeGravity(url.searchParams.get('gravity'));
         if (!isValidDimension(width) || !isValidDimension(height)) {
             return new Response('Invalid target dimensions', { status: 400 });
         }
@@ -20,7 +21,7 @@ export default {
 
         const transformed = await env.IMAGES
             .input(request.body)
-            .transform({ width, height, fit: 'cover' })
+            .transform({ width, height, fit: 'cover', ...(gravity ? { gravity } : {}) })
             .output({ format: 'image/jpeg', quality: 95 });
         const response = transformed.response();
         if (!response.ok) return new Response('Image resize failed', { status: 502 });
@@ -43,4 +44,10 @@ export default {
 
 function isValidDimension(value) {
     return Number.isInteger(value) && value >= 100 && value <= 5000;
+}
+
+function normalizeGravity(value) {
+    return ['top', 'bottom'].includes(String(value || '').toLowerCase())
+        ? String(value).toLowerCase()
+        : '';
 }

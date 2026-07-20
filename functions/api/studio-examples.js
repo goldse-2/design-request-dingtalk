@@ -2,10 +2,9 @@ export async function onRequestGet(context) {
     const { env, request } = context;
     const url = new URL(request.url);
     const includeAll = url.searchParams.get('all') === '1';
-    const builtin = await getBuiltinExamples(context);
     const custom = sortCustomExamples(await getCustomExamples(env));
     const visibleCustom = includeAll ? custom : custom.filter(x => x.status === 'approved');
-    return Response.json({ ok: true, examples: [...visibleCustom, ...builtin] });
+    return Response.json({ ok: true, examples: visibleCustom });
 }
 
 export async function onRequestPost(context) {

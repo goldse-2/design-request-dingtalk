@@ -540,7 +540,7 @@ async function processResizeAiTask(env, task) {
 
     const mimeType = sourceObject.httpMetadata?.contentType || guessContentType(source.name || source.key);
     const base64 = arrayBufferToBase64(await sourceObject.arrayBuffer());
-    const prompt = buildResizePrompt(target, task.resizeReflow === true);
+    const prompt = buildResizePrompt(target, task.resizeReflow === true, task.aPlusDouble === true);
     const result = await editImageWithPrompt({
         env,
         prompt,
@@ -550,10 +550,12 @@ async function processResizeAiTask(env, task) {
     });
     const stored = await storeResizeAiResult(env, task, result, source.name || 'resize-source.png', target);
 
-    task.resultKeys = [stored];
+    task.resultKeys = stored;
     task.status = 'done';
     task.completedAt = new Date().toISOString();
-    task.completeNote = `AI 尺寸修改完成：${target.width} × ${target.height}`;
+    task.completeNote = task.aPlusDouble === true
+        ? 'A+ 连续双图尺寸修改完成：600 × 900，已拆成上下两张 600 × 450'
+        : `AI 尺寸修改完成：${target.width} × ${target.height}`;
     task.backgroundLastAttemptAt = new Date().toISOString();
     task.backgroundLastError = '';
 
@@ -561,9 +563,12 @@ async function processResizeAiTask(env, task) {
     return { done: true, stored };
 }
 
-export function buildResizePrompt(target, allowReflow) {
+export function buildResizePrompt(target, allowReflow, aPlusDouble = false) {
     return [
         `Resize and adapt the uploaded image to exactly ${target.width}x${target.height}px.`,
+        aPlusDouble
+            ? 'This is a vertically joined two-panel A+ composition. Preserve a continuous layout across the horizontal midpoint because the final image will be split into equal upper and lower panels after processing.'
+            : '',
         allowReflow
             ? 'Intelligently recompose the image for the target aspect ratio. Adapt the subject scale and position, spacing, background extension, and visual hierarchy so the layout feels balanced and intentional.'
             : 'Keep the original composition intent as much as possible and only make the changes necessary for the target size.',
@@ -573,23 +578,52 @@ export function buildResizePrompt(target, allowReflow) {
             : 'Avoid stretching, unnecessary cropping, duplicated elements, or unrelated additions.',
         'Use a clean ecommerce-quality result. Do not add watermarks, frames, captions, extra text, or unrelated objects.',
         'Return only one final image in JPEG format with an opaque background.'
-    ].join('\n');
+    ].filter(Boolean).join('\n');
 }
 
 async function storeResizeAiResult(env, task, result, sourceName, target) {
     const fetched = await resultToBytes(result);
     const exact = await transformToExactJpeg(env, fetched, target);
     const safeName = sanitizeName(String(sourceName || 'resize-source.png').replace(/\.[^.]+$/, ''));
+    if (task.aPlusDouble === true) {
+        if (target.width !== 600 || target.height !== 900) {
+            throw new Error('A+ 连续双图尺寸修改必须使用 600x900 输出');
+        }
+        return storeAPlusResizeParts(env, task, exact, safeName);
+    }
     const key = `studio-results/${task.id}/resize-${target.width}x${target.height}-${safeName}.jpg`;
     await env.SUBMISSION_FILES.put(key, exact.bytes, {
         httpMetadata: { contentType: 'image/jpeg' }
     });
-    return { key, name: `${safeName}-尺寸修改-${target.width}x${target.height}.jpg` };
+    return [{ key, name: `${safeName}-尺寸修改-${target.width}x${target.height}.jpg` }];
 }
 
-export async function transformToExactJpeg(env, image, target) {
+async function storeAPlusResizeParts(env, task, image, safeName) {
+    const target = { width: 600, height: 450 };
+    const [top, bottom] = await Promise.all([
+        transformToExactJpeg(env, image, target, 'top'),
+        transformToExactJpeg(env, image, target, 'bottom')
+    ]);
+    const parts = [
+        { position: 'top', label: '上半部分', image: top },
+        { position: 'bottom', label: '下半部分', image: bottom }
+    ];
+    const stored = [];
+    for (const part of parts) {
+        const key = `studio-results/${task.id}/resize-600x450-${part.position}-${safeName}.jpg`;
+        await env.SUBMISSION_FILES.put(key, part.image.bytes, {
+            httpMetadata: { contentType: 'image/jpeg' }
+        });
+        stored.push({ key, name: `${safeName}-尺寸修改-600x450-${part.label}.jpg` });
+    }
+    return stored;
+}
+
+export async function transformToExactJpeg(env, image, target, gravity = '') {
     if (env.IMAGE_RESIZER?.fetch) {
-        const url = `https://image-resizer.internal/resize?width=${target.width}&height=${target.height}`;
+        const query = new URLSearchParams({ width: String(target.width), height: String(target.height) });
+        if (gravity) query.set('gravity', gravity);
+        const url = `https://image-resizer.internal/resize?${query.toString()}`;
         const response = await env.IMAGE_RESIZER.fetch(new Request(url, {
             method: 'POST',
             headers: { 'Content-Type': image.mimeType },
@@ -614,7 +648,7 @@ export async function transformToExactJpeg(env, image, target) {
 
     const transformed = await env.IMAGES
         .input(new Blob([image.bytes], { type: image.mimeType }).stream())
-        .transform({ width: target.width, height: target.height, fit: 'cover' })
+        .transform({ width: target.width, height: target.height, fit: 'cover', ...(gravity ? { gravity } : {}) })
         .output({ format: 'image/jpeg', quality: 95 });
     const response = transformed.response();
     if (!response.ok) throw new Error(`Exact image resize failed: HTTP ${response.status}`);

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>图片制作 - 作图中心</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=20260720-submit-dock">
     <style>
         .size-resize-hint { margin-top: 8px; padding: 9px 11px; border-left: 3px solid #4f46e5; background: #f5f5ff; color: #4b5563; font-size: 0.8rem; line-height: 1.5; }
         .size-resize-hint a { color: #4338ca; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
@@ -35,6 +35,7 @@
         .size-card strong { font-size: .82rem; }
         .size-card small { color: #6b7280; font-size: .69rem; font-weight: 600; }
         .size-custom-row { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: center; margin-top: 10px; }
+        .size-custom-row[hidden] { display: none; }
         .size-custom-row input { width: 100%; min-height: 36px; padding: 7px 9px; border: 1px solid #d1d5db; border-radius: 8px; font-size: .82rem; }
         .size-custom-row span { color: #9ca3af; font-weight: 700; }
         .studio-tabs { flex-wrap: wrap; }
@@ -111,6 +112,10 @@
         .resize-target-btn { min-height: 52px; padding: 10px; border: 1px solid #d1d5db; border-radius: 9px; background: #fff; color: #374151; font-size: .86rem; font-weight: 800; cursor: pointer; }
         .resize-target-btn.active { border-color: #111827; background: #111827; color: #fff; box-shadow: 0 8px 18px rgba(17,24,39,.16); }
         .resize-target-btn small { display: block; margin-top: 3px; font-size: .68rem; font-weight: 600; opacity: .72; }
+        .resize-a-plus-locked .resize-target-grid { opacity: .42; filter: grayscale(1); }
+        .resize-a-plus-locked .resize-target-btn { cursor: not-allowed; }
+        .resize-a-plus-locked .resize-reflow-option { opacity: .42; cursor: not-allowed; }
+        .resize-a-plus-lock { margin-top: 10px; padding: 9px 10px; border: 1px solid #a7f3d0; border-radius: 7px; background: #ecfdf5; color: #047857; font-size: .75rem; font-weight: 800; line-height: 1.5; text-align: center; }
         .resize-custom-size { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); gap: 8px; align-items: end; margin-top: 10px; padding: 11px; border: 1px solid #e5e7eb; border-radius: 9px; background: #f9fafb; }
         .resize-custom-size[hidden] { display: none; }
         .resize-custom-size label { color: #6b7280; font-size: .72rem; font-weight: 700; }
@@ -219,6 +224,42 @@
         .variant-result-card { border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; background: #fff; }
         .variant-result-card img { width: 100%; aspect-ratio: 1; object-fit: contain; display: block; background: #f9fafb; }
         .variant-result-card a { display: block; padding: 8px; border-top: 1px solid #e5e7eb; color: #4338ca; font-size: .78rem; font-weight: 700; text-align: center; text-decoration: none; }
+        .photography-layout { width:100%; margin:0; }
+        .photography-panel { position:static; width:100% !important; max-width:none !important; max-height:none; padding:0; overflow:hidden; }
+        .photography-head { display:flex; align-items:flex-start; justify-content:space-between; gap:20px; padding:22px 24px 18px; border-bottom:1px solid #e5e7eb; }
+        .photography-head h2 { margin:0 0 5px; color:#111827; font-size:1.08rem; }
+        .photography-head p { margin:0; color:#6b7280; font-size:.8rem; line-height:1.55; }
+        .photography-badge { flex-shrink:0; padding:5px 9px; border-radius:6px; background:#ecfdf5; color:#047857; font-size:.7rem; font-weight:800; }
+        .photography-body { display:grid; grid-template-columns:minmax(0,1.7fr) minmax(260px,.7fr); min-width:0; }
+        .photography-assets { min-width:0; padding:20px 24px 24px; }
+        .photography-section-title { margin-bottom:12px; color:#374151; font-size:.76rem; font-weight:800; }
+        .photography-assets-grid { display:grid; grid-template-columns:minmax(150px,.75fr) minmax(150px,.75fr) minmax(220px,1.2fr); gap:10px; min-width:0; }
+        .photography-upload { position:relative; display:flex; min-width:0; height:170px; overflow:hidden; border:1px dashed #cbd5e1; border-radius:7px; background:#fafbfc; }
+        .photography-upload.is-required { border-color:#93c5fd; background:#f7fbff; }
+        .photography-upload.is-loading { opacity:.58; pointer-events:none; }
+        .photography-upload-label { display:flex; flex:1; flex-direction:column; align-items:center; justify-content:center; gap:5px; padding:12px; color:#64748b; font-size:.68rem; line-height:1.4; text-align:center; cursor:pointer; }
+        .photography-upload-label:hover { background:#f1f5f9; color:#1f2937; }
+        .photography-upload-label strong { color:#374151; font-size:.75rem; }
+        .photography-upload-label small { color:#9ca3af; font-size:.63rem; }
+        .photography-upload-preview { width:100%; height:100%; padding:0; border:0; background:transparent; cursor:zoom-in; }
+        .photography-upload-preview img { display:block; width:100%; height:100%; object-fit:cover; }
+        .photography-upload-badge { position:absolute; z-index:2; left:6px; bottom:6px; max-width:calc(100% - 12px); padding:3px 6px; overflow:hidden; border-radius:4px; background:rgba(17,24,39,.78); color:#fff; font-size:.64rem; text-overflow:ellipsis; white-space:nowrap; pointer-events:none; }
+        .photography-upload-remove { position:absolute; z-index:3; top:6px; right:6px; display:grid; place-items:center; width:25px; height:25px; padding:0; border:0; border-radius:50%; background:rgba(17,24,39,.84); color:#fff; font-size:16px; cursor:pointer; }
+        .photography-note { display:flex; min-width:0; flex-direction:column; }
+        .photography-note label { display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin-bottom:6px; color:#374151; font-size:.75rem; font-weight:800; }
+        .photography-note label span { color:#9ca3af; font-size:.64rem; font-weight:500; }
+        .photography-note textarea { width:100%; min-height:170px; flex:1; padding:11px; resize:vertical; border:1px solid #d8dde5; border-radius:7px; background:#fbfcfe; color:#111827; font-size:.76rem; line-height:1.55; outline:none; }
+        .photography-note textarea:focus { border-color:#3b82f6; box-shadow:0 0 0 3px rgba(59,130,246,.1); }
+        .photography-settings { min-width:0; padding:20px 24px; border-left:1px solid #e5e7eb; background:#fbfcfe; }
+        .photography-setting-row { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:14px 0; border-bottom:1px solid #e5e7eb; }
+        .photography-setting-row:first-of-type { padding-top:0; }
+        .photography-setting-row:last-child { border-bottom:0; }
+        .photography-setting-copy strong { display:block; color:#374151; font-size:.76rem; }
+        .photography-setting-copy small { display:block; margin-top:3px; color:#9ca3af; font-size:.66rem; line-height:1.4; }
+        .photography-fixed-state { min-width:56px; padding:5px 8px; border-radius:6px; background:#ecfdf5; color:#047857; font-size:.66rem; font-weight:800; text-align:center; }
+        .photography-actions { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:18px 24px; border-top:1px solid #e5e7eb; background:#fff; }
+        .photography-actions p { margin:0; color:#6b7280; font-size:.74rem; line-height:1.5; }
+        .photography-actions .sf-submit { width:auto; min-width:180px; }
         .sheet-self-layout { width:100%; margin:0; }
         .sheet-self-panel { position:static; width:100% !important; max-width:none !important; max-height:none; padding:0; overflow:hidden; }
         .sheet-self-head { display:flex; align-items:flex-start; justify-content:space-between; gap:20px; margin:0; padding:22px 24px 18px; border-bottom:1px solid #e5e7eb; }
@@ -367,6 +408,8 @@
             .sheet-self-slot-title { flex-direction:row; align-items:center; }
             .sheet-self-size { width:min(180px,48%); }
             .sheet-self-setting { padding:10px 0 0; }
+            .photography-body { grid-template-columns:minmax(0,1fr); }
+            .photography-settings { border-top:1px solid #e5e7eb; border-left:0; }
         }
         @media (max-width: 640px) {
             .studio-photographer-grid { grid-template-columns:minmax(0,1fr); }
@@ -384,6 +427,12 @@
             .sheet-self-images.is-photographer { grid-template-columns:minmax(0,1fr); }
             .sheet-self-photography-brief { grid-template-columns:minmax(0,1fr) minmax(0,1fr); }
             .sheet-self-submit { width:100%; }
+            .photography-head, .photography-actions { align-items:stretch; flex-direction:column; padding-left:16px; padding-right:16px; }
+            .photography-assets, .photography-settings { padding-left:16px; padding-right:16px; }
+            .photography-assets-grid { grid-template-columns:minmax(0,1fr); }
+            .photography-note { grid-column:1/-1; }
+            .photography-note textarea { min-height:110px; }
+            .photography-actions .sf-submit { width:100%; }
         }
     </style>
 </head>
@@ -432,6 +481,7 @@
             <button class="studio-tab active" data-mode="free">自由模式</button>
             <button class="studio-tab" data-mode="program">图生图模式</button>
             <button class="studio-tab" data-mode="sheet">表格自助</button>
+            <button class="studio-tab" data-mode="photography">图片拍摄</button>
             <button class="studio-tab" data-mode="retouch">精修/白底</button>
             <button class="studio-tab" data-mode="variant">变体改色</button>
             <button class="studio-tab" data-mode="resize">尺寸修改</button>
@@ -587,6 +637,6 @@
     帮助中心
 </button>
 
-    <script src="studio.js?v=20260720-photography-workflow"></script>
+    <script src="studio.js?v=20260720-photography-mode"></script>
 </body>
 </html>

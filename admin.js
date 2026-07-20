@@ -492,6 +492,13 @@ function renderCard(sub) {
                                 </a>
                             `).join('')}
                         </div>
+                        <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:9px">
+                            <label style="display:inline-flex;align-items:center;min-height:32px;padding:0 11px;border:1px solid #bfdbfe;border-radius:6px;background:#eff6ff;color:#1d4ed8;font-size:.75rem;font-weight:700;cursor:pointer">
+                                <input type="file" accept="image/jpeg,image/png,image/webp" multiple hidden onchange="replaceSubmissionImages('${sub.id}', this)">
+                                <span data-replace-image-label>重新上传产品图片</span>
+                            </label>
+                            <span style="color:#9ca3af;font-size:.72rem">图片失效时可在此补传，无需重新建需求</span>
+                        </div>
                     </div>
                 ` : ''}
                 ${images.filter(img => img.图片要求).length > 0 ? `<div style="font-size:0.85rem;font-weight:600;color:#6b7280;margin-bottom:8px">📋 图片需求：</div>` : ''}
@@ -1018,6 +1025,74 @@ async function doLibUpload() {
         loadLibraryAdmin();
     } catch (e) {
         status.textContent = '上传失败：' + e.message;
+    }
+}
+
+async function replaceSubmissionImages(id, input) {
+    const files = Array.from(input.files || []);
+    input.value = '';
+    if (!files.length) return;
+    if (files.length > 20) {
+        alert('一次最多上传 20 张图片');
+        return;
+    }
+
+    for (const file of files) {
+        if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+            alert(`不支持的文件格式：${file.name}`);
+            return;
+        }
+        if (file.size > 8 * 1024 * 1024) {
+            alert(`单张图片不能超过 8MB：${file.name}`);
+            return;
+        }
+    }
+    if (!confirm(`将用这 ${files.length} 张图片替换当前任务的产品图片，是否继续？`)) return;
+
+    const trigger = input.parentElement;
+    const previousText = trigger?.textContent || '';
+    if (trigger) {
+        trigger.style.pointerEvents = 'none';
+        trigger.style.opacity = '.65';
+        trigger.querySelector('[data-replace-image-label]').textContent = '正在上传图片...';
+    }
+
+    try {
+        const images = [];
+        for (const file of files) {
+            const formData = new FormData();
+            formData.append('file', file, file.name);
+            formData.append('prefix', 'design/product');
+            const uploadResponse = await fetch('/api/studio-upload', { method: 'POST', body: formData });
+            const uploadResult = await uploadResponse.json().catch(() => ({}));
+            if (!uploadResponse.ok || !uploadResult.ok) {
+                throw new Error(uploadResult.error || `图片上传失败：${file.name}`);
+            }
+            images.push({ key: uploadResult.key, name: uploadResult.name || file.name });
+        }
+
+        const response = await fetch('/api/submissions', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, action: 'replaceProductImages', images })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.ok || !result.submission) {
+            throw new Error(result.error || '更新任务图片失败');
+        }
+
+        const index = allData.findIndex(item => item.id === id);
+        if (index >= 0) allData[index] = result.submission;
+        filterAndRender(filterSelect.value);
+        alert('产品图片已更新');
+    } catch (error) {
+        alert(`上传失败：${error.message || error}`);
+    } finally {
+        if (trigger) {
+            trigger.style.pointerEvents = '';
+            trigger.style.opacity = '';
+            trigger.querySelector('[data-replace-image-label]').textContent = previousText.trim();
+        }
     }
 }
 
@@ -2207,6 +2282,7 @@ function startCountdownTimer(taskId, createdAt) {
 
 function renderSheetSelfAdminTask(task) {
     ensureSheetSelfAdminStyles();
+    const taskLabel = task.standalonePhotography ? '图片拍摄' : '表格自助';
     const slots = Array.isArray(task.workflowSlots) ? task.workflowSlots.filter(Boolean) : [];
     const completedCount = slots.filter(slot => slot.stage === 'done' && slot.resultNotified).length;
     const failedCount = slots.filter(slot => slot.stage === 'error' || (slot.stage === 'done' && !slot.resultNotified)).length;
@@ -2218,7 +2294,7 @@ function renderSheetSelfAdminTask(task) {
         <div>
             <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
                 <strong style="color:#111827;font-size:.96rem">${esc(task.submitter?.name || '匿名')}</strong>
-                <span style="font-size:.76rem;color:#fff;background:#111827;padding:3px 8px;border-radius:6px">表格自助</span>
+                <span style="font-size:.76rem;color:#fff;background:#111827;padding:3px 8px;border-radius:6px">${taskLabel}</span>
                 <span style="font-size:.74rem;color:#047857;background:#ecfdf5;padding:3px 8px;border-radius:6px">已发送 ${completedCount}/${slots.length || task.sheetSelfSlotCount || 0}</span>
                 ${failedCount ? `<span style="font-size:.74rem;color:#b91c1c;background:#fef2f2;padding:3px 8px;border-radius:6px">需处理 ${failedCount}</span>` : ''}
             </div>
@@ -2230,12 +2306,12 @@ function renderSheetSelfAdminTask(task) {
     const deleteButton = document.createElement('button');
     deleteButton.type = 'button';
     deleteButton.title = '删除任务';
-    deleteButton.setAttribute('aria-label', '删除表格自助任务');
+    deleteButton.setAttribute('aria-label', `删除${taskLabel}任务`);
     deleteButton.textContent = '×';
     deleteButton.style.cssText = 'position:absolute;top:14px;right:14px;width:26px;height:26px;display:grid;place-items:center;border:0;border-radius:5px;background:transparent;color:#cbd5e1;font-size:1.15rem;line-height:1;cursor:pointer';
     deleteButton.onmouseover = () => { deleteButton.style.color = '#dc2626'; deleteButton.style.background = '#fef2f2'; };
     deleteButton.onmouseout = () => { deleteButton.style.color = '#cbd5e1'; deleteButton.style.background = 'transparent'; };
-    deleteButton.onclick = () => deleteStudioTask(task.id, card, true);
+    deleteButton.onclick = () => deleteStudioTask(task.id, card, taskLabel);
     card.appendChild(deleteButton);
 
     const list = document.createElement('div');
@@ -2314,14 +2390,14 @@ function ensureSheetSelfAdminStyles() {
         .sheet-self-admin-preview.is-photography { border-color:#93c5fd; }
         .sheet-self-admin-preview:focus-visible { outline:2px solid #2563eb; outline-offset:2px; }
         .sheet-self-admin-preview img { display:block; width:100%; height:100%; object-fit:cover; }
-        .admin-image-preview { position:fixed; inset:0; z-index:15000; display:grid; place-items:center; padding:24px; background:rgba(15,23,42,.78); backdrop-filter:blur(2px); }
-        .admin-image-preview-dialog { position:relative; display:grid; grid-template-rows:auto minmax(0,1fr); width:min(1120px,94vw); height:min(820px,90vh); overflow:hidden; border-radius:8px; background:#fff; box-shadow:0 24px 70px rgba(0,0,0,.35); }
-        .admin-image-preview-head { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:12px 14px 12px 18px; border-bottom:1px solid #e5e7eb; }
-        .admin-image-preview-title { overflow:hidden; color:#111827; font-size:.88rem; font-weight:700; text-overflow:ellipsis; white-space:nowrap; }
-        .admin-image-preview-close { display:grid; place-items:center; width:34px; height:34px; padding:0; border:0; border-radius:6px; background:#f1f5f9; color:#475569; font-size:21px; cursor:pointer; }
-        .admin-image-preview-stage { position:relative; display:grid; place-items:center; min-height:0; padding:18px; overflow:auto; background:#f8fafc; }
-        .admin-image-preview-stage img { display:block; max-width:100%; max-height:100%; object-fit:contain; }
-        .admin-image-preview-status { position:absolute; inset:auto; color:#64748b; font-size:.8rem; }
+        .admin-image-preview { position:fixed; inset:0; z-index:20000; display:flex; align-items:center; justify-content:center; padding:28px; background:rgba(0,0,0,.84); }
+        .admin-image-preview-dialog { display:flex; flex-direction:column; align-items:center; justify-content:center; max-width:94vw; max-height:90vh; margin:0; }
+        .admin-image-preview-close { position:fixed; top:18px; right:24px; z-index:1; display:grid; place-items:center; width:36px; height:36px; padding:0; border:0; border-radius:50%; background:rgba(255,255,255,.12); color:#fff; font-size:24px; line-height:1; cursor:pointer; }
+        .admin-image-preview-close:hover { background:rgba(255,255,255,.22); }
+        .admin-image-preview-stage { position:relative; display:grid; place-items:center; max-width:94vw; max-height:82vh; }
+        .admin-image-preview-stage img { display:block; max-width:94vw; max-height:82vh; border-radius:8px; background:#fff; object-fit:contain; box-shadow:0 20px 60px rgba(0,0,0,.35); }
+        .admin-image-preview-title { max-width:94vw; margin-top:12px; overflow:hidden; color:#fff; font-size:.88rem; text-align:center; text-overflow:ellipsis; white-space:nowrap; }
+        .admin-image-preview-status { position:absolute; color:#fff; font-size:.8rem; }
         @media (max-width: 800px) {
             .sheet-self-admin-slot { grid-template-columns:minmax(0,1fr) auto !important; gap:12px !important; }
             .sheet-self-admin-progress-cell { grid-column:1 / -1; grid-row:2; }
@@ -2338,6 +2414,7 @@ function ensureSheetSelfAdminStyles() {
 }
 
 function openAdminImagePreview(imageUrl, title) {
+    ensureSheetSelfAdminStyles();
     const existing = document.getElementById('adminImagePreview');
     if (existing?.closePreview) existing.closePreview();
 
@@ -2345,9 +2422,10 @@ function openAdminImagePreview(imageUrl, title) {
     const overlay = document.createElement('div');
     overlay.id = 'adminImagePreview';
     overlay.className = 'admin-image-preview';
-    overlay.innerHTML = `<div class="admin-image-preview-dialog" role="dialog" aria-modal="true" aria-label="${esc(title || '查看大图')}">
-        <div class="admin-image-preview-head"><div class="admin-image-preview-title">${esc(title || '查看大图')}</div><button type="button" class="admin-image-preview-close" aria-label="关闭大图">×</button></div>
+    overlay.innerHTML = `<button type="button" class="admin-image-preview-close" aria-label="关闭大图">×</button>
+    <div class="admin-image-preview-dialog" role="dialog" aria-modal="true" aria-label="${esc(title || '查看大图')}">
         <div class="admin-image-preview-stage"><div class="admin-image-preview-status">图片加载中...</div><img src="${imageUrl}" alt="${esc(title || '参考图')}"></div>
+        <div class="admin-image-preview-title">${esc(title || '查看大图')}</div>
     </div>`;
 
     const close = () => {
@@ -3226,8 +3304,8 @@ async function openManualUpload(taskId, card) {
     };
 }
 
-async function deleteStudioTask(id, card, requireConfirm = false) {
-    if (requireConfirm && !confirm('确认删除这个表格自助任务吗？删除后不会再继续处理。')) return;
+async function deleteStudioTask(id, card, confirmLabel = '') {
+    if (confirmLabel && !confirm(`确认删除这个${confirmLabel}任务吗？删除后不会再继续处理。`)) return;
     try {
         const res = await fetch('/api/studio-complete', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },

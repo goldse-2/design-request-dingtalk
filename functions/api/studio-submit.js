@@ -28,11 +28,15 @@ export async function onRequestPost(context) {
     if (mode === 'resize_ai' && !isValidResizeTarget(resizeTarget || size)) {
         return Response.json({ ok: false, error: '目标尺寸必须在 100–5000 px 之间' }, { status: 400 });
     }
-    if (aPlusDouble === true && !['free', 'program'].includes(mode)) {
-        return Response.json({ ok: false, error: 'A+ 连续双图仅支持自由模式和图生图模式' }, { status: 400 });
+    if (aPlusDouble === true && !['free', 'program', 'resize_ai'].includes(mode)) {
+        return Response.json({ ok: false, error: 'A+ 连续双图仅支持自由模式、图生图模式和尺寸修改' }, { status: 400 });
     }
     if (aPlusDouble === true && (!Array.isArray(refKeys) || !refKeys.length)) {
         return Response.json({ ok: false, error: 'A+ 连续双图缺少合并参考图' }, { status: 400 });
+    }
+    const resizeAPlusDouble = aPlusDouble === true && mode === 'resize_ai';
+    if (resizeAPlusDouble && !isAPlusResizeTarget(resizeTarget || size)) {
+        return Response.json({ ok: false, error: 'A+ 连续双图尺寸修改必须固定输出 600x900' }, { status: 400 });
     }
     if (photographerDecision === true && !['free', 'program'].includes(mode)) {
         return Response.json({ ok: false, error: '由摄影师决定仅支持自由模式和图生图模式' }, { status: 400 });
@@ -58,8 +62,8 @@ export async function onRequestPost(context) {
         note: note || '',
         scene: scene || '',
         analyzePrompt: analyzePrompt || '',
-        size: aPlusDouble === true ? '1464x1200' : (size || ''),
-        imageName: aPlusDouble === true ? '' : (imageName || ''),
+        size: resizeAPlusDouble ? '600x900' : (aPlusDouble === true ? '1464x1200' : (size || '')),
+        imageName: aPlusDouble === true && !resizeAPlusDouble ? '' : (imageName || ''),
         productName: productName || '',
         title: title || '',
         subtitle: subtitle || '',
@@ -257,6 +261,11 @@ function isValidResizeTarget(value) {
     const width = Number(match[1]);
     const height = Number(match[2]);
     return width >= 100 && width <= 5000 && height >= 100 && height <= 5000;
+}
+
+function isAPlusResizeTarget(value) {
+    const match = String(value || '').trim().match(/^(\d{3,4})\s*[x×*]\s*(\d{3,4})$/i);
+    return Number(match?.[1]) === 600 && Number(match?.[2]) === 900;
 }
 
 async function appendQueue(kv, key, taskId) {

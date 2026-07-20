@@ -310,12 +310,13 @@ export async function notifySheetSelfSlot(env, parent, slot, origin) {
     const token = await getAccessToken(env);
     const staffId = await getStaffId(token, parent.submitter.unionId);
     if (!staffId) throw new Error('找不到提交人的钉钉账号');
+    const taskLabel = parent.standalonePhotography ? '图片拍摄' : '表格自助';
     const taskForNotification = {
         ...parent,
         mode: 'program',
         resultKeys: (slot.resultKeys || []).map((item, index) => ({
             ...item,
-            name: `表格自助-第${Number(slot.displayIndex ?? slot.index) + 1}张-${item.name || `成品图-${index + 1}.jpg`}`
+            name: `${taskLabel}-第${Number(slot.displayIndex ?? slot.index) + 1}张-${item.name || `成品图-${index + 1}.jpg`}`
         }))
     };
     await sendStudioResultImages(env, token, staffId, taskForNotification, origin);
@@ -341,7 +342,8 @@ export async function finishSheetSelfParent(env, parent) {
 
     parent.status = 'done';
     parent.completedAt = parent.completedAt || new Date().toISOString();
-    parent.completeNote = `表格自助 ${slots.length} 张图片已全部完成`;
+    const taskLabel = parent.standalonePhotography ? '图片拍摄' : '表格自助';
+    parent.completeNote = `${taskLabel} ${slots.length} 张图片已全部完成`;
     parent.dingtalkNotified = slots.every(slot => slot.resultNotified === true);
     parent.r2AutoNotified = false;
     parent.sheetSelfCompleted = true;
@@ -351,6 +353,7 @@ export async function finishSheetSelfParent(env, parent) {
 
 function makeChildTask(parent, slot, options) {
     const now = Date.now();
+    const taskLabel = parent.standalonePhotography ? '图片拍摄' : '表格自助';
     return {
         id: options.id,
         kind: 'studio',
@@ -363,7 +366,7 @@ function makeChildTask(parent, slot, options) {
         scene: '',
         analyzePrompt: '',
         size: options.mode === 'program' ? (slot.aPlusDouble ? '1464x1200' : slot.size || '1600x1600') : '',
-        imageName: `表格自助-第${Number(slot.displayIndex ?? slot.index) + 1}张`,
+        imageName: `${taskLabel}-第${Number(slot.displayIndex ?? slot.index) + 1}张`,
         productName: slot.productName || '-',
         title: slot.title || '',
         subtitle: slot.subtitle || '',
@@ -507,7 +510,8 @@ async function notifyAdminWorkflowError(env, parent, slot, origin) {
     if (!parent || !env.DINGTALK_APPKEY || !env.DINGTALK_APPSECRET || !env.ADMIN_USER_ID) return;
     const token = await getAccessToken(env);
     const stageText = { retouch: '精修', cutout: '白底抠图', program: '图生图', notify: '发送钉钉' }[slot.failedStage] || slot.failedStage || '处理';
-    const content = `表格自助任务自动重试后仍失败\n\n提交人：${parent.submitter?.name || '未知'}\n图片位：第 ${Number(slot.displayIndex ?? slot.index) + 1} 张\n失败环节：${stageText}\n原因：${slot.error || '-'}\n任务ID：${parent.id}${origin ? `\n\n去管理台处理：${origin}/admin.html` : ''}`;
+    const taskLabel = parent.standalonePhotography ? '图片拍摄' : '表格自助';
+    const content = `${taskLabel}任务自动重试后仍失败\n\n提交人：${parent.submitter?.name || '未知'}\n图片位：第 ${Number(slot.displayIndex ?? slot.index) + 1} 张\n失败环节：${stageText}\n原因：${slot.error || '-'}\n任务ID：${parent.id}${origin ? `\n\n去管理台处理：${origin}/admin.html` : ''}`;
     const response = await fetch('https://api.dingtalk.com/v1.0/robot/oToMessages/batchSend', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-acs-dingtalk-access-token': token },

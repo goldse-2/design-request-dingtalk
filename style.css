@@ -1052,6 +1052,12 @@ body.has-sidebar .container { padding-top: 0; }
 .studio-panel { position:sticky; top:20px; align-self:start; max-height:calc(100vh - 40px); overflow-y:auto; }
 .studio-panel::-webkit-scrollbar { width:6px; }
 .studio-panel::-webkit-scrollbar-thumb { background:#e5e7eb; border-radius:3px; }
+.studio-generation-panel { display:flex; flex-direction:column; overflow:hidden; }
+.studio-generation-scroll { min-height:0; flex:1; overflow-y:auto; padding-right:6px; margin-right:-6px; }
+.studio-generation-scroll::-webkit-scrollbar { width:6px; }
+.studio-generation-scroll::-webkit-scrollbar-thumb { background:#e5e7eb; border-radius:3px; }
+.studio-submit-dock { position:relative; z-index:20; flex:0 0 auto; margin-top:8px; padding-top:10px; background:#fff; box-shadow:0 -10px 18px rgba(255,255,255,.96); }
+.studio-submit-dock .studio-status:not(:empty) { margin-top:10px; }
 .sf-fade-in { animation:sfFadeUp .5s ease both; }
 @keyframes sfFadeUp { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
 @media (max-width:860px){ .studio-panel { position:static; max-height:none; overflow:visible; } }
@@ -1089,6 +1095,42 @@ body.has-sidebar .container { padding-top: 0; }
 .sf-model-option.disabled:hover { background:transparent; }
 .sf-model-badge { display:inline-block; font-size:0.66rem; font-weight:700; color:#fff; background:#22c55e; border-radius:6px; padding:1px 7px; margin-left:6px; vertical-align:middle; }
 .sf-model-badge.gray { background:#9ca3af; }
+
+/* Free-mode issue reporting replaces the former model picker. */
+.studio-help-section { margin-bottom:22px; }
+.studio-help-launcher { position:relative; }
+.studio-help-trigger { width:100%; min-height:64px; display:flex; align-items:center; gap:12px; padding:12px 14px; border:1px solid #dbe7f5; border-radius:10px; background:#f8fbff; color:#1e3a5f; text-align:left; cursor:pointer; transition:background .15s,border-color .15s,box-shadow .15s; }
+.studio-help-trigger:hover, .studio-help-trigger.is-selected { border-color:#60a5fa; background:#eff6ff; box-shadow:0 2px 8px rgba(37,99,235,.08); }
+.studio-help-trigger-icon { width:34px; height:34px; border-radius:8px; background:#dbeafe; color:#2563eb; display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
+.studio-help-trigger-copy { min-width:0; display:flex; flex:1; flex-direction:column; gap:3px; }
+.studio-help-trigger-copy strong { color:#1f2937; font-size:.9rem; line-height:1.25; }
+.studio-help-trigger-copy small { color:#6b7280; font-size:.75rem; line-height:1.35; }
+.studio-help-trigger-caret { color:#64748b; flex:0 0 auto; }
+.studio-help-options { position:absolute; z-index:60; top:calc(100% + 7px); left:0; right:0; display:flex; flex-wrap:wrap; gap:7px; padding:10px; border:1px solid #dbe7f5; border-radius:10px; background:#fff; box-shadow:0 12px 28px rgba(15,23,42,.13); }
+.studio-help-options[hidden] { display:none; }
+.studio-help-options button { border:1px solid #dbe7f5; border-radius:7px; padding:7px 9px; background:#fff; color:#334155; font:inherit; font-size:.8rem; cursor:pointer; white-space:nowrap; }
+.studio-help-options button:hover, .studio-help-options button.is-selected { border-color:#60a5fa; background:#eff6ff; color:#1d4ed8; }
+.studio-help-feedback { margin-top:14px; padding:15px; border:1px solid #dbe7f5; border-radius:10px; background:#fbfdff; }
+.studio-help-feedback[hidden] { display:none; }
+.studio-help-feedback-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+.studio-help-type-pill { display:inline-flex; align-items:center; min-height:26px; padding:0 9px; border-radius:6px; background:#dbeafe; color:#1d4ed8; font-size:.76rem; font-weight:700; }
+.studio-help-exit { width:30px; height:30px; display:flex; align-items:center; justify-content:center; border:0; border-radius:7px; background:transparent; color:#64748b; cursor:pointer; }
+.studio-help-exit:hover { background:#eef2f7; color:#334155; }
+.studio-help-copy { margin:0 0 14px; color:#64748b; font-size:.78rem; line-height:1.65; }
+.studio-help-count { margin-top:4px; color:#94a3b8; font-size:.76rem; text-align:right; }
+.studio-help-upload-label { margin-top:14px; }
+.studio-layout.is-help-active { grid-template-columns:minmax(340px,520px); justify-content:start; }
+.studio-layout.is-help-active .studio-gallery-preview, .studio-layout.is-help-active .free-create-section { display:none; }
+.studio-layout.is-help-active .studio-panel { width:100%; box-sizing:border-box; }
+.studio-help-feedback .sf-submit { margin-top:14px; background:#2563eb; }
+.studio-help-feedback .sf-submit:hover { background:#1d4ed8; }
+.studio-help-feedback .studio-status.ok { color:#15803d; }
+
+@media (max-width:520px) {
+  .studio-help-options { gap:6px; }
+  .studio-help-options button { flex:1 1 calc(50% - 6px); text-align:center; }
+  .studio-layout.is-help-active { grid-template-columns:minmax(0,1fr); }
+}
 
 /* 鈹€鈹€ Guide modal (onboarding) 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ */
 .guide-modal { position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:13000; display:none; align-items:center; justify-content:center; padding:24px; }
@@ -1279,10 +1321,11 @@ body.has-sidebar { min-height: calc(100vh + 400px); }
 
 /* 锟斤拷锟斤拷 Task Queue Styles 锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷 */
 .queue-list { display:flex; flex-direction:column; gap:0; border:1px solid #e5e7eb; border-radius:8px; overflow:hidden; background:#fff; }
-.queue-item { border-bottom:1px solid #e5e7eb; padding:10px 16px; transition:all 0.15s; display:grid; grid-template-columns:90px 1fr auto; gap:12px; align-items:center; }
+.queue-item { border-bottom:1px solid #e5e7eb; padding:10px 16px; transition:all 0.15s; display:grid; grid-template-columns:90px 44px minmax(0, 1fr) auto; gap:12px; align-items:center; }
 .queue-item:last-child { border-bottom:none; }
 .queue-item:hover { background:#f9fafb; }
 .queue-item-time { font-size:0.75rem; color:#6b7280; font-family:monospace; }
+.queue-item-number { width:44px; color:#4f46e5; font-size:0.8rem; font-weight:700; font-variant-numeric:tabular-nums; text-align:center; }
 .queue-item-status { font-size:0.75rem; padding:4px 10px; border-radius:6px; font-weight:600; white-space:nowrap; text-align:center; }
 .queue-item-status.pending { background:#fef3c7; color:#92400e; }
 .queue-item-status.processing { background:#dbeafe; color:#1e40af; }
@@ -1292,6 +1335,13 @@ body.has-sidebar { min-height: calc(100vh + 400px); }
 .queue-item-task { font-weight:600; color:#111827; font-size:0.88rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .queue-item-submitter { display:flex; align-items:center; gap:6px; font-size:0.78rem; color:#6b7280; }
 .queue-item-submitter img { width:16px; height:16px; border-radius:50%; }
+@media (max-width:600px) {
+    .queue-item { grid-template-columns:minmax(0,1fr) 40px auto; gap:6px 8px; padding:10px 12px; }
+    .queue-item-time { grid-column:1; grid-row:1; }
+    .queue-item-number { grid-column:2; grid-row:1; width:40px; }
+    .queue-item-body { grid-column:1 / -1; grid-row:2; }
+    .queue-item > div:last-child { grid-column:3; grid-row:1; }
+}
 
 /* ── Task Reorder Buttons ───────────────────────── */
 .btn-reorder { background:#f3f4f6; border:1px solid #d1d5db; color:#6b7280; padding:4px 8px; border-radius:6px; font-size:1rem; cursor:pointer; transition:all 0.15s; font-weight:700; line-height:1; }

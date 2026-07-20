@@ -14,9 +14,9 @@ export async function onRequestPatch(context) {
     catch { return Response.json({ ok: false, error: 'Invalid JSON' }, { status: 400 }); }
 
     const id = body.id || body.submissionId;
+    const action = String(body.action || '').trim();
     const productName = String(body.productName || '').trim();
     if (!id) return Response.json({ ok: false, error: 'Missing id' }, { status: 400 });
-    if (!productName) return Response.json({ ok: false, error: 'Missing productName' }, { status: 400 });
 
     const raw = await env.SUBMISSIONS.get(id);
     if (!raw) return Response.json({ ok: false, error: 'Not found' }, { status: 404 });
@@ -24,14 +24,54 @@ export async function onRequestPatch(context) {
     const sub = JSON.parse(raw);
     sub.data = sub.data || {};
     sub.data.basicInfo = sub.data.basicInfo || {};
-    sub.data.basicInfo['型号'] = productName;
+    if (action === 'replaceProductImages') {
+        const images = normalizeReplacementImages(body.images);
+        if (!images.length) return Response.json({ ok: false, error: '请至少上传一张产品图片' }, { status: 400 });
+
+        const previous = Array.isArray(sub.data.images) ? sub.data.images : [];
+        sub.data.images = images.map((image, index) => ({
+            ...(previous[index] || {}),
+            序号: previous[index]?.序号 || `图${index + 1}`,
+            区域: previous[index]?.区域 || '产品图',
+            photoKey: image.key,
+            photoName: image.name
+        }));
+        if (sub.data.designInfo) sub.data.designInfo.productImages = images;
+        if (sub.data.packagingInfo) sub.data.packagingInfo.productImages = images;
+        if (Array.isArray(sub.data.directPhotoKeys)) sub.data.directPhotoKeys = images;
+    } else {
+        if (!productName) return Response.json({ ok: false, error: 'Missing productName' }, { status: 400 });
+        sub.data.basicInfo['型号'] = productName;
+    }
     sub.updatedAt = Date.now();
 
     await env.SUBMISSIONS.put(id, JSON.stringify(sub), {
         metadata: { taskType: sub.taskType, timestamp: sub.timestamp, archived: sub.archived || false, archivedAt: sub.archivedAt || 0 }
     });
 
-    return Response.json({ ok: true, id, productName });
+    _cache = { data: null, time: 0 };
+    return Response.json({ ok: true, id, productName, submission: sanitizeSubmissionForResponse(sub) });
+}
+
+function normalizeReplacementImages(value) {
+    if (!Array.isArray(value)) return [];
+    const seen = new Set();
+    return value.reduce((images, item) => {
+        const key = String(item?.key || '').trim();
+        const name = String(item?.name || '').trim().replace(/[\\/:*?"<>|\r\n]/g, '_').slice(0, 160);
+        if (!key.startsWith('design/product/') || seen.has(key) || !name || images.length >= 20) return images;
+        seen.add(key);
+        images.push({ key, name });
+        return images;
+    }, []);
+}
+
+function sanitizeSubmissionForResponse(submission) {
+    const copy = structuredClone(submission);
+    if (Array.isArray(copy.data?.images)) {
+        copy.data.images = copy.data.images.map(({ imageData, imageData2, ...image }) => image);
+    }
+    return copy;
 }
 
 export async function onRequestDelete(context) {

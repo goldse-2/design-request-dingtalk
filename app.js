@@ -1285,7 +1285,7 @@ function resetAll() {
     taskSelected.hidden = true;
     taskSelected.textContent = '';
     Array.from(taskCat.children).forEach(btn => btn.classList.remove('active'));
-    submitBtn.textContent = '提交';
+    submitBtn.textContent = '取号';
     statusEl.className = 'status';
     statusEl.textContent = '';
 }
@@ -1390,13 +1390,14 @@ function resetAll() {
             queueCount.textContent = pendingTasks.length;
             if (queueEmpty) queueEmpty.hidden = true;
             queueList.hidden = false;
-            queueList.innerHTML = pendingTasks.slice(0, 10).map(function(task) {
+            queueList.innerHTML = pendingTasks.slice(0, 10).map(function(task, index) {
                 var time = task.createdAt ? new Date(task.createdAt).toLocaleString('zh-CN', {month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'}) : '';
+                var queueNumber = 'A' + String(index + 1).padStart(2, '0');
                 var submitter = task.submitter ? task.submitter.name : '';
                 var avatar = task.submitter && task.submitter.avatar ? task.submitter.avatar : '';
                 var taskName = (task.data && task.data.basicInfo && task.data.basicInfo['\u578b\u53f7']) || task.taskType || '';
                 var etaBadge = task.eta ? '<span style="background:#fef3c7;color:#f59e0b;padding:3px 10px;border-radius:10px;font-size:0.72rem;font-weight:600;white-space:nowrap">⏰ 预计' + task.eta + '完成</span>' : '';
-                return '<div class="queue-item"><span class="queue-item-time">' + time + '</span><div class="queue-item-body"><div class="queue-item-task">' + taskName + '</div><div class="queue-item-submitter">' + (avatar ? '<img src="' + avatar + '" alt="">' : '') + '<span>' + submitter + '</span></div></div><div style="display:flex;align-items:center;gap:8px;flex-shrink:0">' + etaBadge + '<span class="queue-item-status pending">Pending</span></div></div>';
+                return '<div class="queue-item"><span class="queue-item-time">' + time + '</span><span class="queue-item-number">' + queueNumber + '</span><div class="queue-item-body"><div class="queue-item-task">' + taskName + '</div><div class="queue-item-submitter">' + (avatar ? '<img src="' + avatar + '" alt="">' : '') + '<span>' + submitter + '</span></div></div><div style="display:flex;align-items:center;gap:8px;flex-shrink:0">' + etaBadge + '<span class="queue-item-status pending">Pending</span></div></div>';
             }).join('');
         } catch (err) {
             console.error('Queue load failed:', err);

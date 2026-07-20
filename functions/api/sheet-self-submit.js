@@ -10,6 +10,7 @@ export async function onRequestPost(context) {
     catch { return Response.json({ ok: false, error: '请求格式错误' }, { status: 400 }); }
 
     const submitter = normalizeSubmitter(body.submitter);
+    const standalonePhotography = body.sourceMode === 'photography';
     const slots = Array.isArray(body.slots) ? body.slots.slice(0, SHEET_SELF_SLOT_COUNT).map((slot, index) => normalizeSlot(slot, index)) : [];
     if (!submitter.unionId || !submitter.name) {
         return Response.json({ ok: false, error: '请先登录钉钉' }, { status: 401 });
@@ -28,9 +29,9 @@ export async function onRequestPost(context) {
         mode: 'sheet_self',
         submitter,
         category: '图片',
-        imageName: `表格自助-${slots.length}张图片`,
-        productName: slots[0]?.productName || '表格自助',
-        desc: `生成 ${slots.length} 个图片位：${sizeSummary.join('、')}`,
+        imageName: standalonePhotography ? '图片拍摄' : `表格自助-${slots.length}张图片`,
+        productName: standalonePhotography ? '图片拍摄' : slots[0]?.productName || '表格自助',
+        desc: standalonePhotography ? '图片拍摄需求' : `生成 ${slots.length} 个图片位：${sizeSummary.join('、')}`,
         size: sizeSummary.length === 1 ? slots[0].size : 'mixed',
         productKeys: [],
         refKeys: slots.map(slot => slot.referenceKey),
@@ -38,6 +39,7 @@ export async function onRequestPost(context) {
         resultKeys: [],
         sheetSelfSlotCount: slots.length,
         photographerSlotCount: slots.filter(slot => slot.photographer).length,
+        standalonePhotography,
         status: 'processing',
         silent: false,
         dingtalkNotified: false,
@@ -160,7 +162,8 @@ async function notifyAdminForPhotography(env, parent, origin) {
     });
     const tokenData = await tokenResponse.json();
     if (!tokenData.accessToken) throw new Error('获取钉钉令牌失败');
-    const content = `表格自助任务需要摄影协助\n\n提交人：${parent.submitter.name}\n需要摄影：${parent.photographerSlotCount} 个图片位\n任务ID：${parent.id}\n\n去管理台上传拍摄原图：${origin}/admin.html`;
+    const taskLabel = parent.standalonePhotography ? '图片拍摄' : '表格自助';
+    const content = `${taskLabel}任务需要摄影协助\n\n提交人：${parent.submitter.name}\n需要摄影：${parent.photographerSlotCount} 个图片位\n任务ID：${parent.id}\n\n去管理台上传拍摄原图：${origin}/admin.html`;
     const response = await fetch('https://api.dingtalk.com/v1.0/robot/oToMessages/batchSend', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-acs-dingtalk-access-token': tokenData.accessToken },

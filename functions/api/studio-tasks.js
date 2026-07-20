@@ -53,6 +53,9 @@ export async function onRequestPatch(context) {
         if (task.mode !== 'resize_ai' || task.status !== 'done') {
             return Response.json({ ok: false, error: 'Only completed resize tasks can be repaired' }, { status: 400 });
         }
+        if (task.aPlusDouble === true) {
+            return Response.json({ ok: false, error: 'A+ 连续双图已按上下两张 600x450 导出，无需执行单图校正' }, { status: 409 });
+        }
         if (!env.SUBMISSION_FILES) {
             return Response.json({ ok: false, error: 'R2 storage not configured' }, { status: 500 });
         }

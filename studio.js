@@ -23,7 +23,7 @@ function initStudioTypewriter() {
 
 let currentUser = null;
 const requestedMode = new URLSearchParams(window.location.search).get('mode');
-let currentMode = ['free', 'program', 'sheet', 'retouch', 'variant', 'resize'].includes(requestedMode) ? requestedMode : 'free';
+let currentMode = ['free', 'program', 'sheet', 'photography', 'retouch', 'variant', 'resize'].includes(requestedMode) ? requestedMode : 'free';
 
 const ANALYZE_PROMPT = `# 角色设定
 你是一位拥有十年经验的亚马逊资深视觉拆解专家。你的任务是对用户上传的电商图片进行"逆向工程"，将其拆解为 1:1 像素级复刻的"图层蓝图"，并生成精准包含"人物互动"的素材生图提示词。
@@ -131,7 +131,7 @@ function onAgreeChange(checked) {
 }
 function applyAgreementGate() {
     const agreed = hasAgreed();
-    document.querySelectorAll('.studio-submit-btn, #freeSubmit, #progSubmit, #sheetSelfSubmit, #retouchSubmit, #cutoutSubmit, #variantSubmit').forEach(btn => {
+    document.querySelectorAll('.studio-submit-btn, #freeSubmit, #progSubmit, #sheetSelfSubmit, #photographySubmit, #retouchSubmit, #cutoutSubmit, #variantSubmit').forEach(btn => {
         if (!btn) return;
         if (agreed) {
             btn.classList.remove('is-gated');
@@ -262,6 +262,7 @@ function renderSizePicker(inputId) {
 }
 
 const A_PLUS_DOUBLE_HELP = '放入上下两个1464x600图片会自动合并上传为参考图，并且输出时会导出为两张1464x600自动分割给你';
+const RESIZE_A_PLUS_DOUBLE_HELP = '分别上传上下两张 1464x600 图片，系统会先合并为一张 1464x1200 图片处理，固定输出 600x900，并自动拆成两张 600x450 发回给你。';
 
 function renderAPlusDoubleLauncher(mode) {
     return `
@@ -277,6 +278,23 @@ function renderAPlusDoubleLauncher(mode) {
                         <div class="a-plus-double-help" id="${mode}APlusDoubleHelp" role="tooltip">${A_PLUS_DOUBLE_HELP}</div>
                     </div>
                     <div class="a-plus-double-ready" id="${mode}APlusDoubleReady" hidden>已合并为 1464 × 1200，输出后自动拆成上下两张</div>
+                </div>`;
+}
+
+function renderResizeAPlusDoubleLauncher() {
+    return `
+                <div class="a-plus-double-launcher resize-a-plus-double-launcher" id="resizeAPlusDoubleLauncher">
+                    <div class="a-plus-double-action-row">
+                        <button type="button" class="a-plus-double-btn" id="resizeAPlusDoubleBtn" onclick="openAPlusDoubleModal('resize')" aria-pressed="false">
+                            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="8" rx="2"/><rect x="3" y="13" width="18" height="8" rx="2"/><path d="M8 7h8M8 17h8"/></svg>
+                            <span>A+ 连续双图</span>
+                        </button>
+                        <button type="button" class="a-plus-double-info" onclick="toggleAPlusDoubleHelp(event, 'resize')" aria-label="查看 A+ 连续双图说明" aria-describedby="resizeAPlusDoubleHelp">
+                            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+                        </button>
+                        <div class="a-plus-double-help" id="resizeAPlusDoubleHelp" role="tooltip">${RESIZE_A_PLUS_DOUBLE_HELP}</div>
+                    </div>
+                    <div class="a-plus-double-ready" id="resizeAPlusDoubleReady" hidden>已合并为 1464 × 1200，固定处理为 600 × 900，完成后自动拆成上下两张 600 × 450。</div>
                 </div>`;
 }
 
@@ -312,7 +330,8 @@ function renderShootRequestLauncher(mode) {
 
 const FREE_FORM = `
     <div class="studio-layout">
-        <div class="studio-panel">
+        <div class="studio-panel studio-generation-panel">
+            <div class="studio-generation-scroll">
             <div class="sf-section">
                 <div class="sf-label">模型</div>
                 <div class="sf-model-select" id="modelSelect">
@@ -388,8 +407,11 @@ ${renderShootRequestLauncher('free')}
 ${renderSizePicker('freeSizeSelect')}
                 <div class="size-resize-hint" id="freeSizeHint" hidden>生成后可进入 <a href="studio.html?mode=resize&width=1464&height=600">尺寸修改</a> 修改成 1464 × 600</div>
             </div>
-            <button class="sf-submit" id="freeSubmit">生成图片</button>
-            <div id="freeStatus" class="studio-status" style="margin-top:10px"></div>
+            </div>
+            <div class="studio-submit-dock">
+                <button class="sf-submit" id="freeSubmit">生成图片</button>
+                <div id="freeStatus" class="studio-status"></div>
+            </div>
         </div>
         <div class="studio-preview studio-gallery-preview">
             <div class="studio-preview-tab">预览</div>
@@ -408,7 +430,8 @@ ${renderSizePicker('freeSizeSelect')}
 
 const PROGRAM_FORM = `
     <div class="studio-layout">
-        <div class="studio-panel">
+        <div class="studio-panel studio-generation-panel">
+            <div class="studio-generation-scroll">
             <div class="sf-section">
                 <div class="program-ai-label-row">
                     <div class="sf-label">产品名称 <span class="sf-req">*</span></div>
@@ -471,8 +494,11 @@ ${renderShootRequestLauncher('program')}
 ${renderSizePicker('progSizeSelect')}
                 <div class="size-resize-hint" id="progSizeHint" hidden>生成后可进入 <a href="studio.html?mode=resize&width=1464&height=600">尺寸修改</a> 修改成 1464 × 600</div>
             </div>
-            <button class="sf-submit" id="progSubmit">生成图片</button>
-            <div id="progStatus" class="studio-status" style="margin-top:10px"></div>
+            </div>
+            <div class="studio-submit-dock">
+                <button class="sf-submit" id="progSubmit">生成图片</button>
+                <div id="progStatus" class="studio-status"></div>
+            </div>
         </div>
         <div class="studio-preview studio-gallery-preview">
             <div class="studio-preview-tab">预览</div>
@@ -524,10 +550,69 @@ const SHEET_SELF_FORM = `
         </div>
     </div>`;
 
+const PHOTOGRAPHY_FORM = `
+    <div class="photography-layout">
+        <div class="studio-panel photography-panel">
+            <div class="photography-head">
+                <div>
+                    <h2>图片拍摄</h2>
+                    <p>上传要模仿的参考图，摄影师补图后会自动完成精修、白底抠图和图生图。</p>
+                </div>
+                <span class="photography-badge">摄影师协助</span>
+            </div>
+            <div class="photography-body">
+                <section class="photography-assets">
+                    <div class="photography-section-title">素材图片</div>
+                    <div class="photography-assets-grid">
+                        <div class="photography-upload is-required" id="photographyReferenceSlot">
+                            <label class="photography-upload-label" for="photographyReferenceInput">
+                                <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 16V4m0 0L7 9m5-5 5 5"/><path d="M5 14v5h14v-5"/></svg>
+                                <strong>要模仿的图</strong>
+                                <small>必填，单张最大 8 MB</small>
+                            </label>
+                        </div>
+                        <div class="photography-upload" id="photographyExampleSlot">
+                            <label class="photography-upload-label" for="photographyExampleInput">
+                                <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 16V4m0 0L7 9m5-5 5 5"/><path d="M5 14v5h14v-5"/></svg>
+                                <strong>上传拍摄案例图</strong>
+                                <small>可选，留空则按参考图拍摄</small>
+                            </label>
+                        </div>
+                        <div class="photography-note">
+                            <label for="photographyNote">拍摄备注 <span>可选</span></label>
+                            <textarea id="photographyNote" maxlength="300" placeholder="例如：参考这个角度、光线或摆放方式"></textarea>
+                        </div>
+                    </div>
+                    <input type="file" id="photographyReferenceInput" accept="image/*" hidden>
+                    <input type="file" id="photographyExampleInput" accept="image/*" hidden>
+                </section>
+                <aside class="photography-settings">
+                    <div class="photography-section-title">设置</div>
+                    <div class="photography-setting-row">
+                        <div class="photography-setting-copy"><strong>由摄影师决定</strong><small>开启后，此图片位暂时不需要用户上传白底图</small></div>
+                        <span class="photography-fixed-state">已开启</span>
+                    </div>
+                    <div class="photography-setting-row">
+                        <div class="photography-setting-copy"><strong>需要精修</strong><small id="photographyRetouchHint">已开启：先精修，再进行白底抠图</small></div>
+                        <div class="sheet-self-switch-control">
+                            <span class="sheet-self-switch-state" id="photographyRetouchState">已开启</span>
+                            <label class="sheet-self-switch" title="控制是否需要精修"><input type="checkbox" id="photographyRetouchToggle" aria-label="需要精修" checked><span></span></label>
+                        </div>
+                    </div>
+                </aside>
+            </div>
+            <div class="photography-actions">
+                <p>提交后会通知摄影师；完成后通过钉钉通知，无需停留在此页面。</p>
+                <button class="sf-submit" id="photographySubmit">提交拍摄需求</button>
+            </div>
+            <div id="photographyStatus" class="studio-status" style="margin:0 24px 18px"></div>
+        </div>
+    </div>`;
+
 const RESIZE_FORM = `
     <div class="studio-layout resize-layout">
         <div class="studio-panel">
-            <div class="sf-section">
+            <div class="sf-section" id="resizeTargetSection">
                 <div class="sf-label">目标尺寸 <span class="sf-req">*</span></div>
                 <div class="resize-target-grid" id="resizeTargetGrid">
                     <button type="button" class="resize-target-btn" data-width="800" data-height="600">修改成 800 × 600<small>AI 2K 后台处理</small></button>
@@ -550,6 +635,7 @@ const RESIZE_FORM = `
             </div>
             <div class="sf-section">
                 <div class="sf-label">原始图片 <span class="sf-req">*</span></div>
+${renderResizeAPlusDoubleLauncher()}
                 <label class="sf-upload-box resize-upload-box" id="resizeDropZone" for="resizeImageInput">
                     <input id="resizeImageInput" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="26" height="26"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
@@ -687,7 +773,8 @@ const VARIANT_FORM = `
         </div>
     </div>`;
 
-const uploads = { freeImages: [], freeModel: null, freeScene: null, freeProduct: [], freeProduct1: null, freeProduct2: null, progRef: [], progProduct: [], retouchImages: [], cutoutImages: [], variantImages: [] };
+const uploads = { freeImages: [], freeModel: null, freeScene: null, freeProduct: [], freeProduct1: null, freeProduct2: null, helpImages: [], progRef: [], progProduct: [], retouchImages: [], cutoutImages: [], variantImages: [] };
+const studioHelpState = { type: '' };
 const inlineShootRequestState = {
     free: { enabled: false, image: null },
     program: { enabled: false, image: null }
@@ -710,6 +797,7 @@ let programProductAiBusy = false;
 let programCopyAiBusy = false;
 let programProductAiRequestId = 0;
 let resizeToolCleanup = null;
+let resizeAPlusApplyHandler = null;
 const MAX_STUDIO_FILE_SIZE = 8 * 1024 * 1024;
 const MAX_RETOUCH_FILE_SIZE = 15 * 1024 * 1024;
 const MAX_VARIANT_FILE_SIZE = 15 * 1024 * 1024;
@@ -726,6 +814,13 @@ const aPlusDoubleState = {
     merged: null,
     previousSize: '',
     previousRefs: []
+};
+const photographyModeState = {
+    referenceKey: null,
+    photographyExampleKey: null,
+    photographyNote: '',
+    skipRetouch: false,
+    uploadingType: ''
 };
 
 function createEmptySheetSelfState() {
@@ -830,8 +925,8 @@ function loadAPlusImage(src) {
     });
 }
 
-async function readAPlusHalf(file, label) {
-    const validationError = validateStudioImage(file);
+async function readAPlusHalf(file, label, maxBytes = MAX_STUDIO_FILE_SIZE) {
+    const validationError = validateAPlusHalfFile(file, maxBytes);
     if (validationError) throw new Error(validationError);
     const upload = await fileToStudioUpload(file);
     const image = await loadAPlusImage(upload.dataUrl);
@@ -839,6 +934,12 @@ async function readAPlusHalf(file, label) {
         throw new Error(`${label}必须是 1464 × 600，当前是 ${image.naturalWidth} × ${image.naturalHeight}`);
     }
     return { ...upload, width: image.naturalWidth, height: image.naturalHeight };
+}
+
+function validateAPlusHalfFile(file, maxBytes) {
+    if (!file?.type?.startsWith('image/')) return '请选择图片文件';
+    if (file.size > maxBytes) return `图片不能超过 ${Math.round(maxBytes / 1024 / 1024)}MB`;
+    return '';
 }
 
 async function mergeAPlusHalves(top, bottom) {
@@ -930,22 +1031,56 @@ function updateAPlusDoubleUi(mode) {
         if (sizeSection) sizeSection.hidden = active;
         if (refInput) refInput.disabled = active;
         setAPlusSizeLocked('progSizeSelect', active);
+    } else if (mode === 'resize') {
+        const targetSection = document.getElementById('resizeTargetSection');
+        const targetGrid = document.getElementById('resizeTargetGrid');
+        const customSize = document.getElementById('resizeCustomSize');
+        const customInputs = targetSection?.querySelectorAll('input[type="number"]') || [];
+        const reflowInput = document.getElementById('resizeReflow');
+        const dropZone = document.getElementById('resizeDropZone');
+        const imageInput = document.getElementById('resizeImageInput');
+        targetSection?.classList.toggle('resize-a-plus-locked', active);
+        targetGrid?.querySelectorAll('.resize-target-btn').forEach(button => { button.disabled = active; });
+        customInputs.forEach(input => { input.disabled = active; });
+        if (reflowInput) {
+            if (active) reflowInput.checked = false;
+            reflowInput.disabled = active;
+        }
+        if (customSize) customSize.hidden = active || !targetGrid?.querySelector('.resize-target-btn.active[data-custom="true"]');
+        if (dropZone) dropZone.hidden = active;
+        if (imageInput) imageInput.disabled = active;
+
+        let lockLabel = targetSection?.querySelector('.resize-a-plus-lock');
+        if (active && targetSection && !lockLabel) {
+            lockLabel = document.createElement('div');
+            lockLabel.className = 'resize-a-plus-lock';
+            lockLabel.textContent = 'A+ 连续双图已固定输出：600 × 900，完成后自动拆成上下两张 600 × 450';
+            targetSection.appendChild(lockLabel);
+        } else if (!active) {
+            lockLabel?.remove();
+        }
     }
 }
 
 function activateAPlusDouble(mode, top, bottom, merged) {
     if (!isAPlusDoubleActive(mode)) {
-        const sizeInput = document.getElementById(mode === 'free' ? 'freeSizeSelect' : 'progSizeSelect');
-        aPlusDoubleState.previousSize = sizeInput?.value || '2K 自动识别';
-        aPlusDoubleState.previousRefs = mode === 'free' ? [...uploads.freeImages] : [...uploads.progRef];
+        if (mode === 'free' || mode === 'program') {
+            const sizeInput = document.getElementById(mode === 'free' ? 'freeSizeSelect' : 'progSizeSelect');
+            aPlusDoubleState.previousSize = sizeInput?.value || '2K 自动识别';
+            aPlusDoubleState.previousRefs = mode === 'free' ? [...uploads.freeImages] : [...uploads.progRef];
+        }
     }
     Object.assign(aPlusDoubleState, { enabled: true, mode, top, bottom, merged });
     if (mode === 'free') {
         uploads.freeImages = [merged, ...aPlusDoubleState.previousRefs.filter(item => !item?.isAPlusDouble).slice(0, 3)];
         renderFreePreview();
-    } else {
+    } else if (mode === 'program') {
         uploads.progRef = [merged];
         renderThumbs('progRefThumbs', 'progRef');
+    } else if (mode === 'resize') {
+        updateAPlusDoubleUi(mode);
+        resizeAPlusApplyHandler?.({ top, bottom, merged });
+        return;
     }
     updateAPlusDoubleUi(mode);
 }
@@ -959,16 +1094,25 @@ function deactivateAPlusDouble(mode) {
         uploads.freeImages = previousRefs;
         renderFreePreview();
         syncSizePickerValue('freeSizeSelect', previousSize);
-    } else {
+    } else if (mode === 'program') {
         uploads.progRef = previousRefs;
         renderThumbs('progRefThumbs', 'progRef');
         syncSizePickerValue('progSizeSelect', previousSize);
+    } else if (mode === 'resize') {
+        resizeAPlusApplyHandler?.(null);
     }
     updateAPlusDoubleUi(mode);
 }
 
 function openAPlusDoubleModal(mode) {
-    if (!['free', 'program'].includes(mode) || currentMode !== mode) return;
+    if (!['free', 'program', 'resize'].includes(mode) || currentMode !== mode) return;
+    const isResizeMode = mode === 'resize';
+    const maxBytes = isResizeMode ? 20 * 1024 * 1024 : MAX_STUDIO_FILE_SIZE;
+    const title = isResizeMode ? 'A+ 连续双图尺寸修改' : 'A+ 连续双图';
+    const description = isResizeMode
+        ? '分别上传上下两张 1464 × 600 图片，处理后固定输出 600 × 900，并自动拆成两张 600 × 450。'
+        : '分别上传上下两张 1464 × 600 图片';
+    const mergeLabel = isResizeMode ? '合并并用于尺寸修改' : '合并并使用';
     document.getElementById('aPlusDoubleModal')?.remove();
     const overlay = document.createElement('div');
     overlay.id = 'aPlusDoubleModal';
@@ -979,7 +1123,7 @@ function openAPlusDoubleModal(mode) {
     overlay.innerHTML = `
         <div class="a-plus-double-dialog">
             <div class="a-plus-double-dialog-head">
-                <div><h3 id="aPlusDoubleModalTitle">A+ 连续双图</h3><p>分别上传上下两张 1464 × 600 图片</p></div>
+                <div><h3 id="aPlusDoubleModalTitle">${title}</h3><p>${description}</p></div>
                 <button type="button" class="a-plus-double-close" aria-label="关闭">×</button>
             </div>
             <div class="a-plus-double-slot-grid">
@@ -998,7 +1142,7 @@ function openAPlusDoubleModal(mode) {
             <div class="a-plus-double-dialog-actions">
                 <button type="button" class="a-plus-double-cancel">取消</button>
                 <button type="button" class="a-plus-double-disable" ${isAPlusDoubleActive(mode) ? '' : 'hidden'}>停用连续双图</button>
-                <button type="button" class="a-plus-double-merge">合并并使用</button>
+                <button type="button" class="a-plus-double-merge">${mergeLabel}</button>
             </div>
         </div>`;
 
@@ -1041,7 +1185,7 @@ function openAPlusDoubleModal(mode) {
         if (!file) return;
         setStatus(`正在读取${slot === 'top' ? '上半部分' : '下半部分'}...`);
         try {
-            selected[slot] = await readAPlusHalf(file, slot === 'top' ? '上半部分' : '下半部分');
+            selected[slot] = await readAPlusHalf(file, slot === 'top' ? '上半部分' : '下半部分', maxBytes);
             renderSlot(slot);
             setStatus(selected.top && selected.bottom ? '两张图片尺寸正确，可以合并。' : '图片尺寸正确，请继续上传另一张。');
         } catch (error) {
@@ -1084,7 +1228,7 @@ function openAPlusDoubleModal(mode) {
         } catch (error) {
             setStatus(error.message, true);
             mergeButton.disabled = false;
-            mergeButton.textContent = '合并并使用';
+            mergeButton.textContent = mergeLabel;
         }
     });
     overlay.addEventListener('click', event => { if (event.target === overlay) close(); });
@@ -1364,6 +1508,225 @@ function toggleModelDropdown() {
     if (dd) dd.hidden = !dd.hidden;
 }
 
+function initStudioHelp() {
+    const modelSection = document.getElementById('modelSelect')?.closest('.sf-section');
+    const panel = modelSection?.closest('.studio-panel');
+    const layout = modelSection?.closest('.studio-layout');
+    if (!modelSection || !panel || !layout) return;
+
+    modelSection.hidden = true;
+    modelSection.classList.add('legacy-model-section');
+
+    const section = document.createElement('section');
+    section.className = 'studio-help-section';
+    section.id = 'studioHelpSection';
+    section.innerHTML = `
+        <div class="sf-label">问题反馈 / 协助</div>
+        <div class="studio-help-launcher">
+            <button type="button" class="studio-help-trigger" id="studioHelpTrigger" aria-expanded="false" aria-controls="studioHelpOptions">
+                <span class="studio-help-trigger-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="8.5"/><path d="M9.7 9.3a2.5 2.5 0 1 1 3.95 2.02c-.95.7-1.65 1.16-1.65 2.48"/><path d="M12 16.8h.01"/></svg>
+                </span>
+                <span class="studio-help-trigger-copy"><strong id="studioHelpTriggerTitle">问题反馈 / 协助</strong><small id="studioHelpTriggerHint">图片、描述词或使用问题都可以告诉我们</small></span>
+                <svg class="studio-help-trigger-caret" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div class="studio-help-options" id="studioHelpOptions" role="listbox" aria-label="选择问题类型" hidden>
+                <button type="button" data-help-type="图片不清晰">图片不清晰</button>
+                <button type="button" data-help-type="如何使用">如何使用</button>
+                <button type="button" data-help-type="需要协助">需要协助</button>
+                <button type="button" data-help-type="反馈">反馈</button>
+                <button type="button" data-help-type="描述词问题">描述词问题</button>
+            </div>
+        </div>
+        <div class="studio-help-feedback" id="studioHelpFeedback" hidden>
+            <div class="studio-help-feedback-head">
+                <span class="studio-help-type-pill" id="studioHelpTypeLabel"></span>
+                <button type="button" class="studio-help-exit" id="studioHelpExit" title="返回作图" aria-label="返回作图">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <p class="studio-help-copy">请说明遇到问题的页面、操作步骤和期望结果。涉及图片或描述词时，可附上截图或原图，方便我们更快协助处理。</p>
+            <div class="sf-label">问题说明 <span class="sf-req">*</span></div>
+            <textarea class="sf-textarea" id="studioHelpMessage" rows="6" maxlength="2000" placeholder="请把遇到的问题写在这里" oninput="updateCharCount(this,'studioHelpMessageCount',2000)"></textarea>
+            <div class="studio-help-count"><span id="studioHelpMessageCount">0</span> / 2000</div>
+            <div class="sf-label studio-help-upload-label">上传图片 <span class="sf-sub">（可选，最多 4 张）</span></div>
+            <div class="sf-upload-row">
+                <div class="sf-upload-box" id="studioHelpDrop">
+                    <input type="file" id="studioHelpInput" accept="image/*" multiple hidden>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="24" height="24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    <span>上传图片</span>
+                    <small>单张最大 8 MB</small>
+                </div>
+                <div class="sf-preview-list" id="studioHelpPreviewList"></div>
+            </div>
+            <button type="button" class="sf-submit" id="studioHelpSubmit">提交问题</button>
+            <div id="studioHelpStatus" class="studio-status" style="margin-top:10px" aria-live="polite"></div>
+        </div>`;
+
+    modelSection.insertAdjacentElement('afterend', section);
+    [...panel.children].forEach(child => {
+        if (child !== modelSection && child !== section) child.classList.add('free-create-section');
+    });
+
+    const trigger = section.querySelector('#studioHelpTrigger');
+    const triggerTitle = section.querySelector('#studioHelpTriggerTitle');
+    const triggerHint = section.querySelector('#studioHelpTriggerHint');
+    const options = section.querySelector('#studioHelpOptions');
+    const feedback = section.querySelector('#studioHelpFeedback');
+    const typeLabel = section.querySelector('#studioHelpTypeLabel');
+    const exit = section.querySelector('#studioHelpExit');
+    const drop = section.querySelector('#studioHelpDrop');
+    const input = section.querySelector('#studioHelpInput');
+    const submit = section.querySelector('#studioHelpSubmit');
+
+    const render = () => {
+        const active = Boolean(studioHelpState.type);
+        layout.classList.toggle('is-help-active', active);
+        feedback.hidden = !active;
+        trigger.classList.toggle('is-selected', active);
+        triggerTitle.textContent = active ? studioHelpState.type : '问题反馈 / 协助';
+        triggerHint.textContent = active ? '已选择，点击可更换问题类型' : '图片、描述词或使用问题都可以告诉我们';
+        typeLabel.textContent = studioHelpState.type;
+        options.querySelectorAll('button').forEach(button => {
+            const selected = button.dataset.helpType === studioHelpState.type;
+            button.classList.toggle('is-selected', selected);
+            button.setAttribute('aria-selected', String(selected));
+        });
+    };
+
+    trigger.addEventListener('click', () => {
+        options.hidden = !options.hidden;
+        trigger.setAttribute('aria-expanded', String(!options.hidden));
+    });
+    options.addEventListener('click', event => {
+        const button = event.target.closest('button[data-help-type]');
+        if (!button) return;
+        studioHelpState.type = button.dataset.helpType;
+        options.hidden = true;
+        trigger.setAttribute('aria-expanded', 'false');
+        render();
+        section.querySelector('#studioHelpMessage')?.focus();
+    });
+    exit.addEventListener('click', () => {
+        studioHelpState.type = '';
+        options.hidden = true;
+        trigger.setAttribute('aria-expanded', 'false');
+        render();
+    });
+    drop.addEventListener('click', () => input.click());
+    drop.addEventListener('dragover', event => {
+        event.preventDefault();
+        drop.classList.add('dragover');
+    });
+    drop.addEventListener('dragleave', () => drop.classList.remove('dragover'));
+    drop.addEventListener('drop', event => {
+        event.preventDefault();
+        drop.classList.remove('dragover');
+        addStudioHelpImages(Array.from(event.dataTransfer.files));
+    });
+    input.addEventListener('change', event => {
+        addStudioHelpImages(Array.from(event.target.files));
+        input.value = '';
+    });
+    submit.addEventListener('click', submitStudioHelp);
+    render();
+}
+
+function addStudioHelpImages(files) {
+    const status = document.getElementById('studioHelpStatus');
+    const drop = document.getElementById('studioHelpDrop');
+    for (const file of files) {
+        if (uploads.helpImages.length >= 4) {
+            showStudioFieldError(status, '最多上传 4 张图片', drop);
+            return;
+        }
+        const validationError = validateStudioImage(file);
+        if (validationError) {
+            showStudioFieldError(status, validationError, drop);
+            continue;
+        }
+        const reader = new FileReader();
+        reader.onload = event => {
+            uploads.helpImages.push({ name: file.name, base64: event.target.result.split(',')[1], mimeType: file.type, dataUrl: event.target.result });
+            renderStudioHelpImages();
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+function renderStudioHelpImages() {
+    const list = document.getElementById('studioHelpPreviewList');
+    const drop = document.getElementById('studioHelpDrop');
+    if (!list) return;
+    list.replaceChildren();
+    if (drop) drop.style.display = uploads.helpImages.length >= 4 ? 'none' : '';
+    uploads.helpImages.forEach((image, index) => {
+        const item = document.createElement('div');
+        item.className = 'sf-preview-item';
+        const preview = document.createElement('img');
+        preview.src = image.dataUrl;
+        preview.alt = `反馈图片 ${index + 1}`;
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.textContent = '×';
+        remove.setAttribute('aria-label', `删除反馈图片 ${index + 1}`);
+        remove.addEventListener('click', () => {
+            uploads.helpImages.splice(index, 1);
+            renderStudioHelpImages();
+        });
+        item.append(preview, remove);
+        list.append(item);
+    });
+}
+
+async function submitStudioHelp() {
+    if (!currentUser) { showLoginModal(); return; }
+    if (!hasAgreed()) { openGuide(); guideShowPage(2); return; }
+    const message = document.getElementById('studioHelpMessage')?.value.trim() || '';
+    const status = document.getElementById('studioHelpStatus');
+    const button = document.getElementById('studioHelpSubmit');
+    if (!studioHelpState.type) return;
+    if (!message) {
+        showStudioFieldError(status, '请写下遇到的问题', document.getElementById('studioHelpMessage'));
+        return;
+    }
+    if (button.dataset.loading === '1') return;
+
+    const originalText = button.textContent;
+    button.dataset.loading = '1';
+    button.disabled = true;
+    button.classList.add('is-loading');
+    status.className = 'studio-status';
+    try {
+        status.textContent = '正在上传图片…';
+        const images = uploads.helpImages.length
+            ? await uploadImages(uploads.helpImages, 'feedback-images/studio-help')
+            : [];
+        status.textContent = '正在提交问题…';
+        const response = await fetch('/api/studio-help', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: studioHelpState.type, message, images: images.map(item => item.key), submitter: currentUser })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.ok) throw new Error(result.error || `提交失败 (${response.status})`);
+        document.getElementById('studioHelpMessage').value = '';
+        updateCharCount(document.getElementById('studioHelpMessage'), 'studioHelpMessageCount', 2000);
+        uploads.helpImages = [];
+        renderStudioHelpImages();
+        status.textContent = '问题已提交，我们会尽快协助处理。';
+        status.classList.add('ok');
+    } catch (error) {
+        status.textContent = `提交失败：${error.message}`;
+        status.classList.add('err');
+    } finally {
+        button.disabled = false;
+        button.classList.remove('is-loading');
+        button.dataset.loading = '';
+        button.textContent = originalText;
+    }
+}
+
 function selectModel(key, name) {
     const nameEl = document.getElementById('modelCurrentName');
     if (nameEl) nameEl.textContent = name;
@@ -1405,7 +1768,8 @@ function renderForm() {
     programProductAiBusy = false;
     programCopyAiBusy = false;
     resetAPlusDoubleState();
-    uploads.freeImages = []; uploads.freeModel = null; uploads.freeScene = null; uploads.freeProduct = []; uploads.freeProduct1 = null; uploads.freeProduct2 = null; uploads.progRef = []; uploads.progProduct = []; uploads.variantImages = [];
+    uploads.freeImages = []; uploads.freeModel = null; uploads.freeScene = null; uploads.freeProduct = []; uploads.freeProduct1 = null; uploads.freeProduct2 = null; uploads.helpImages = []; uploads.progRef = []; uploads.progProduct = []; uploads.variantImages = [];
+    studioHelpState.type = '';
     if (currentMode === 'free' || currentMode === 'program') resetInlineShootRequestState(currentMode);
     let galleryWasReady = false;
     if (currentMode === 'free') {
@@ -1416,6 +1780,7 @@ function renderForm() {
         loadPromptQuota();
         initSizePicker('freeSizeSelect', 'freeSizeHint');
         initInlineShootRequest('free');
+        initStudioHelp();
         document.getElementById('freeSubmit').addEventListener('click', submitFree);
     } else if (currentMode === 'program') {
         galleryWasReady = renderGenerationMode(area, PROGRAM_FORM);
@@ -1429,6 +1794,10 @@ function renderForm() {
         if (attachedGallery) attachedGallery.remove();
         area.innerHTML = SHEET_SELF_FORM;
         initSheetSelfMode();
+    } else if (currentMode === 'photography') {
+        if (attachedGallery) attachedGallery.remove();
+        area.innerHTML = PHOTOGRAPHY_FORM;
+        initPhotographyMode();
     } else if (currentMode === 'retouch') {
         if (attachedGallery) attachedGallery.remove();
         area.innerHTML = RETOUCH_FORM;
@@ -1442,7 +1811,7 @@ function renderForm() {
         area.innerHTML = RESIZE_FORM;
         initResizeTool();
     }
-    if (currentMode !== 'resize' && currentMode !== 'retouch' && currentMode !== 'variant' && currentMode !== 'sheet' && !galleryWasReady) renderStudioGallery();
+    if (currentMode !== 'resize' && currentMode !== 'retouch' && currentMode !== 'variant' && currentMode !== 'sheet' && currentMode !== 'photography' && !galleryWasReady) renderStudioGallery();
     applyAgreementGate();
 }
 
@@ -2330,6 +2699,177 @@ function sheetSelfEsc(value) {
     return String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+function initPhotographyMode() {
+    const note = document.getElementById('photographyNote');
+    const retouchToggle = document.getElementById('photographyRetouchToggle');
+    if (note) {
+        note.value = photographyModeState.photographyNote;
+        note.addEventListener('input', event => {
+            photographyModeState.photographyNote = event.target.value;
+        });
+    }
+    if (retouchToggle) {
+        retouchToggle.checked = !photographyModeState.skipRetouch;
+        retouchToggle.addEventListener('change', event => {
+            photographyModeState.skipRetouch = !event.target.checked;
+            updatePhotographyRetouchState();
+        });
+    }
+    document.getElementById('photographyReferenceInput')?.addEventListener('change', event => {
+        const file = event.target.files?.[0];
+        event.target.value = '';
+        if (file) handlePhotographyModeFile('reference', file);
+    });
+    document.getElementById('photographyExampleInput')?.addEventListener('change', event => {
+        const file = event.target.files?.[0];
+        event.target.value = '';
+        if (file) handlePhotographyModeFile('example', file);
+    });
+    document.querySelector('.photography-assets')?.addEventListener('click', event => {
+        const preview = event.target.closest('[data-photography-preview]');
+        if (preview) {
+            openSheetSelfImagePreview(preview.dataset.photographyPreview, preview.dataset.previewLabel);
+            return;
+        }
+        const remove = event.target.closest('[data-photography-remove]');
+        if (!remove) return;
+        if (remove.dataset.photographyRemove === 'reference') photographyModeState.referenceKey = null;
+        else photographyModeState.photographyExampleKey = null;
+        renderPhotographyModeUploads();
+    });
+    document.getElementById('photographySubmit')?.addEventListener('click', submitPhotographyMode);
+    renderPhotographyModeUploads();
+    updatePhotographyRetouchState();
+}
+
+function updatePhotographyRetouchState() {
+    const enabled = !photographyModeState.skipRetouch;
+    const toggle = document.getElementById('photographyRetouchToggle');
+    const state = document.getElementById('photographyRetouchState');
+    const hint = document.getElementById('photographyRetouchHint');
+    if (toggle) toggle.checked = enabled;
+    if (state) {
+        state.textContent = enabled ? '已开启' : '已关闭';
+        state.className = 'sheet-self-switch-state' + (enabled ? '' : ' is-off');
+    }
+    if (hint) hint.textContent = enabled
+        ? '已开启：先精修，再进行白底抠图'
+        : '已关闭：跳过精修，速度更快，适合场景图';
+}
+
+function renderPhotographyModeUploads() {
+    renderPhotographyModeUpload('photographyReferenceSlot', 'reference', photographyModeState.referenceKey, '要模仿的图', true);
+    renderPhotographyModeUpload('photographyExampleSlot', 'example', photographyModeState.photographyExampleKey, '拍摄案例图', false);
+}
+
+function renderPhotographyModeUpload(slotId, type, file, label, required) {
+    const slot = document.getElementById(slotId);
+    if (!slot) return;
+    const loading = photographyModeState.uploadingType === type;
+    slot.className = `photography-upload${required ? ' is-required' : ''}${loading ? ' is-loading' : ''}`;
+    if (file?.key) {
+        const imageUrl = sheetSelfImageUrl(file.key);
+        slot.innerHTML = `<button type="button" class="photography-upload-preview" data-photography-preview="${sheetSelfEsc(imageUrl)}" data-preview-label="${sheetSelfEsc(label)}" title="点击放大查看"><img src="${sheetSelfEsc(imageUrl)}" alt="${sheetSelfEsc(label)}"></button>
+            <span class="photography-upload-badge">${sheetSelfEsc(label)}</span>
+            <button type="button" class="photography-upload-remove" data-photography-remove="${type}" aria-label="移除${sheetSelfEsc(label)}" title="移除${sheetSelfEsc(label)}">×</button>`;
+        return;
+    }
+    const inputId = type === 'reference' ? 'photographyReferenceInput' : 'photographyExampleInput';
+    slot.innerHTML = `<label class="photography-upload-label" for="${inputId}">
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 16V4m0 0L7 9m5-5 5 5"/><path d="M5 14v5h14v-5"/></svg>
+        <strong>${loading ? '图片上传中...' : (type === 'reference' ? '要模仿的图' : '上传拍摄案例图')}</strong>
+        <small>${type === 'reference' ? '必填，单张最大 8 MB' : '可选，留空则按参考图拍摄'}</small>
+    </label>`;
+}
+
+async function handlePhotographyModeFile(type, file) {
+    if (photographyModeState.uploadingType) return;
+    const status = document.getElementById('photographyStatus');
+    const error = validateSheetSelfFile(file);
+    if (error) {
+        showStudioFieldError(status, error, document.getElementById(type === 'reference' ? 'photographyReferenceSlot' : 'photographyExampleSlot'));
+        return;
+    }
+    photographyModeState.uploadingType = type;
+    status.textContent = '正在上传图片...';
+    status.className = 'studio-status';
+    renderPhotographyModeUploads();
+    try {
+        const [key] = await uploadImages([{ file, name: file.name }], 'studio/sheet-self');
+        if (type === 'reference') photographyModeState.referenceKey = key;
+        else photographyModeState.photographyExampleKey = key;
+        status.textContent = '图片已上传';
+        status.className = 'studio-status ok';
+    } catch (uploadError) {
+        status.textContent = '上传失败：' + uploadError.message;
+        status.className = 'studio-status err';
+    } finally {
+        photographyModeState.uploadingType = '';
+        renderPhotographyModeUploads();
+    }
+}
+
+async function submitPhotographyMode() {
+    const status = document.getElementById('photographyStatus');
+    const button = document.getElementById('photographySubmit');
+    if (!currentUser) { showLoginModal(); return; }
+    if (!hasAgreed()) { openGuide(); guideShowPage(2); return; }
+    if (button.dataset.loading === '1' || photographyModeState.uploadingType) return;
+    if (!photographyModeState.referenceKey?.key) {
+        showStudioFieldError(status, '请先上传要模仿的图', document.getElementById('photographyReferenceSlot'));
+        return;
+    }
+
+    const originalText = button.textContent;
+    button.dataset.loading = '1';
+    button.disabled = true;
+    button.textContent = '正在提交...';
+    status.textContent = '正在创建图片拍摄任务...';
+    status.className = 'studio-status';
+    try {
+        const response = await fetch('/api/sheet-self-submit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                sourceMode: 'photography',
+                submitter: currentUser,
+                slots: [{
+                    index: 0,
+                    photographer: true,
+                    skipRetouch: photographyModeState.skipRetouch,
+                    photographyExampleKey: photographyModeState.photographyExampleKey,
+                    photographyNote: photographyModeState.photographyNote,
+                    productName: '图片拍摄',
+                    size: '1600x1600',
+                    referenceKey: photographyModeState.referenceKey,
+                    productKeys: []
+                }]
+            })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.ok) throw new Error(result.error || `提交失败 (${response.status})`);
+        Object.assign(photographyModeState, {
+            referenceKey: null,
+            photographyExampleKey: null,
+            photographyNote: '',
+            skipRetouch: false,
+            uploadingType: ''
+        });
+        document.getElementById('photographyNote').value = '';
+        renderPhotographyModeUploads();
+        updatePhotographyRetouchState();
+        status.textContent = '';
+        showSuccessModal({ ...result, waitingPhotography: true }, '摄影师补图后会自动处理，完成后通过钉钉通知。');
+    } catch (error) {
+        status.textContent = '提交失败：' + error.message;
+        status.className = 'studio-status err';
+    } finally {
+        button.dataset.loading = '';
+        button.disabled = false;
+        button.textContent = originalText;
+    }
+}
+
 function initRetouchMode() {
     wireBatchImageUpload({
         inputId: 'retouchImageInput',
@@ -2776,6 +3316,9 @@ function initResizeTool() {
     });
 
     const getTarget = () => {
+        if (isAPlusDoubleActive('resize')) {
+            return { width: 600, height: 900, custom: false, aPlusDouble: true };
+        }
         const active = targetGrid.querySelector('.resize-target-btn.active');
         if (active?.dataset.custom === 'true') {
             return {
@@ -2825,6 +3368,10 @@ function initResizeTool() {
             remove.title = '移除图片';
             remove.textContent = '×';
             remove.addEventListener('click', () => {
+                if (isAPlusDoubleActive('resize')) {
+                    deactivateAPlusDouble('resize');
+                    return;
+                }
                 const removed = selectedFiles.splice(index, 1)[0];
                 if (removed) releasePreviewUrl(removed);
                 renderSelectedFiles();
@@ -2854,6 +3401,10 @@ function initResizeTool() {
         return '';
     };
     const addFiles = files => {
+        if (isAPlusDoubleActive('resize')) {
+            showError('A+ 连续双图请通过上方按钮分别上传上下两张 1464 × 600 图片。');
+            return;
+        }
         const incoming = Array.from(files || []);
         const remaining = MAX_RESIZE_BATCH_FILES - selectedFiles.length;
         if (remaining <= 0) {
@@ -2910,6 +3461,27 @@ function initResizeTool() {
         } catch (error) {
             showError(error.message || '图片读取失败，请重新选择。');
         }
+    };
+    const applyResizeAPlusDouble = selection => {
+        selectedFiles.forEach(releasePreviewUrl);
+        selectedFiles = [];
+        currentFile = null;
+        currentImage = null;
+        if (!selection?.merged?.file) {
+            renderSelectedFiles();
+            reset();
+            return;
+        }
+        const mergedFile = selection.merged.file;
+        mergedFile.isAPlusDouble = true;
+        selectedFiles = [mergedFile];
+        renderSelectedFiles();
+        loadFile(mergedFile);
+    };
+    resizeAPlusApplyHandler = applyResizeAPlusDouble;
+    resizeToolCleanup = () => {
+        previewUrls.forEach(url => URL.revokeObjectURL(url));
+        if (resizeAPlusApplyHandler === applyResizeAPlusDouble) resizeAPlusApplyHandler = null;
     };
     const prepareResizeResult = (file, image) => {
         const target = getTarget();
@@ -3025,7 +3597,8 @@ function initResizeTool() {
                 prepared.push({ file: originalFiles[index], image: await readImageFile(originalFiles[index]) });
             }
 
-            const hasAiTasks = prepared.some(item => reflowInput.checked || !canResizeLocally(item.image, target));
+            const aPlusDouble = isAPlusDoubleActive('resize');
+            const hasAiTasks = aPlusDouble || prepared.some(item => reflowInput.checked || !canResizeLocally(item.image, target));
             if (hasAiTasks && !currentUser) {
                 showLoginModal();
                 return;
@@ -3043,13 +3616,13 @@ function initResizeTool() {
                 const item = prepared[index];
                 status.textContent = `正在处理 ${index + 1}/${prepared.length}：${item.file.name}`;
                 try {
-                    const useLocal = !reflowInput.checked && canResizeLocally(item.image, target);
+                    const useLocal = !aPlusDouble && !reflowInput.checked && canResizeLocally(item.image, target);
                     if (useLocal) {
                         await downloadLocalResult(item.file, item.image, target);
                         localCount++;
                         await new Promise(resolve => setTimeout(resolve, 300));
                     } else {
-                        await submitResizeAiTask(item.file, target, reflowInput.checked);
+                        await submitResizeAiTask(item.file, target, aPlusDouble ? false : reflowInput.checked, aPlusDouble);
                         aiCount++;
                     }
                 } catch (error) {
@@ -3075,7 +3648,10 @@ function initResizeTool() {
                 status.className = 'resize-status ready';
             }
             if (aiCount) {
-                showSuccessModal(null, `${aiCount} 个尺寸修改任务已按顺序加入队列，后台会逐张处理，完成后通过钉钉通知`);
+                const successText = aPlusDouble
+                    ? 'A+ 连续双图已加入队列，后台会处理为 600 × 900，并在完成后通过钉钉发送上下两张 600 × 450 图片。'
+                    : `${aiCount} 个尺寸修改任务已按顺序加入队列，后台会逐张处理，完成后通过钉钉通知`;
+                showSuccessModal(null, successText);
                 loadResizeQueue();
             }
         } catch (error) {
@@ -3092,6 +3668,7 @@ function initResizeTool() {
             }
         }
     });
+    updateAPlusDoubleUi('resize');
     updateTarget();
     loadResizeQueue();
 }
@@ -3110,7 +3687,7 @@ function fileToStudioUpload(file) {
     });
 }
 
-async function submitResizeAiTask(file, target, resizeReflow) {
+async function submitResizeAiTask(file, target, resizeReflow, aPlusDouble = false) {
     const upload = await fileToStudioUpload(file);
     const refKeys = await uploadImages([upload], 'studio/resize');
     const size = `${target.width}x${target.height}`;
@@ -3123,10 +3700,11 @@ async function submitResizeAiTask(file, target, resizeReflow) {
             productKeys: [],
             modelKeys: [],
             refKeys,
-            desc: `AI 尺寸修改为 ${size}${resizeReflow ? '，允许重新排版' : ''}`,
+            desc: `${aPlusDouble ? 'A+ 连续双图尺寸修改，合并图会在完成后自动拆成上下两张。' : 'AI 尺寸修改为 ' + size}${resizeReflow ? '，允许重新排版' : ''}`,
             size,
             resizeTarget: size,
             resizeReflow,
+            aPlusDouble,
             imageName: file.name.replace(/\.[^.]+$/, '')
         })
     });
