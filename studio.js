@@ -1512,7 +1512,8 @@ function initStudioHelp() {
     const modelSection = document.getElementById('modelSelect')?.closest('.sf-section');
     const panel = modelSection?.closest('.studio-panel');
     const layout = modelSection?.closest('.studio-layout');
-    if (!modelSection || !panel || !layout) return;
+    const generationScroll = modelSection?.closest('.studio-generation-scroll');
+    if (!modelSection || !panel || !layout || !generationScroll) return;
 
     modelSection.hidden = true;
     modelSection.classList.add('legacy-model-section');
@@ -1564,8 +1565,12 @@ function initStudioHelp() {
         </div>`;
 
     modelSection.insertAdjacentElement('afterend', section);
-    [...panel.children].forEach(child => {
+    generationScroll.classList.remove('free-create-section');
+    [...generationScroll.children].forEach(child => {
         if (child !== modelSection && child !== section) child.classList.add('free-create-section');
+    });
+    [...panel.children].forEach(child => {
+        if (child !== generationScroll) child.classList.add('free-create-section');
     });
 
     const trigger = section.querySelector('#studioHelpTrigger');
