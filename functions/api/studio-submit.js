@@ -9,7 +9,7 @@ export async function onRequestPost(context) {
     try { body = await request.json(); }
     catch { return Response.json({ ok: false, error: 'Invalid JSON' }, { status: 400 }); }
 
-    const { mode, submitter, desc, want, note, scene, analyzePrompt, size, imageName, productName, title, subtitle, otherText, productKeys, refKeys, modelKeys, category, variantScope, colorName, colorHex, resizeTarget, resizeReflow, cutoutOutputFormat, aPlusDouble } = body;
+    const { mode, submitter, desc, want, note, scene, analyzePrompt, size, imageName, productName, title, subtitle, otherText, productKeys, refKeys, modelKeys, category, variantScope, colorName, colorHex, resizeTarget, resizeReflow, cutoutOutputFormat, aPlusDouble, photographerDecision, photographyExampleKey, photographyNote } = body;
     if (!mode || !submitter) {
         return Response.json({ ok: false, error: 'Missing required fields' }, { status: 400 });
     }
@@ -34,12 +34,16 @@ export async function onRequestPost(context) {
     if (aPlusDouble === true && (!Array.isArray(refKeys) || !refKeys.length)) {
         return Response.json({ ok: false, error: 'A+ 连续双图缺少合并参考图' }, { status: 400 });
     }
+    if (photographerDecision === true && !['free', 'program'].includes(mode)) {
+        return Response.json({ ok: false, error: '由摄影师决定仅支持自由模式和图生图模式' }, { status: 400 });
+    }
     if (!env.SUBMISSIONS) {
         return Response.json({ ok: false, error: 'Storage not configured' }, { status: 500 });
     }
 
     const taskId = 'studio-' + crypto.randomUUID();
     const timestamp = Date.now();
+    const waitingPhotography = photographerDecision === true;
 
     const silent = internalTaskOptions?.silent === true;
     const libraryReplacement = normalizeLibraryReplacement(internalTaskOptions?.libraryReplacement);
@@ -67,6 +71,10 @@ export async function onRequestPost(context) {
         resizeReflow: resizeReflow === true,
         cutoutOutputFormat: mode === 'cutout' && cutoutOutputFormat === 'jpg' ? 'jpg' : (mode === 'cutout' ? 'png' : ''),
         aPlusDouble: aPlusDouble === true,
+        photographerDecision: waitingPhotography,
+        photographyExampleKey: waitingPhotography ? normalizePhotographyExample(photographyExampleKey) : null,
+        photographyNote: waitingPhotography ? String(photographyNote || '').trim().slice(0, 300) : '',
+        photographyRequestedAt: waitingPhotography ? new Date(timestamp).toISOString() : '',
         variantNextIndex: 0,
         productKeys: productKeys || [],
         refKeys: refKeys || [],
@@ -76,7 +84,7 @@ export async function onRequestPost(context) {
         libraryReplacement,
         dingtalkNotified: silent,
         r2AutoNotified: silent,
-        status: 'pending',
+        status: waitingPhotography ? 'waiting_photos' : 'pending',
         timestamp,
         createdAt: new Date(timestamp).toISOString()
     };
@@ -86,9 +94,11 @@ export async function onRequestPost(context) {
     let rpaQueueResult = null;
     try {
         await env.SUBMISSIONS.put(taskId, JSON.stringify(task), studioTaskPutOptions(task));
-        const isBackgroundImageTask = mode === 'variant' || mode === 'resize_ai';
-        if (isBackgroundImageTask) await appendQueue(env.SUBMISSIONS, 'studio:imageQueue:v2', taskId);
-        else rpaQueueResult = await queueStudioRpaTask(env, taskId);
+        if (!waitingPhotography) {
+            const isBackgroundImageTask = mode === 'variant' || mode === 'resize_ai';
+            if (isBackgroundImageTask) await appendQueue(env.SUBMISSIONS, 'studio:imageQueue:v2', taskId);
+            else rpaQueueResult = await queueStudioRpaTask(env, taskId);
+        }
     } catch (err) {
         return Response.json({ ok: false, error: 'Storage failed' }, { status: 500 });
     }
@@ -107,11 +117,14 @@ export async function onRequestPost(context) {
             const token = await getAccessToken(env).catch(() => null);
             if (!token) return;
             const modeText = studioModeText(mode);
-            let content = `🎨 新图片制作需求\n\n`;
+            let content = waitingPhotography ? `📷 新任务等待拍照\n\n` : `🎨 新图片制作需求\n\n`;
             content += `提交人：${submitter.name || '匿名'}\n`;
             content += `模式：${modeText}\n`;
+            if (waitingPhotography) content += `任务ID：${taskId}\n`;
             if (desc) content += `描述：${desc}\n`;
             if (want) content += `想做成：${want}\n`;
+            if (waitingPhotography && photographyNote) content += `拍摄备注：${String(photographyNote).trim().slice(0, 300)}\n`;
+            if (waitingPhotography) content += `状态：等待你拍照并在管理台补图，补图后才会开始作图\n`;
             content += `\n去处理：${origin}/admin.html`;
             await sendText(token, env, [env.ADMIN_USER_ID], content).catch(() => {});
         })();
@@ -131,21 +144,27 @@ export async function onRequestPost(context) {
             let content = `✅ 任务已提交成功\n\n`;
             content += `📋 ${titleText}\n`;
             content += `模式：${modeText}\n\n`;
+
+            if (waitingPhotography) {
+                content += `📷 已通知摄影师补拍图片\n`;
+                content += `摄影师在管理台补图后，任务会自动进入作图队列\n`;
+                content += `页面可以先关闭，作图完成后会通过钉钉通知\n\n`;
+            }
             
-            if (mode === 'retouch') {
+            if (!waitingPhotography && mode === 'retouch') {
                 content += `🖼️ 精修任务已进入处理队列\n`;
-            } else if (mode === 'cutout') {
+            } else if (!waitingPhotography && mode === 'cutout') {
                 content += `🖼️ 白底抠图任务已进入处理队列\n`;
-            } else if (mode === 'variant') {
+            } else if (!waitingPhotography && mode === 'variant') {
                 content += `🎨 改色任务已进入处理队列\n`;
                 content += `⏱ 完成后会通过钉钉通知，页面可以先关闭\n\n`;
-            } else if (mode === 'resize_ai') {
+            } else if (!waitingPhotography && mode === 'resize_ai') {
                 content += `🖼️ 尺寸修改任务已进入后台处理\n`;
                 content += `目标尺寸：${resizeTarget || size || '-'}\n`;
                 content += `⏱ 完成后会通过钉钉通知，页面可以先关闭\n\n`;
             }
 
-            if (queueInfo) {
+            if (!waitingPhotography && queueInfo) {
                 if (queueInfo.aheadCount > 0) {
                     content += `📊 前面还有 ${queueInfo.aheadCount} 个任务，您排在第 ${queueInfo.queuePosition} 位\n`;
                     content += `⏱ 预计约 ${queueInfo.waitMinutes} 分钟后开始处理\n`;
@@ -163,7 +182,17 @@ export async function onRequestPost(context) {
         if (waitUntil) waitUntil(p2);
     }
 
-    return Response.json({ ok: true, id: taskId, autoSent, autoSendError, queued: !autoSent, queueInfo });
+    return Response.json({ ok: true, id: taskId, autoSent, autoSendError, waitingPhotography, queued: !waitingPhotography && !autoSent, queueInfo });
+}
+
+function normalizePhotographyExample(value) {
+    if (!value || typeof value !== 'object') return null;
+    const key = String(value.key || '').trim();
+    if (!key.startsWith('studio/photography-brief/')) return null;
+    return {
+        key,
+        name: String(value.name || '拍摄案例图').replace(/[\\/:*?"<>|\r\n]/g, '_').slice(0, 160) || '拍摄案例图'
+    };
 }
 
 function defaultQueueInfo(mode) {

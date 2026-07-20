@@ -136,7 +136,7 @@ export async function onRequestGet(context) {
             .filter(k => {
                 const meta = k.metadata || {};
                 if (active) {
-                    if (meta.status === 'pending' || meta.status === 'processing') return true;
+                    if (meta.status === 'waiting_photos' || meta.status === 'pending' || meta.status === 'processing') return true;
                     const hasNotifyMetadata = Object.prototype.hasOwnProperty.call(meta, 'dingtalkNotified')
                         || Object.prototype.hasOwnProperty.call(meta, 'r2AutoNotified');
                     return meta.status === 'done' && hasNotifyMetadata && !meta.dingtalkNotified && !meta.r2AutoNotified;

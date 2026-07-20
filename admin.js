@@ -1871,7 +1871,10 @@ function renderStudioTasks(allTasks, category) {
 function renderStudioTask(task) {
     if (task.mode === 'sheet_self') return renderSheetSelfAdminTask(task);
     const requiresApproval = studioApprovalModes.has(task.mode);
-    const st = task.status === 'done'
+    const waitingPhotography = task.status === 'waiting_photos' && task.photographerDecision === true;
+    const st = waitingPhotography
+        ? ['等待摄影补图', '#b45309', '#fff7ed']
+        : task.status === 'done'
         ? ['待通知', '#16a34a', '#dcfce7']
         : task.status === 'processing'
             ? ['处理中', '#3b82f6', '#dbeafe']
@@ -1919,8 +1922,20 @@ function renderStudioTask(task) {
     const displayTitle = task.imageName ? task.imageName.replace(/^[^-]+-/, '') : '';
     if (displayTitle) html += '<div style="font-size:0.95rem;font-weight:600;color:#111827;margin-bottom:6px">' + esc(displayTitle) + '</div>';
     if (task.note) html += '<div style="font-size:0.85rem;color:#6b7280;margin-bottom:3px">补充：' + esc(task.note) + '</div>';
+    if (waitingPhotography && task.photographyNote) html += '<div style="margin-top:8px;padding:9px 11px;border-left:3px solid #f59e0b;background:#fffbeb;color:#78350f;font-size:.8rem;line-height:1.55">拍摄备注：' + esc(task.photographyNote) + '</div>';
     card.innerHTML = html;
     card.appendChild(delBtn);
+
+    if (waitingPhotography && task.photographyExampleKey?.key) {
+        const example = document.createElement('button');
+        const exampleUrl = '/api/library-file/' + encodeURIComponent(task.photographyExampleKey.key);
+        example.type = 'button';
+        example.title = '点击放大拍摄案例图';
+        example.style.cssText = 'display:flex;align-items:center;gap:10px;width:min(330px,100%);margin:10px 0 2px;padding:8px;border:1px solid #fde68a;border-radius:8px;background:#fffbeb;text-align:left;cursor:zoom-in';
+        example.innerHTML = '<img src="' + exampleUrl + '" alt="拍摄案例图" style="width:64px;height:64px;flex:0 0 64px;object-fit:cover;border-radius:6px;background:#f3f4f6"><span style="min-width:0"><strong style="display:block;color:#78350f;font-size:.78rem">拍摄案例图</strong><small style="display:block;margin-top:3px;overflow:hidden;color:#92400e;font-size:.7rem;text-overflow:ellipsis;white-space:nowrap">' + esc(task.photographyExampleKey.name || '点击放大查看') + '</small></span>';
+        example.onclick = () => openAdminImagePreview(exampleUrl, task.photographyExampleKey.name || '拍摄案例图');
+        card.appendChild(example);
+    }
 
     const editBtn = document.createElement('button');
     editBtn.type = 'button';
@@ -1993,7 +2008,14 @@ function renderStudioTask(task) {
     uploadBtn.style.cssText = 'font-size:0.82rem;color:#16a34a;background:#fff;border:1px solid #16a34a;border-radius:7px;padding:7px 16px;cursor:pointer;font-weight:600';
     uploadBtn.onclick = () => openManualUpload(task.id, card);
 
-    if (requiresApproval) {
+    if (waitingPhotography) {
+        const photographyBtn = document.createElement('button');
+        photographyBtn.type = 'button';
+        photographyBtn.textContent = '上传拍摄图片并开始作图';
+        photographyBtn.style.cssText = 'font-size:.82rem;color:#fff;background:#111827;border:0;border-radius:7px;padding:8px 16px;cursor:pointer;font-weight:700';
+        photographyBtn.onclick = () => openStudioPhotographyUpload(task, photographyBtn);
+        actions.append(photographyBtn);
+    } else if (requiresApproval) {
         actions.append(feedbackBtn, rpaBtn, viewCodeBtn, uploadBtn);
     } else {
         const automaticLabel = document.createElement('span');
@@ -2019,6 +2041,80 @@ function renderStudioTask(task) {
     }
     card.appendChild(actions);
     return card;
+}
+
+function openStudioPhotographyUpload(task, cardButton) {
+    document.getElementById('studioPhotographyUploadModal')?.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'studioPhotographyUploadModal';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:12200;display:grid;place-items:center;padding:16px;background:rgba(17,24,39,.55)';
+    overlay.innerHTML = `<div role="dialog" aria-modal="true" aria-labelledby="studioPhotographyUploadTitle" style="width:min(620px,100%);padding:22px;border-radius:9px;background:#fff;box-shadow:0 24px 70px rgba(0,0,0,.28)">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:18px">
+            <div><strong id="studioPhotographyUploadTitle" style="display:block;color:#111827;font-size:1rem">补上传拍摄图片</strong><small style="display:block;margin-top:4px;color:#6b7280;font-size:.74rem">上传后原任务会进入现有作图队列，不会新建任务</small></div>
+            <button type="button" data-photo-close style="display:grid;place-items:center;width:30px;height:30px;flex:0 0 30px;border:0;border-radius:6px;background:#f3f4f6;color:#4b5563;font-size:19px;cursor:pointer" title="关闭">×</button>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">
+            ${[0, 1].map(index => `<div style="min-width:0"><label for="studioPhotographyFile${index}" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:142px;padding:14px;border:1px dashed #cbd5e1;border-radius:8px;background:#f8fafc;color:#64748b;text-align:center;cursor:pointer"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 16V4m0 0L7 9m5-5 5 5"/><path d="M5 14v5h14v-5"/></svg><strong data-file-name="${index}" style="display:block;max-width:100%;margin-top:8px;overflow:hidden;color:#374151;font-size:.78rem;text-overflow:ellipsis;white-space:nowrap">${index === 0 ? '选择第一张照片' : '选择第二张照片（可选）'}</strong><small style="margin-top:4px;color:#9ca3af;font-size:.68rem">单张最大 15MB</small></label><input id="studioPhotographyFile${index}" type="file" accept="image/jpeg,image/png,image/webp" hidden></div>`).join('')}
+        </div>
+        <div style="margin-top:9px;color:#9ca3af;font-size:.7rem;text-align:center">图生图任务只上传一张时，会自动把同一张作为两张产品图使用</div>
+        <div data-photo-status style="min-height:20px;margin-top:10px;color:#6b7280;font-size:.76rem"></div>
+        <button type="button" data-photo-submit style="width:100%;height:42px;margin-top:4px;border:0;border-radius:7px;background:#111827;color:#fff;font-size:.84rem;font-weight:700;cursor:pointer">上传并开始作图</button>
+    </div>`;
+    document.body.appendChild(overlay);
+
+    const inputs = [0, 1].map(index => overlay.querySelector(`#studioPhotographyFile${index}`));
+    const status = overlay.querySelector('[data-photo-status]');
+    const submit = overlay.querySelector('[data-photo-submit]');
+    const close = () => overlay.remove();
+    overlay.querySelector('[data-photo-close]').onclick = close;
+    overlay.onclick = event => { if (event.target === overlay) close(); };
+    inputs.forEach((input, index) => {
+        input.onchange = () => {
+            const name = overlay.querySelector(`[data-file-name="${index}"]`);
+            name.textContent = input.files?.[0]?.name || (index === 0 ? '选择第一张照片' : '选择第二张照片（可选）');
+            status.textContent = '';
+        };
+    });
+
+    submit.onclick = async () => {
+        const files = inputs.map(input => input.files?.[0]).filter(Boolean);
+        if (!files.length) {
+            status.textContent = '请至少选择一张拍摄图片';
+            status.style.color = '#b91c1c';
+            return;
+        }
+        if (files.some(file => file.size > 15 * 1024 * 1024)) {
+            status.textContent = '拍摄图片单张不能超过 15MB';
+            status.style.color = '#b91c1c';
+            return;
+        }
+
+        submit.disabled = true;
+        submit.textContent = '正在上传并加入队列...';
+        status.textContent = '请不要关闭，正在把照片写入原任务';
+        status.style.color = '#6b7280';
+        try {
+            const form = new FormData();
+            form.append('taskId', task.id);
+            files.forEach(file => form.append('files', file, file.name));
+            const response = await fetch('/api/studio-photography-photo', { method: 'POST', body: form });
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok || !result.ok) throw new Error(result.error || `操作失败 (${response.status})`);
+            const queueText = result.queueInfo?.aheadCount > 0
+                ? `已进入作图队列，前面还有 ${result.queueInfo.aheadCount} 个任务`
+                : '已进入作图队列，系统会按顺序开始处理';
+            status.textContent = queueText;
+            status.style.color = '#047857';
+            submit.textContent = '已开始作图';
+            if (cardButton) cardButton.textContent = '已提交拍摄图片';
+            setTimeout(() => { close(); loadStudioAdmin(); }, 900);
+        } catch (error) {
+            status.textContent = error.message;
+            status.style.color = '#b91c1c';
+            submit.disabled = false;
+            submit.textContent = '重新上传并开始作图';
+        }
+    };
 }
 
 function startCountdownTimer(taskId, createdAt) {

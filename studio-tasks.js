@@ -46,6 +46,7 @@ function showLoginModal() {
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 const STATUS_MAP = {
+    waiting_photos: { text: '等待摄影补图', color: '#b45309', bg: '#fff7ed' },
     pending: { text: '待处理', color: '#f59e0b', bg: '#fef3c7' },
     processing: { text: '处理中', color: '#3b82f6', bg: '#dbeafe' },
     done: { text: '已完成', color: '#16a34a', bg: '#dcfce7' },
@@ -139,6 +140,7 @@ async function refreshQueueStatus() {
 
 function renderTask(task) {
     const st = STATUS_MAP[task.status] || STATUS_MAP.pending;
+    const waitingPhotography = task.status === 'waiting_photos' && task.photographerDecision === true;
     const card = document.createElement('div');
     card.style.cssText = 'background:#fff;border-radius:12px;padding:18px 20px;box-shadow:0 1px 4px rgba(0,0,0,0.07)';
 
@@ -180,7 +182,7 @@ function renderTask(task) {
                         <div style="width:20px;height:20px;border-radius:50%;background:${step2 ? '#16a34a' : '#e5e7eb'};display:flex;align-items:center;justify-content:center">
                             ${step2 ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>' : '<div style="width:8px;height:8px;border-radius:50%;background:#9ca3af"></div>'}
                         </div>
-                        <span style="font-size:0.75rem;color:${step2 ? '#16a34a' : '#9ca3af'};font-weight:${step2 ? '600' : '400'}">${task.status === 'processing' ? '处理中' : '待处理'}</span>
+                        <span style="font-size:0.75rem;color:${step2 ? '#16a34a' : (waitingPhotography ? '#b45309' : '#9ca3af')};font-weight:${step2 || waitingPhotography ? '600' : '400'}">${task.status === 'processing' ? '处理中' : (waitingPhotography ? '等待摄影' : '待处理')}</span>
                     </div>
                     <div style="flex:1;height:2px;background:#e5e7eb;margin:0 12px;position:relative">
                         <div style="position:absolute;left:0;top:0;height:100%;background:${step3 ? '#16a34a' : '#e5e7eb'};width:100%;transition:all 0.3s"></div>
@@ -193,6 +195,7 @@ function renderTask(task) {
                     </div>
                 </div>
                 ${task.status === 'processing' ? '<div style="font-size:0.72rem;color:#3b82f6;text-align:center;margin-top:6px">' + (task.mode === 'sheet_self' ? `已完成 ${Number(task.sheetSelfCompletedCount || 0)}/${Number(task.sheetSelfSlotCount || 0)} 张，每完成一张就会发到钉钉` : task.mode === 'retouch' ? '⏱ 图片正在精修中，预计约 30 分钟完成...' : task.mode === 'cutout' ? '⏱ 正在进行白底抠图，完成后会通过钉钉通知...' : '⏱ AI 正在生成中，预计还需 4-8 分钟...') + '</div>' : ''}
+                ${waitingPhotography ? '<div style="font-size:0.72rem;color:#b45309;text-align:center;margin-top:6px">摄影师补上传照片后，任务会自动开始作图</div>' : ''}
                 ${task.status === 'pending' && !task.sentToRpa ? '<div style="font-size:0.72rem;color:#f59e0b;text-align:center;margin-top:6px">📋 任务已提交，等待自动发送到 RPA...</div>' : ''}
             </div>`;
     }
@@ -203,6 +206,7 @@ function renderTask(task) {
     if (task.imageName) html += `<div style="font-size:0.85rem;color:#6b7280;margin-bottom:4px">图片命名：${esc(task.imageName)}</div>`;
     if (task.want) html += `<div style="font-size:0.85rem;color:#374151;margin-bottom:4px">想做成：${esc(task.want)}</div>`;
     if (task.note) html += `<div style="font-size:0.85rem;color:#6b7280;margin-bottom:4px">补充：${esc(task.note)}</div>`;
+    if (waitingPhotography && task.photographyNote) html += `<div style="font-size:0.85rem;color:#92400e;margin-bottom:4px">拍摄备注：${esc(task.photographyNote)}</div>`;
     if (task.status === 'rejected' && task.rejectReason) {
         html += `<div style="font-size:0.85rem;color:#ef4444;margin-top:6px">驳回原因：${esc(task.rejectReason)}</div>`;
     }

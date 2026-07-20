@@ -306,10 +306,6 @@ function renderShootRequestLauncher(mode) {
                                 <textarea id="${mode}PhotographerNote" maxlength="300" placeholder="例如：参考这个角度、光线或摆放方式"></textarea>
                             </div>
                         </div>
-                        <div class="studio-photographer-actions">
-                            <div class="studio-photographer-status" id="${mode}PhotographerStatus"></div>
-                            <button type="button" class="studio-photographer-submit" id="${mode}PhotographerSubmit">提交拍摄需求</button>
-                        </div>
                     </div>
                 </div>`;
 }
@@ -693,8 +689,8 @@ const VARIANT_FORM = `
 
 const uploads = { freeImages: [], freeModel: null, freeScene: null, freeProduct: [], freeProduct1: null, freeProduct2: null, progRef: [], progProduct: [], retouchImages: [], cutoutImages: [], variantImages: [] };
 const inlineShootRequestState = {
-    free: { enabled: false, image: null, busy: false },
-    program: { enabled: false, image: null, busy: false }
+    free: { enabled: false, image: null },
+    program: { enabled: false, image: null }
 };
 const SHEET_SELF_DEFAULT_SLOT_COUNT = 3;
 const SHEET_SELF_SLOT_COUNT = 8;
@@ -1101,7 +1097,6 @@ function resetInlineShootRequestState(mode) {
     if (!state) return;
     state.enabled = false;
     state.image = null;
-    state.busy = false;
 }
 
 function initInlineShootRequest(mode) {
@@ -1110,8 +1105,7 @@ function initInlineShootRequest(mode) {
     const panel = document.getElementById(`${mode}PhotographerPanel`);
     const input = document.getElementById(`${mode}PhotographerInput`);
     const remove = document.getElementById(`${mode}PhotographerRemove`);
-    const submit = document.getElementById(`${mode}PhotographerSubmit`);
-    if (!state || !toggle || !panel || !input || !remove || !submit) return;
+    if (!state || !toggle || !panel || !input || !remove) return;
 
     const applyToggleState = () => {
         state.enabled = toggle.checked;
@@ -1133,24 +1127,29 @@ function initInlineShootRequest(mode) {
         if (!file) return;
         const error = validateSheetSelfFile(file);
         if (error) {
-            setInlineShootStatus(mode, error, true);
+            showStudioFieldError(
+                document.getElementById(mode === 'program' ? 'progStatus' : 'freeStatus'),
+                error,
+                document.getElementById(`${mode}PhotographerUpload`)
+            );
             return;
         }
         const reader = new FileReader();
         reader.onload = () => {
             state.image = { file, name: file.name, mimeType: file.type, dataUrl: reader.result };
             renderInlineShootImage(mode);
-            setInlineShootStatus(mode, '拍摄案例图已选择');
         };
-        reader.onerror = () => setInlineShootStatus(mode, '图片读取失败，请重新选择', true);
+        reader.onerror = () => showStudioFieldError(
+            document.getElementById(mode === 'program' ? 'progStatus' : 'freeStatus'),
+            '图片读取失败，请重新选择',
+            document.getElementById(`${mode}PhotographerUpload`)
+        );
         reader.readAsDataURL(file);
     });
     remove.addEventListener('click', () => {
         state.image = null;
         renderInlineShootImage(mode);
-        setInlineShootStatus(mode, '');
     });
-    submit.addEventListener('click', () => submitInlineShootRequest(mode));
 }
 
 function renderInlineShootImage(mode) {
@@ -1167,82 +1166,6 @@ function renderInlineShootImage(mode) {
     upload.classList.remove('has-image');
     upload.innerHTML = `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 16V4m0 0L7 9m5-5 5 5"/><path d="M5 14v5h14v-5"/></svg><strong>上传拍摄案例图</strong><small>可选，留空则按参考图拍摄</small>`;
     remove.hidden = true;
-}
-
-function setInlineShootStatus(mode, message, isError = false) {
-    const status = document.getElementById(`${mode}PhotographerStatus`);
-    if (!status) return;
-    status.textContent = message;
-    status.classList.toggle('is-error', isError);
-}
-
-function getInlineShootReference(mode) {
-    const explicit = inlineShootRequestState[mode]?.image;
-    if (explicit) return explicit;
-    if (mode === 'program') return uploads.progRef?.[0] || null;
-    return uploads.freeImages?.find(image => image && !image.isAPlusDouble) || uploads.freeImages?.[0] || null;
-}
-
-async function submitInlineShootRequest(mode) {
-    const state = inlineShootRequestState[mode];
-    const button = document.getElementById(`${mode}PhotographerSubmit`);
-    const noteInput = document.getElementById(`${mode}PhotographerNote`);
-    if (!state || !button || !noteInput || state.busy) return;
-    if (!currentUser) { showLoginModal(); return; }
-    if (!hasAgreed()) { openGuide(); guideShowPage(2); return; }
-
-    const note = noteInput.value.trim();
-    const reference = getInlineShootReference(mode);
-    if (!reference && !note) {
-        setInlineShootStatus(mode, '请上传拍摄案例图、当前参考图，或填写拍摄备注', true);
-        noteInput.focus();
-        return;
-    }
-
-    const product = mode === 'program'
-        ? (document.getElementById('progProductName')?.value.trim() || '图生图拍摄需求')
-        : (document.getElementById('freeFileName')?.value.trim() || document.getElementById('freeDesc')?.value.trim().slice(0, 40) || '自由模式拍摄需求');
-    const description = note || '请由摄影师参考案例图决定拍摄角度、光线和摆放方式';
-    state.busy = true;
-    button.disabled = true;
-    button.textContent = '提交中...';
-    setInlineShootStatus(mode, reference ? '正在上传拍摄参考图...' : '正在提交拍摄需求...');
-    try {
-        const photoKeys = reference ? await uploadImages([reference], 'shoot/ref') : [];
-        const data = {
-            fileName: '白底拍摄需求',
-            submitTime: new Date().toLocaleString('zh-CN'),
-            basicInfo: { '型号': product, '图片数量': `${photoKeys.length} 张` },
-            images: photoKeys.map((image, index) => ({
-                序号: `图${index + 1}`,
-                区域: '拍摄参考',
-                图片要求: description,
-                photoKey: image.key,
-                photoName: image.name
-            })),
-            directPhotoKeys: photoKeys,
-            directDesc: description
-        };
-        const response = await fetch('/api/submit', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ taskType: '白底拍摄需求', remarks: description, submitter: currentUser, data })
-        });
-        const result = await response.json().catch(() => ({}));
-        if (!response.ok || !result.ok) throw new Error(result.error || `提交失败 (${response.status})`);
-        state.image = null;
-        noteInput.value = '';
-        renderInlineShootImage(mode);
-        setInlineShootStatus(mode, '拍摄需求已提交，我会尽快拍给你');
-        button.textContent = '已提交';
-    } catch (error) {
-        setInlineShootStatus(mode, `提交失败：${error.message}`, true);
-        button.textContent = '重新提交';
-    } finally {
-        state.busy = false;
-        button.disabled = false;
-        if (button.textContent === '提交中...') button.textContent = '提交拍摄需求';
-    }
 }
 
 let shootImages = [];
@@ -3862,6 +3785,9 @@ async function submitTask(mode, payload, statusEl, btn, onSuccess) {
         const uploadedRefKeys = payload.refImages && payload.refImages.length ? await uploadImages(payload.refImages, refPrefix) : [];
         const refKeys = uploadedRefKeys;
         const modelKeys = payload.modelImages && payload.modelImages.length ? await uploadImages(payload.modelImages, 'studio/model') : [];
+        const photographyExampleKeys = payload.photographyExampleImage
+            ? await uploadImages([payload.photographyExampleImage], 'studio/photography-brief')
+            : [];
 
         statusEl.textContent = '提交中...';
         const submitPayload = { mode, submitter: currentUser, productKeys, refKeys, modelKeys };
@@ -3882,6 +3808,9 @@ async function submitTask(mode, payload, statusEl, btn, onSuccess) {
         if (payload.resizeReflow !== undefined) submitPayload.resizeReflow = payload.resizeReflow === true;
         if (payload.cutoutOutputFormat) submitPayload.cutoutOutputFormat = payload.cutoutOutputFormat;
         if (payload.aPlusDouble !== undefined) submitPayload.aPlusDouble = payload.aPlusDouble === true;
+        if (payload.photographerDecision !== undefined) submitPayload.photographerDecision = payload.photographerDecision === true;
+        if (payload.photographyNote !== undefined) submitPayload.photographyNote = payload.photographyNote;
+        if (photographyExampleKeys.length) submitPayload.photographyExampleKey = photographyExampleKeys[0];
 
         const res = await fetch('/api/studio-submit', {
             method: 'POST',
@@ -4290,6 +4219,7 @@ async function importSheetLibraryFile(libraryFile, modal) {
 
 function showSuccessModal(task, estimateText = '') {
     const queueText = estimateText || formatStudioQueueInfo(task?.queueInfo);
+    const waitingPhotography = task?.waitingPhotography === true;
     const overlay = document.createElement('div');
     overlay.setAttribute('role', 'dialog');
     overlay.setAttribute('aria-modal', 'true');
@@ -4300,7 +4230,9 @@ function showSuccessModal(task, estimateText = '') {
     box.innerHTML = '<div style="width:56px;height:56px;border-radius:50%;background:#ecfdf5;display:flex;align-items:center;justify-content:center;margin:0 auto 16px">'
         + '<svg viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5" width="28" height="28"><polyline points="20 6 9 17 4 12"/></svg></div>'
         + '<div style="font-size:1.15rem;font-weight:700;color:#111827;margin-bottom:10px">任务提交成功</div>'
-        + '<div style="font-size:0.88rem;color:#6b7280;line-height:1.7">网站已收到你的任务并进入处理队列。<br>可在「我的任务」查看进度，完成后会通过钉钉通知。</div>'
+        + '<div style="font-size:0.88rem;color:#6b7280;line-height:1.7">' + (waitingPhotography
+            ? '网站已收到你的任务，并已提醒摄影师拍照。<br>摄影师补图后会自动开始作图，完成后通过钉钉通知。'
+            : '网站已收到你的任务并进入处理队列。<br>可在「我的任务」查看进度，完成后会通过钉钉通知。') + '</div>'
         + (queueText ? '<div style="margin-top:12px;padding:9px 12px;border-radius:7px;background:#eff6ff;color:#1d4ed8;font-size:.84rem;font-weight:700">' + queueText + '</div>' : '')
         + (task && task.id ? '<div style="margin-top:12px;color:#9ca3af;font-size:.72rem">任务编号：' + String(task.id).replace(/[<>&]/g, '') + '</div>' : '')
         + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:24px">'
@@ -4354,10 +4286,12 @@ function submitFree() {
     const imageNameEl = document.getElementById('freeFileName');
     const imageName = aPlusDouble ? '' : (imageNameEl ? imageNameEl.value.trim() : '');
     const status = document.getElementById('freeStatus');
+    const photographerDecision = inlineShootRequestState.free.enabled === true;
+    const photographyNote = document.getElementById('freePhotographerNote')?.value.trim() || '';
     if (!desc) { showStudioFieldError(status, '请填写提示词', document.getElementById('freeDesc')); return; }
     if (!size) { showStudioFieldError(status, '请选择或填写尺寸', document.getElementById('freeSizeSelectPicker')); return; }
     if (aPlusDouble && !uploads.freeImages.some(item => item?.isAPlusDouble)) { showStudioFieldError(status, '请重新上传 A+ 连续双图', document.getElementById('freeAPlusDoubleBtn')); return; }
-    submitTask('free', { desc, want, note: scene ? ('场景：' + scene) : '', scene, size, imageName, aPlusDouble, refImages: [...(uploads.freeScene ? [uploads.freeScene] : []), ...(uploads.freeImages || [])], modelImages: uploads.freeModel ? [uploads.freeModel] : [], productImages: uploads.freeProduct || [] }, status, document.getElementById('freeSubmit'), showSuccessModal);
+    submitTask('free', { desc, want, note: scene ? ('场景：' + scene) : '', scene, size, imageName, aPlusDouble, photographerDecision, photographyNote, photographyExampleImage: inlineShootRequestState.free.image, refImages: [...(uploads.freeScene ? [uploads.freeScene] : []), ...(uploads.freeImages || [])], modelImages: uploads.freeModel ? [uploads.freeModel] : [], productImages: uploads.freeProduct || [] }, status, document.getElementById('freeSubmit'), showSuccessModal);
 }
 
 function submitProgram() {
@@ -4369,11 +4303,13 @@ function submitProgram() {
     const sizeEl = document.getElementById('progSizeSelect');
     const size = aPlusDouble ? A_PLUS_DOUBLE_SIZE : (sizeEl ? sizeEl.value : '');
     const status = document.getElementById('progStatus');
+    const photographerDecision = inlineShootRequestState.program.enabled === true;
+    const photographyNote = document.getElementById('programPhotographerNote')?.value.trim() || '';
     if (!productName) { showStudioFieldError(status, '请填写产品名称', document.getElementById('progProductName')); return; }
     if (!size) { showStudioFieldError(status, '请选择或填写尺寸', document.getElementById('progSizeSelectPicker')); return; }
     if (uploads.progRef.length !== 1) { showStudioFieldError(status, '请上传1张要模仿的图', document.getElementById('progRefDrop')); return; }
-    if (uploads.progProduct.length !== 2) { showStudioFieldError(status, '请上传2张白底产品图（当前' + uploads.progProduct.length + '张）', document.getElementById('progProductDrop')); return; }
-    submitTask('program', { productName, title, subtitle, otherText, size, aPlusDouble, analyzePrompt: ANALYZE_PROMPT, refImages: uploads.progRef, productImages: uploads.progProduct }, status, document.getElementById('progSubmit'), showSuccessModal);
+    if (!photographerDecision && uploads.progProduct.length !== 2) { showStudioFieldError(status, '请上传2张白底产品图（当前' + uploads.progProduct.length + '张）', document.getElementById('progProductDrop')); return; }
+    submitTask('program', { productName, title, subtitle, otherText, size, aPlusDouble, analyzePrompt: ANALYZE_PROMPT, photographerDecision, photographyNote, photographyExampleImage: inlineShootRequestState.program.image, refImages: uploads.progRef, productImages: uploads.progProduct }, status, document.getElementById('progSubmit'), showSuccessModal);
 }
 
 function submitRetouch() {

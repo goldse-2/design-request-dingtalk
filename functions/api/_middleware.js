@@ -15,6 +15,7 @@ const ADMIN_PATHS = new Set([
     '/api/admin-library-cutout',
     '/api/admin-retouch-library-review',
     '/api/sheet-self-photo',
+    '/api/studio-photography-photo',
     '/api/retention-cleanup'
 ]);
 

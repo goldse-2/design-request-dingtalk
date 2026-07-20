@@ -93,7 +93,9 @@ export async function onRequestGet(context) {
                 const createdAt = typeof task.timestamp === 'number'
                     ? task.timestamp
                     : new Date(task.createdAt || task.timestamp || 0).getTime();
-                const requiresApprovalDelay = task.workflow?.type !== 'sheet_self' && task.mode !== 'cutout';
+                const requiresApprovalDelay = task.workflow?.type !== 'sheet_self'
+                    && task.mode !== 'cutout'
+                    && !task.photographyCompletedAt;
                 if (!imageOnly && requiresApprovalDelay && (!createdAt || (now - createdAt) < autoSendThreshold)) {
                     nextAutoQueue.push(task.id);
                     continue;
