@@ -5,6 +5,7 @@ import { advanceSheetSelfWorkflow } from '../_shared/sheet-self-workflow.js';
 import { releaseStudioRpaSlot } from '../_shared/studio-rpa-slot.js';
 import { wakeStudioRpaQueue } from '../_shared/studio-rpa-wakeup.js';
 import { enqueueRetouchLibraryReviews } from '../_shared/retouch-library-review.js';
+import { advanceStudioPhotographyWorkflow } from '../_shared/studio-photography-workflow.js';
 
 export async function onRequestPost(context) {
     const { request, env, waitUntil } = context;
@@ -87,6 +88,8 @@ export async function onRequestPost(context) {
 
         if (task.workflow?.type === 'sheet_self') {
             await advanceSheetSelfWorkflow({ env, task, origin: new URL(request.url).origin });
+        } else if (task.workflow?.type === 'studio_photography') {
+            await advanceStudioPhotographyWorkflow({ env, task });
         }
         wakeStudioRpaQueue(request, waitUntil);
 

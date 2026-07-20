@@ -3,6 +3,7 @@ import { RECORD_RETENTION_MS, studioTaskPutOptions, studioTaskRetentionAnchor } 
 import { parseResizeTarget, transformToExactJpeg } from './studio-check-overdue.js';
 import { advanceSheetSelfWorkflow, getSheetSelfSlots } from '../_shared/sheet-self-workflow.js';
 import { enqueueRetouchLibraryReviews } from '../_shared/retouch-library-review.js';
+import { advanceStudioPhotographyWorkflow } from '../_shared/studio-photography-workflow.js';
 
 export async function onRequestPatch(context) {
     const { request, env } = context;
@@ -136,7 +137,7 @@ export async function onRequestGet(context) {
             .filter(k => {
                 const meta = k.metadata || {};
                 if (active) {
-                    if (meta.status === 'waiting_photos' || meta.status === 'pending' || meta.status === 'processing') return true;
+                    if (meta.status === 'waiting_photos' || meta.status === 'photography_processing' || meta.status === 'pending' || meta.status === 'processing') return true;
                     const hasNotifyMetadata = Object.prototype.hasOwnProperty.call(meta, 'dingtalkNotified')
                         || Object.prototype.hasOwnProperty.call(meta, 'r2AutoNotified');
                     return meta.status === 'done' && hasNotifyMetadata && !meta.dingtalkNotified && !meta.r2AutoNotified;
@@ -156,7 +157,7 @@ export async function onRequestGet(context) {
             .map(r => { try { return JSON.parse(r); } catch { return null; } })
             .filter(t => t && t.kind === 'studio');
 
-        tasks = tasks.filter(task => !(task.silent && task.workflow?.type === 'sheet_self'));
+        tasks = tasks.filter(task => !(task.silent && ['sheet_self', 'studio_photography'].includes(task.workflow?.type)));
 
         if (!all && unionId) {
             tasks = tasks.filter(t => t.submitter?.unionId === unionId);
@@ -259,6 +260,8 @@ async function syncR2StudioResults(env, request, listedKeys) {
 
         if (task.workflow?.type === 'sheet_self') {
             await advanceSheetSelfWorkflow({ env, task, origin: new URL(request.url).origin });
+        } else if (task.workflow?.type === 'studio_photography') {
+            await advanceStudioPhotographyWorkflow({ env, task });
         }
 
         if (!task.silent && !task.r2AutoNotified && task.submitter?.unionId && env.DINGTALK_APPKEY && env.DINGTALK_APPSECRET) {

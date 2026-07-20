@@ -1872,8 +1872,11 @@ function renderStudioTask(task) {
     if (task.mode === 'sheet_self') return renderSheetSelfAdminTask(task);
     const requiresApproval = studioApprovalModes.has(task.mode);
     const waitingPhotography = task.status === 'waiting_photos' && task.photographerDecision === true;
+    const photographyRetouching = task.status === 'photography_processing' && task.photographerDecision === true;
     const st = waitingPhotography
         ? ['等待摄影补图', '#b45309', '#fff7ed']
+        : photographyRetouching
+        ? ['拍摄图片精修中', '#1d4ed8', '#dbeafe']
         : task.status === 'done'
         ? ['待通知', '#16a34a', '#dcfce7']
         : task.status === 'processing'
@@ -1923,6 +1926,7 @@ function renderStudioTask(task) {
     if (displayTitle) html += '<div style="font-size:0.95rem;font-weight:600;color:#111827;margin-bottom:6px">' + esc(displayTitle) + '</div>';
     if (task.note) html += '<div style="font-size:0.85rem;color:#6b7280;margin-bottom:3px">补充：' + esc(task.note) + '</div>';
     if (waitingPhotography && task.photographyNote) html += '<div style="margin-top:8px;padding:9px 11px;border-left:3px solid #f59e0b;background:#fffbeb;color:#78350f;font-size:.8rem;line-height:1.55">拍摄备注：' + esc(task.photographyNote) + '</div>';
+    if (waitingPhotography && task.photographyRetouchError) html += '<div style="margin-top:8px;padding:9px 11px;border-left:3px solid #dc2626;background:#fef2f2;color:#991b1b;font-size:.8rem;line-height:1.55">上次精修未完成：' + esc(task.photographyRetouchError) + '</div>';
     card.innerHTML = html;
     card.appendChild(delBtn);
 
@@ -2015,6 +2019,15 @@ function renderStudioTask(task) {
         photographyBtn.style.cssText = 'font-size:.82rem;color:#fff;background:#111827;border:0;border-radius:7px;padding:8px 16px;cursor:pointer;font-weight:700';
         photographyBtn.onclick = () => openStudioPhotographyUpload(task, photographyBtn);
         actions.append(photographyBtn);
+    } else if (photographyRetouching) {
+        const retouchingLabel = document.createElement('span');
+        const completedCount = Number(task.photographyWorkflow?.completedCount || 0);
+        const totalCount = Number(task.photographyWorkflow?.sourceCount || 0);
+        retouchingLabel.textContent = totalCount > 0
+            ? `正在精修拍摄图片（${completedCount}/${totalCount}）`
+            : '正在精修拍摄图片，完成后会自动开始作图';
+        retouchingLabel.style.cssText = 'font-size:.82rem;color:#1d4ed8;background:#eff6ff;border:1px solid #bfdbfe;border-radius:7px;padding:7px 12px;font-weight:700';
+        actions.append(retouchingLabel);
     } else if (requiresApproval) {
         actions.append(feedbackBtn, rpaBtn, viewCodeBtn, uploadBtn);
     } else {
@@ -2050,28 +2063,75 @@ function openStudioPhotographyUpload(task, cardButton) {
     overlay.style.cssText = 'position:fixed;inset:0;z-index:12200;display:grid;place-items:center;padding:16px;background:rgba(17,24,39,.55)';
     overlay.innerHTML = `<div role="dialog" aria-modal="true" aria-labelledby="studioPhotographyUploadTitle" style="width:min(620px,100%);padding:22px;border-radius:9px;background:#fff;box-shadow:0 24px 70px rgba(0,0,0,.28)">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:18px">
-            <div><strong id="studioPhotographyUploadTitle" style="display:block;color:#111827;font-size:1rem">补上传拍摄图片</strong><small style="display:block;margin-top:4px;color:#6b7280;font-size:.74rem">上传后原任务会进入现有作图队列，不会新建任务</small></div>
+            <div><strong id="studioPhotographyUploadTitle" style="display:block;color:#111827;font-size:1rem">补上传拍摄图片</strong><small style="display:block;margin-top:4px;color:#6b7280;font-size:.74rem">照片会补充到原任务，精修完成后自动继续作图</small></div>
             <button type="button" data-photo-close style="display:grid;place-items:center;width:30px;height:30px;flex:0 0 30px;border:0;border-radius:6px;background:#f3f4f6;color:#4b5563;font-size:19px;cursor:pointer" title="关闭">×</button>
         </div>
+        <label style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:14px;padding:11px 12px;border:1px solid #dbe3ee;border-radius:8px;background:#f8fafc;cursor:pointer">
+            <span style="min-width:0"><strong style="display:block;color:#111827;font-size:.82rem">开启精修流程</strong><small style="display:block;margin-top:3px;color:#64748b;font-size:.7rem;line-height:1.4">打开后先精修拍摄照片，再自动回到原任务开始作图</small></span>
+            <span style="display:flex;align-items:center;gap:8px;flex:0 0 auto">
+                <span data-photo-retouch-state style="color:#047857;font-size:.72rem;font-weight:700">已开启</span>
+                <input type="checkbox" data-photo-retouch checked style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none">
+                <span data-photo-toggle-track style="position:relative;display:block;width:42px;height:24px;border-radius:999px;background:#111827;transition:background .16s">
+                    <span data-photo-toggle-knob style="position:absolute;top:3px;left:21px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.2);transition:left .16s"></span>
+                </span>
+            </span>
+        </label>
         <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">
-            ${[0, 1].map(index => `<div style="min-width:0"><label for="studioPhotographyFile${index}" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:142px;padding:14px;border:1px dashed #cbd5e1;border-radius:8px;background:#f8fafc;color:#64748b;text-align:center;cursor:pointer"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 16V4m0 0L7 9m5-5 5 5"/><path d="M5 14v5h14v-5"/></svg><strong data-file-name="${index}" style="display:block;max-width:100%;margin-top:8px;overflow:hidden;color:#374151;font-size:.78rem;text-overflow:ellipsis;white-space:nowrap">${index === 0 ? '选择第一张照片' : '选择第二张照片（可选）'}</strong><small style="margin-top:4px;color:#9ca3af;font-size:.68rem">单张最大 15MB</small></label><input id="studioPhotographyFile${index}" type="file" accept="image/jpeg,image/png,image/webp" hidden></div>`).join('')}
+            ${[0, 1].map(index => `<div style="min-width:0"><label data-photo-drop="${index}" for="studioPhotographyFile${index}" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:164px;padding:10px 12px;border:1px dashed #cbd5e1;border-radius:8px;background:#f8fafc;color:#64748b;text-align:center;cursor:pointer;overflow:hidden"><img data-photo-preview="${index}" hidden alt="已选择图片预览" style="width:100%;height:94px;object-fit:contain;border-radius:6px;background:#eef2f7"><svg data-photo-placeholder="${index}" viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 16V4m0 0L7 9m5-5 5 5"/><path d="M5 14v5h14v-5"/></svg><strong data-file-name="${index}" style="display:block;max-width:100%;margin-top:7px;overflow:hidden;color:#374151;font-size:.76rem;text-overflow:ellipsis;white-space:nowrap">${index === 0 ? '选择第一张照片' : '选择第二张照片（可选）'}</strong><small style="margin-top:3px;color:#9ca3af;font-size:.66rem">单张最大 15MB</small></label><input id="studioPhotographyFile${index}" type="file" accept="image/jpeg,image/png,image/webp" hidden></div>`).join('')}
         </div>
         <div style="margin-top:9px;color:#9ca3af;font-size:.7rem;text-align:center">图生图任务只上传一张时，会自动把同一张作为两张产品图使用</div>
         <div data-photo-status style="min-height:20px;margin-top:10px;color:#6b7280;font-size:.76rem"></div>
-        <button type="button" data-photo-submit style="width:100%;height:42px;margin-top:4px;border:0;border-radius:7px;background:#111827;color:#fff;font-size:.84rem;font-weight:700;cursor:pointer">上传并开始作图</button>
+        <button type="button" data-photo-submit style="width:100%;height:42px;margin-top:4px;border:0;border-radius:7px;background:#111827;color:#fff;font-size:.84rem;font-weight:700;cursor:pointer">上传并开始精修</button>
     </div>`;
     document.body.appendChild(overlay);
 
     const inputs = [0, 1].map(index => overlay.querySelector(`#studioPhotographyFile${index}`));
     const status = overlay.querySelector('[data-photo-status]');
     const submit = overlay.querySelector('[data-photo-submit]');
-    const close = () => overlay.remove();
+    const retouchToggle = overlay.querySelector('[data-photo-retouch]');
+    const retouchState = overlay.querySelector('[data-photo-retouch-state]');
+    const toggleTrack = overlay.querySelector('[data-photo-toggle-track]');
+    const toggleKnob = overlay.querySelector('[data-photo-toggle-knob]');
+    const previewUrls = ['', ''];
+    const close = () => {
+        previewUrls.forEach(url => { if (url) URL.revokeObjectURL(url); });
+        overlay.remove();
+    };
+    const updateRetouchToggle = () => {
+        const enabled = retouchToggle.checked;
+        retouchState.textContent = enabled ? '已开启' : '已关闭';
+        retouchState.style.color = enabled ? '#047857' : '#6b7280';
+        toggleTrack.style.background = enabled ? '#111827' : '#cbd5e1';
+        toggleKnob.style.left = enabled ? '21px' : '3px';
+        if (!submit.disabled) submit.textContent = enabled ? '上传并开始精修' : '上传并开始作图';
+    };
+    retouchToggle.onchange = updateRetouchToggle;
     overlay.querySelector('[data-photo-close]').onclick = close;
     overlay.onclick = event => { if (event.target === overlay) close(); };
     inputs.forEach((input, index) => {
         input.onchange = () => {
+            if (previewUrls[index]) URL.revokeObjectURL(previewUrls[index]);
+            previewUrls[index] = '';
             const name = overlay.querySelector(`[data-file-name="${index}"]`);
-            name.textContent = input.files?.[0]?.name || (index === 0 ? '选择第一张照片' : '选择第二张照片（可选）');
+            const preview = overlay.querySelector(`[data-photo-preview="${index}"]`);
+            const placeholder = overlay.querySelector(`[data-photo-placeholder="${index}"]`);
+            const drop = overlay.querySelector(`[data-photo-drop="${index}"]`);
+            const file = input.files?.[0];
+            name.textContent = file?.name || (index === 0 ? '选择第一张照片' : '选择第二张照片（可选）');
+            if (file) {
+                previewUrls[index] = URL.createObjectURL(file);
+                preview.src = previewUrls[index];
+                preview.hidden = false;
+                placeholder.hidden = true;
+                drop.style.borderColor = '#94a3b8';
+                drop.style.background = '#fff';
+            } else {
+                preview.removeAttribute('src');
+                preview.hidden = true;
+                placeholder.hidden = false;
+                drop.style.borderColor = '#cbd5e1';
+                drop.style.background = '#f8fafc';
+            }
             status.textContent = '';
         };
     });
@@ -2090,29 +2150,34 @@ function openStudioPhotographyUpload(task, cardButton) {
         }
 
         submit.disabled = true;
-        submit.textContent = '正在上传并加入队列...';
+        const retouchEnabled = retouchToggle.checked;
+        submit.textContent = retouchEnabled ? '正在上传并加入精修队列...' : '正在上传并加入作图队列...';
         status.textContent = '请不要关闭，正在把照片写入原任务';
         status.style.color = '#6b7280';
         try {
             const form = new FormData();
             form.append('taskId', task.id);
+            form.append('retouchEnabled', String(retouchEnabled));
             files.forEach(file => form.append('files', file, file.name));
             const response = await fetch('/api/studio-photography-photo', { method: 'POST', body: form });
             const result = await response.json().catch(() => ({}));
             if (!response.ok || !result.ok) throw new Error(result.error || `操作失败 (${response.status})`);
+            const stageText = result.retouchEnabled ? '精修' : '作图';
             const queueText = result.queueInfo?.aheadCount > 0
-                ? `已进入作图队列，前面还有 ${result.queueInfo.aheadCount} 个任务`
-                : '已进入作图队列，系统会按顺序开始处理';
+                ? `已进入${stageText}队列，前面还有 ${result.queueInfo.aheadCount} 个任务`
+                : result.retouchEnabled
+                    ? '已进入精修队列，完成后会自动开始作图'
+                    : '已进入作图队列，系统会按顺序开始处理';
             status.textContent = queueText;
             status.style.color = '#047857';
-            submit.textContent = '已开始作图';
-            if (cardButton) cardButton.textContent = '已提交拍摄图片';
+            submit.textContent = result.retouchEnabled ? '已开始精修' : '已开始作图';
+            if (cardButton) cardButton.textContent = result.retouchEnabled ? '拍摄图片精修中' : '已提交拍摄图片';
             setTimeout(() => { close(); loadStudioAdmin(); }, 900);
         } catch (error) {
             status.textContent = error.message;
             status.style.color = '#b91c1c';
             submit.disabled = false;
-            submit.textContent = '重新上传并开始作图';
+            submit.textContent = retouchToggle.checked ? '重新上传并开始精修' : '重新上传并开始作图';
         }
     };
 }

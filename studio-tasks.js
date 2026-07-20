@@ -47,6 +47,7 @@ function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;'
 
 const STATUS_MAP = {
     waiting_photos: { text: '等待摄影补图', color: '#b45309', bg: '#fff7ed' },
+    photography_processing: { text: '拍摄图片精修中', color: '#1d4ed8', bg: '#dbeafe' },
     pending: { text: '待处理', color: '#f59e0b', bg: '#fef3c7' },
     processing: { text: '处理中', color: '#3b82f6', bg: '#dbeafe' },
     done: { text: '已完成', color: '#16a34a', bg: '#dcfce7' },
@@ -75,7 +76,7 @@ async function loadTasks() {
         
         // 统计队列状态
         const pending = json.tasks.filter(t => t.status === 'pending' && !t.sentToRpa).length;
-        const processing = json.tasks.filter(t => t.status === 'processing' || (t.status === 'pending' && t.sentToRpa)).length;
+        const processing = json.tasks.filter(t => t.status === 'photography_processing' || t.status === 'processing' || (t.status === 'pending' && t.sentToRpa)).length;
         
         updateQueueStatus(pending, processing);
         
@@ -130,7 +131,7 @@ async function refreshQueueStatus() {
         if (!json.ok) return;
         
         const pending = json.tasks.filter(t => t.status === 'pending' && !t.sentToRpa).length;
-        const processing = json.tasks.filter(t => t.status === 'processing' || (t.status === 'pending' && t.sentToRpa)).length;
+        const processing = json.tasks.filter(t => t.status === 'photography_processing' || t.status === 'processing' || (t.status === 'pending' && t.sentToRpa)).length;
         
         updateQueueStatus(pending, processing);
     } catch (e) {
@@ -141,6 +142,7 @@ async function refreshQueueStatus() {
 function renderTask(task) {
     const st = STATUS_MAP[task.status] || STATUS_MAP.pending;
     const waitingPhotography = task.status === 'waiting_photos' && task.photographerDecision === true;
+    const photographyRetouching = task.status === 'photography_processing' && task.photographerDecision === true;
     const card = document.createElement('div');
     card.style.cssText = 'background:#fff;border-radius:12px;padding:18px 20px;box-shadow:0 1px 4px rgba(0,0,0,0.07)';
 
@@ -163,7 +165,7 @@ function renderTask(task) {
     // 进度条
     if (task.status !== 'done' && task.status !== 'rejected') {
         const step1 = true; // 已提交
-        const step2 = task.sentToRpa || task.status === 'processing'; // 已发送RPA/处理中
+        const step2 = task.sentToRpa || task.status === 'processing' || photographyRetouching; // 已发送RPA/处理中
         const step3 = task.status === 'done'; // 已完成
         
         html += `
@@ -182,7 +184,7 @@ function renderTask(task) {
                         <div style="width:20px;height:20px;border-radius:50%;background:${step2 ? '#16a34a' : '#e5e7eb'};display:flex;align-items:center;justify-content:center">
                             ${step2 ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>' : '<div style="width:8px;height:8px;border-radius:50%;background:#9ca3af"></div>'}
                         </div>
-                        <span style="font-size:0.75rem;color:${step2 ? '#16a34a' : (waitingPhotography ? '#b45309' : '#9ca3af')};font-weight:${step2 || waitingPhotography ? '600' : '400'}">${task.status === 'processing' ? '处理中' : (waitingPhotography ? '等待摄影' : '待处理')}</span>
+                        <span style="font-size:0.75rem;color:${step2 ? '#16a34a' : (waitingPhotography ? '#b45309' : '#9ca3af')};font-weight:${step2 || waitingPhotography ? '600' : '400'}">${photographyRetouching ? '照片精修中' : (task.status === 'processing' ? '处理中' : (waitingPhotography ? '等待摄影' : '待处理'))}</span>
                     </div>
                     <div style="flex:1;height:2px;background:#e5e7eb;margin:0 12px;position:relative">
                         <div style="position:absolute;left:0;top:0;height:100%;background:${step3 ? '#16a34a' : '#e5e7eb'};width:100%;transition:all 0.3s"></div>
@@ -195,6 +197,8 @@ function renderTask(task) {
                     </div>
                 </div>
                 ${task.status === 'processing' ? '<div style="font-size:0.72rem;color:#3b82f6;text-align:center;margin-top:6px">' + (task.mode === 'sheet_self' ? `已完成 ${Number(task.sheetSelfCompletedCount || 0)}/${Number(task.sheetSelfSlotCount || 0)} 张，每完成一张就会发到钉钉` : task.mode === 'retouch' ? '⏱ 图片正在精修中，预计约 30 分钟完成...' : task.mode === 'cutout' ? '⏱ 正在进行白底抠图，完成后会通过钉钉通知...' : '⏱ AI 正在生成中，预计还需 4-8 分钟...') + '</div>' : ''}
+                ${task.photographyUploadedAt && task.status !== 'done' && task.status !== 'rejected' ? `<div style="font-size:0.72rem;color:#047857;text-align:center;margin-top:6px">摄影师已上传 ${Number(task.photographyUploadedCount || task.photographySourceKeys?.length || 0)} 张图片</div>` : ''}
+                ${photographyRetouching ? `<div style="font-size:0.72rem;color:#1d4ed8;text-align:center;margin-top:6px">拍摄图片正在精修（${Number(task.photographyWorkflow?.completedCount || 0)}/${Number(task.photographyWorkflow?.sourceCount || 0)}），完成后会自动开始作图</div>` : ''}
                 ${waitingPhotography ? '<div style="font-size:0.72rem;color:#b45309;text-align:center;margin-top:6px">摄影师补上传照片后，任务会自动开始作图</div>' : ''}
                 ${task.status === 'pending' && !task.sentToRpa ? '<div style="font-size:0.72rem;color:#f59e0b;text-align:center;margin-top:6px">📋 任务已提交，等待自动发送到 RPA...</div>' : ''}
             </div>`;

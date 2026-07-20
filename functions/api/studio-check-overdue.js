@@ -6,6 +6,7 @@ import { editImageWithPrompt } from '../_shared/image-edit-core.js';
 import { studioTaskPutOptions } from '../_shared/studio-task-storage.js';
 import { advanceSheetSelfWorkflow, retrySheetSelfChildAfterTimeout } from '../_shared/sheet-self-workflow.js';
 import { acquireStudioRpaSlot, ensureStudioRpaSlot, releaseStudioRpaSlot } from '../_shared/studio-rpa-slot.js';
+import { advanceStudioPhotographyWorkflow, markStudioPhotographyRetouchTimedOut } from '../_shared/studio-photography-workflow.js';
 
 export async function onRequestGet(context) {
     const { env, request, waitUntil } = context;
@@ -93,7 +94,7 @@ export async function onRequestGet(context) {
                 const createdAt = typeof task.timestamp === 'number'
                     ? task.timestamp
                     : new Date(task.createdAt || task.timestamp || 0).getTime();
-                const requiresApprovalDelay = task.workflow?.type !== 'sheet_self'
+                const requiresApprovalDelay = !['sheet_self', 'studio_photography'].includes(task.workflow?.type)
                     && task.mode !== 'cutout'
                     && !task.photographyCompletedAt;
                 if (!imageOnly && requiresApprovalDelay && (!createdAt || (now - createdAt) < autoSendThreshold)) {
@@ -213,6 +214,10 @@ export async function onRequestGet(context) {
                 nextProcessingQueue.push(...(advanceResult.nextTaskIds || []));
                 continue;
             }
+            if (task.status === 'done' && task.workflow?.type === 'studio_photography') {
+                await advanceStudioPhotographyWorkflow({ env, task });
+                continue;
+            }
             if (task.status === 'done' && !task.dingtalkNotified && !task.r2AutoNotified) {
                 if (studioNotificationLeaseActive(task, now)) {
                     nextProcessingQueue.push(task.id);
@@ -267,6 +272,14 @@ export async function onRequestGet(context) {
                     rpaSlot = { busy: false, taskId: '' };
                     deferredProcessingQueue.push(task.id);
                 }
+                continue;
+            }
+
+            if (task.workflow?.type === 'studio_photography') {
+                await markStudioPhotographyRetouchTimedOut(env, task);
+                await releaseStudioRpaSlot(env, task.id);
+                rpaSlot = { busy: false, taskId: '' };
+                deferredProcessingQueue.push(task.id);
                 continue;
             }
 

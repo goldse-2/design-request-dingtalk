@@ -1,6 +1,7 @@
 import { getStudioRpaQueueInfo, queueStudioRpaTask } from '../_shared/studio-rpa-slot.js';
 import { wakeStudioRpaQueue } from '../_shared/studio-rpa-wakeup.js';
 import { studioTaskPutOptions } from '../_shared/studio-task-storage.js';
+import { startStudioPhotographyRetouchWorkflow } from '../_shared/studio-photography-workflow.js';
 
 const MAX_PHOTO_SIZE = 15 * 1024 * 1024;
 
@@ -15,6 +16,7 @@ export async function onRequestPost(context) {
     catch { return Response.json({ ok: false, error: '上传格式错误' }, { status: 400 }); }
 
     const taskId = String(form.get('taskId') || '').trim();
+    const retouchEnabled = String(form.get('retouchEnabled') ?? 'true') !== 'false';
     const files = form.getAll('files').filter(file => file && typeof file !== 'string');
     if (!taskId) return Response.json({ ok: false, error: '缺少任务ID' }, { status: 400 });
     if (files.length < 1 || files.length > 2) {
@@ -51,12 +53,41 @@ export async function onRequestPost(context) {
         sourceKeys.push({ key, name: cleanFileName(file.name, `拍摄图片-${index + 1}.${ext}`) });
     }
 
+    const now = new Date().toISOString();
+    task.photographySourceKeys = sourceKeys;
+    task.photographyUploadedAt = now;
+    task.photographyUploadedCount = sourceKeys.length;
+    schedulePhotographyUploadNotification(request, env, waitUntil, task, sourceKeys.length);
+
+    if (retouchEnabled) {
+        try {
+            const workflowResult = await startStudioPhotographyRetouchWorkflow(env, task, sourceKeys);
+            const firstChild = workflowResult.children[0];
+            const queueInfo = await getStudioRpaQueueInfo(env, firstChild).catch(() => null);
+            wakeStudioRpaQueue(request, waitUntil);
+            return Response.json({
+                ok: true,
+                id: taskId,
+                status: 'photography_processing',
+                retouchEnabled: true,
+                retouchCount: workflowResult.children.length,
+                queueInfo
+            });
+        } catch (error) {
+            task.status = 'waiting_photos';
+            task.photographyRetouchError = error.message || String(error);
+            await env.SUBMISSIONS.put(taskId, JSON.stringify(task), studioTaskPutOptions(task)).catch(() => {});
+            return Response.json({ ok: false, error: `图片已保存，但加入精修队列失败：${error.message}` }, { status: 500 });
+        }
+    }
+
     const productKeys = task.mode === 'program' && sourceKeys.length === 1
         ? [{ ...sourceKeys[0] }, { ...sourceKeys[0] }]
         : sourceKeys;
-    const now = new Date().toISOString();
     task.productKeys = productKeys;
-    task.photographySourceKeys = sourceKeys;
+    task.photographyRetouchEnabled = false;
+    task.photographyRetouchError = '';
+    task.photographyWorkflow = { state: 'skipped', completedAt: now };
     task.photographyCompletedAt = now;
     task.status = 'pending';
     task.sentToRpa = false;
@@ -74,6 +105,7 @@ export async function onRequestPost(context) {
             ok: true,
             id: taskId,
             status: task.status,
+            retouchEnabled: false,
             duplicatedPhoto: task.mode === 'program' && sourceKeys.length === 1,
             queueInfo
         });
@@ -95,4 +127,67 @@ function safeExtension(name, mimeType) {
 
 function cleanFileName(name, fallback) {
     return String(name || fallback).replace(/[\\/:*?"<>|\r\n]/g, '_').slice(0, 160) || fallback;
+}
+
+function schedulePhotographyUploadNotification(request, env, waitUntil, task, photoCount) {
+    if (!env.DINGTALK_APPKEY || !env.DINGTALK_APPSECRET || (!task.submitter?.userId && !task.submitter?.unionId)) return;
+    const origin = new URL(request.url).origin;
+    const notification = notifyPhotographyUpload(env, task, photoCount, origin)
+        .catch(error => console.error('Photography upload notification failed:', error.message || error));
+    if (waitUntil) waitUntil(notification);
+}
+
+async function notifyPhotographyUpload(env, task, photoCount, origin) {
+    const accessToken = await getAccessToken(env);
+    const staffId = task.submitter?.userId || await getStaffId(accessToken, task.submitter.unionId);
+    if (!staffId) throw new Error('未找到提交人的钉钉用户ID');
+
+    const content = [
+        '拍摄图片已上传',
+        '',
+        `摄影师已为你的任务上传 ${photoCount} 张图片。`,
+        '系统会继续处理，完成后将再次通过钉钉通知你。',
+        `查看进度：${origin}/studio-tasks.html`
+    ].join('\n');
+    const response = await fetch('https://api.dingtalk.com/v1.0/robot/oToMessages/batchSend', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'x-acs-dingtalk-access-token': accessToken
+        },
+        body: JSON.stringify({
+            robotCode: env.DINGTALK_APPKEY,
+            userIds: [staffId],
+            msgKey: 'sampleText',
+            msgParam: JSON.stringify({ content })
+        })
+    });
+    if (!response.ok) {
+        const detail = await response.text().catch(() => '');
+        throw new Error(`钉钉通知失败 (${response.status}) ${detail}`.trim());
+    }
+}
+
+async function getAccessToken(env) {
+    const response = await fetch('https://api.dingtalk.com/v1.0/oauth2/accessToken', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ appKey: env.DINGTALK_APPKEY, appSecret: env.DINGTALK_APPSECRET })
+    });
+    const data = await response.json();
+    if (!response.ok || !data.accessToken) throw new Error('获取钉钉令牌失败');
+    return data.accessToken;
+}
+
+async function getStaffId(accessToken, unionId) {
+    const response = await fetch(`https://oapi.dingtalk.com/topapi/user/getbyunionid?access_token=${accessToken}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ unionid: unionId })
+    });
+    const data = await response.json();
+    if (!response.ok || data.errcode !== 0 || !data.result?.userid) {
+        throw new Error(`获取钉钉用户ID失败：${data.errmsg || response.status}`);
+    }
+    return data.result.userid;
 }
