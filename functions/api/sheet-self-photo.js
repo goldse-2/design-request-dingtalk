@@ -1,4 +1,4 @@
-import { SHEET_SELF_SLOT_COUNT, getSheetSelfSlot, putSheetSelfSlot, retrySheetSelfSlot, startSheetSelfPhotographySlot, startSheetSelfProgramSlot } from '../_shared/sheet-self-workflow.js';
+import { SHEET_SELF_SLOT_COUNT, getSheetSelfSlot, retrySheetSelfSlot, startSheetSelfPhotographySlot } from '../_shared/sheet-self-workflow.js';
 
 export async function onRequestPost(context) {
     const { request, env } = context;
@@ -32,7 +32,7 @@ export async function onRequestPost(context) {
         ? parseProcessingFlags(form.get('retouchFlags'), files.length, !loaded.slot.skipRetouch)
         : legacyFlags.map(flag => flag && loaded.slot.skipRetouch !== true);
     const requestedCutoutFlags = form.has('cutoutFlags')
-        ? parseProcessingFlags(form.get('cutoutFlags'), files.length, true)
+        ? parseProcessingFlags(form.get('cutoutFlags'), files.length, loaded.slot.cutoutEnabled !== false)
         : legacyFlags;
     const retouchFlags = duplicatedSource
         ? [requestedRetouchFlags[0], requestedRetouchFlags[0]]
@@ -56,41 +56,24 @@ export async function onRequestPost(context) {
 
     try {
         const origin = new URL(request.url).origin;
-        if (needsProcessing) {
-            await startSheetSelfPhotographySlot(env, loaded.parent, loaded.slot, sourceKeys, origin, { retouchFlags, cutoutFlags });
-            const stage = retouchFlags.some(Boolean) ? 'retouch' : 'cutout';
-            return Response.json({
-                ok: true,
-                parentId,
-                slotIndex,
-                stage,
-                needsProcessing: true,
-                retouchEnabled: retouchFlags.some(Boolean),
-                cutoutEnabled: cutoutFlags.some(Boolean),
-                duplicatedSource,
-                retouchFlags,
-                cutoutFlags,
-                mixedProcessing: hasMixedSteps(retouchFlags, cutoutFlags)
-            });
-        }
-        loaded.slot.sourceKeys = sourceKeys;
-        loaded.slot.cutoutKeys = sourceKeys;
-        loaded.slot.processingFlags = [false, false];
-        loaded.slot.retouchFlags = [false, false];
-        loaded.slot.cutoutFlags = [false, false];
-        loaded.slot.processingSkipped = true;
-        loaded.slot.error = '';
-        loaded.slot.failedStage = '';
-        loaded.slot.children = {
-            ...(loaded.slot.children || {}),
-            retouch: [],
-            cutout: []
-        };
-        await putSheetSelfSlot(env, loaded.slot);
-        await startSheetSelfProgramSlot(env, loaded.parent, loaded.slot, origin);
-        return Response.json({ ok: true, parentId, slotIndex, stage: 'program', needsProcessing: false, duplicatedSource });
+        await startSheetSelfPhotographySlot(env, loaded.parent, loaded.slot, sourceKeys, origin, { retouchFlags, cutoutFlags });
+        return Response.json({
+            ok: true,
+            parentId,
+            slotIndex,
+            stage: loaded.slot.stage,
+            needsProcessing,
+            retouchEnabled: retouchFlags.some(Boolean),
+            cutoutEnabled: cutoutFlags.some(Boolean),
+            duplicatedSource,
+            retouchFlags,
+            cutoutFlags,
+            mixedProcessing: hasMixedSteps(retouchFlags, cutoutFlags)
+        });
     } catch (error) {
-        const stageText = retouchFlags.some(Boolean) ? '精修' : (cutoutFlags.some(Boolean) ? '白底抠图' : '图生图');
+        const stageText = retouchFlags.some(Boolean)
+            ? '精修'
+            : (cutoutFlags.some(Boolean) ? '白底抠图' : (loaded.slot.photographyOnly ? '发送用户' : '图生图'));
         return Response.json({ ok: false, error: `图片已保存，但发送${stageText}失败：${error.message}` }, { status: 502 });
     }
 }
@@ -153,32 +136,22 @@ async function useLibraryImages(context, body) {
         : selectedKeys;
 
     try {
-        loaded.slot.sourceKeys = sourceKeys;
-        loaded.slot.cutoutKeys = sourceKeys;
-        loaded.slot.processingFlags = [false, false];
-        loaded.slot.retouchFlags = [false, false];
-        loaded.slot.cutoutFlags = [false, false];
-        loaded.slot.processingSkipped = true;
-        loaded.slot.error = '';
-        loaded.slot.failedStage = '';
-        loaded.slot.children = {
-            ...(loaded.slot.children || {}),
-            retouch: [],
-            cutout: []
-        };
-        await putSheetSelfSlot(env, loaded.slot);
-        await startSheetSelfProgramSlot(env, loaded.parent, loaded.slot, new URL(request.url).origin);
+        await startSheetSelfPhotographySlot(env, loaded.parent, loaded.slot, sourceKeys, new URL(request.url).origin, {
+            retouchFlags: [false, false],
+            cutoutFlags: [false, false]
+        });
         return Response.json({
             ok: true,
             parentId,
             slotIndex,
-            stage: 'program',
+            stage: loaded.slot.stage,
             needsProcessing: false,
             duplicatedSource,
             source: 'library'
         });
     } catch (error) {
-        return Response.json({ ok: false, error: `资料库图片已选入，但发送图生图失败：${error.message}` }, { status: 502 });
+        const action = loaded.slot.photographyOnly ? '发送用户' : '发送图生图';
+        return Response.json({ ok: false, error: `资料库图片已选入，但${action}失败：${error.message}` }, { status: 502 });
     }
 }
 

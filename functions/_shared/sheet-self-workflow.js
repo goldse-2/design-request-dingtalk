@@ -67,7 +67,9 @@ export async function startSheetSelfPhotographySlot(env, parent, slot, sourceKey
         ? legacyFlags[index] !== false
         : options.cutoutFlags?.[index] === true);
     const processingFlags = sourceKeys.map((_, index) => retouchFlags[index] || cutoutFlags[index]);
-    const firstStage = retouchFlags.some(Boolean) ? 'retouch' : (cutoutFlags.some(Boolean) ? 'cutout' : 'program');
+    const firstStage = retouchFlags.some(Boolean)
+        ? 'retouch'
+        : (cutoutFlags.some(Boolean) ? 'cutout' : (slot.photographyOnly ? 'done' : 'program'));
     slot.sourceKeys = sourceKeys;
     slot.processingFlags = processingFlags;
     slot.retouchFlags = retouchFlags;
@@ -87,10 +89,13 @@ export async function startSheetSelfPhotographySlot(env, parent, slot, sourceKey
         cutoutFlags[index]
             ? sheetSelfChildId(parent.id, slot.index, 'cutout', index)
             : '');
-    slot.children.program = sheetSelfChildId(parent.id, slot.index, 'program');
+    slot.children.program = slot.photographyOnly ? '' : sheetSelfChildId(parent.id, slot.index, 'program');
     await putSheetSelfSlot(env, slot);
 
     if (!processingFlags.some(Boolean)) {
+        if (slot.photographyOnly) {
+            return [await completeSheetSelfSlot(env, parent, slot, sourceKeys, origin)];
+        }
         return [await startSheetSelfProgramSlot(env, parent, slot, origin)];
     }
 
@@ -164,31 +169,7 @@ export async function advanceSheetSelfWorkflow({ env, task, origin }) {
         }
 
         if (workflow.stage === 'program') {
-            if (!Array.isArray(task.resultKeys) || !task.resultKeys.some(item => item?.key)) {
-                throw new Error('图生图已回传完成状态，但没有收到成品图片');
-            }
-            slot.stage = 'done';
-            slot.resultKeys = Array.isArray(task.resultKeys) ? task.resultKeys : [];
-            slot.completedAt = task.completedAt || new Date().toISOString();
-            slot.error = '';
-            slot.failedStage = '';
-            await putSheetSelfSlot(env, slot, true);
-            await notifySheetSelfSlot(env, parent, slot, origin).catch(async error => {
-                slot.resultNotified = false;
-                slot.notificationError = String(error?.message || error).slice(0, 300);
-                slot.failedStage = 'notify';
-                slot.error = slot.notificationError;
-                slot.notificationLastAttemptAt = new Date().toISOString();
-                await putSheetSelfSlot(env, slot, true);
-                if (!slot.errorNotifiedAt) {
-                    await notifyAdminWorkflowError(env, parent, slot, origin).then(async () => {
-                        slot.errorNotifiedAt = new Date().toISOString();
-                        await putSheetSelfSlot(env, slot, true);
-                    }).catch(notifyError => console.error('Sheet self notification error alert failed:', notifyError.message));
-                }
-            });
-            await finishSheetSelfParent(env, parent);
-            return { advanced: true, stage: 'done', notified: slot.resultNotified === true };
+            return completeSheetSelfSlot(env, parent, slot, task.resultKeys, origin, task.completedAt);
         }
     } catch (error) {
         await markSlotError(env, slot, workflow.stage, error, origin);
@@ -206,6 +187,9 @@ async function advancePreparedSheetSelfSlot(env, parent, slot, origin) {
         return { advanced: true, stage: slot.stage, waiting: true };
     }
     await putSheetSelfSlot(env, slot);
+    if (slot.photographyOnly) {
+        return completeSheetSelfSlot(env, parent, slot, prepared.keys, origin);
+    }
     await startSheetSelfProgramSlot(env, parent, slot, origin);
     return { advanced: true, stage: 'program', nextTaskIds: [slot.children.program] };
 }
@@ -282,6 +266,13 @@ export async function retrySheetSelfSlot(env, parent, slot, origin) {
         await putSheetSelfSlot(env, slot);
         await createAndDispatchChild(env, pendingCutout, origin, true);
         return { stage: 'cutout' };
+    }
+
+    if (slot.photographyOnly) {
+        const prepared = await collectPreparedSheetSelfKeys(env, slot);
+        slot.cutoutKeys = prepared.keys;
+        if (!prepared.ready) throw new Error('两张处理图片尚未准备完成');
+        return completeSheetSelfSlot(env, parent, slot, prepared.keys, origin);
     }
 
     const programId = slot.children?.program || sheetSelfChildId(parent.id, slot.index, 'program');
@@ -381,6 +372,34 @@ export async function notifySheetSelfSlot(env, parent, slot, origin) {
     slot.errorNotifiedAt = '';
     slot.notificationLastAttemptAt = slot.resultNotifiedAt;
     await putSheetSelfSlot(env, slot, true);
+}
+
+async function completeSheetSelfSlot(env, parent, slot, resultKeys, origin, completedAt = '') {
+    if (!Array.isArray(resultKeys) || !resultKeys.some(item => item?.key)) {
+        throw new Error(slot.photographyOnly ? '拍摄处理已完成，但没有收到可发送的图片' : '图生图已回传完成状态，但没有收到成品图片');
+    }
+    slot.stage = 'done';
+    slot.resultKeys = resultKeys.filter(item => item?.key);
+    slot.completedAt = completedAt || new Date().toISOString();
+    slot.error = '';
+    slot.failedStage = '';
+    await putSheetSelfSlot(env, slot, true);
+    await notifySheetSelfSlot(env, parent, slot, origin).catch(async error => {
+        slot.resultNotified = false;
+        slot.notificationError = String(error?.message || error).slice(0, 300);
+        slot.failedStage = 'notify';
+        slot.error = slot.notificationError;
+        slot.notificationLastAttemptAt = new Date().toISOString();
+        await putSheetSelfSlot(env, slot, true);
+        if (!slot.errorNotifiedAt) {
+            await notifyAdminWorkflowError(env, parent, slot, origin).then(async () => {
+                slot.errorNotifiedAt = new Date().toISOString();
+                await putSheetSelfSlot(env, slot, true);
+            }).catch(notifyError => console.error('Sheet self notification error alert failed:', notifyError.message));
+        }
+    });
+    await finishSheetSelfParent(env, parent);
+    return { advanced: true, stage: 'done', notified: slot.resultNotified === true };
 }
 
 export async function finishSheetSelfParent(env, parent) {

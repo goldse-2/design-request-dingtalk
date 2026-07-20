@@ -11,7 +11,9 @@ export async function onRequestPost(context) {
 
     const submitter = normalizeSubmitter(body.submitter);
     const standalonePhotography = body.sourceMode === 'photography';
-    const slots = Array.isArray(body.slots) ? body.slots.slice(0, SHEET_SELF_SLOT_COUNT).map((slot, index) => normalizeSlot(slot, index)) : [];
+    const slots = Array.isArray(body.slots)
+        ? body.slots.slice(0, SHEET_SELF_SLOT_COUNT).map((slot, index) => normalizeSlot(slot, index, standalonePhotography))
+        : [];
     if (!submitter.unionId || !submitter.name) {
         return Response.json({ ok: false, error: '请先登录钉钉' }, { status: 401 });
     }
@@ -31,10 +33,10 @@ export async function onRequestPost(context) {
         category: '图片',
         imageName: standalonePhotography ? '图片拍摄' : `表格自助-${slots.length}张图片`,
         productName: standalonePhotography ? '图片拍摄' : slots[0]?.productName || '表格自助',
-        desc: standalonePhotography ? '图片拍摄需求' : `生成 ${slots.length} 个图片位：${sizeSummary.join('、')}`,
+        desc: standalonePhotography ? `图片拍摄需求，共 ${slots.length} 个图片位` : `生成 ${slots.length} 个图片位：${sizeSummary.join('、')}`,
         size: sizeSummary.length === 1 ? slots[0].size : 'mixed',
         productKeys: [],
-        refKeys: slots.map(slot => slot.referenceKey),
+        refKeys: slots.map(slot => slot.referenceKey).filter(Boolean),
         modelKeys: [],
         resultKeys: [],
         sheetSelfSlotCount: slots.length,
@@ -88,11 +90,11 @@ export async function onRequestPost(context) {
     });
 }
 
-function normalizeSlot(value, index) {
+function normalizeSlot(value, index, standalonePhotography = false) {
     const slot = value && typeof value === 'object' ? value : {};
     const referenceKey = normalizeFileKey(slot.referenceKey);
     const productKeys = Array.isArray(slot.productKeys) ? slot.productKeys.slice(0, 2).map(normalizeFileKey).filter(Boolean) : [];
-    const photographer = slot.photographer === true;
+    const photographer = standalonePhotography || slot.photographer === true;
     const photographyExampleKey = photographer ? normalizeFileKey(slot.photographyExampleKey) : null;
     const requestedSize = normalizeSize(slot.size);
     const aPlusDouble = slot.aPlusDouble === true || requestedSize === '1464x1200';
@@ -101,11 +103,13 @@ function normalizeSlot(value, index) {
         displayIndex: Number.isInteger(Number(slot.index)) && Number(slot.index) >= 0 && Number(slot.index) < SHEET_SELF_SLOT_COUNT ? Number(slot.index) : index,
         photographer,
         skipRetouch: slot.skipRetouch === true,
+        cutoutEnabled: slot.cutoutEnabled !== false,
+        photographyOnly: standalonePhotography,
         photographyExampleKey,
         photographyNote: photographer ? cleanText(slot.photographyNote, 300) : '',
         size: aPlusDouble ? '1464x1200' : requestedSize,
         aPlusDouble,
-        productName: cleanText(slot.productName, 100),
+        productName: cleanText(slot.productName, 100) || (standalonePhotography ? `图片拍摄-${index + 1}` : ''),
         title: cleanText(slot.title, 100),
         subtitle: cleanText(slot.subtitle, 100),
         otherText: cleanText(slot.otherText, 300),
@@ -122,7 +126,7 @@ function normalizeSlot(value, index) {
     };
     const displayNumber = normalized.displayIndex + 1;
     if (!normalized.productName) normalized.error = `第 ${displayNumber} 张请填写产品名称`;
-    else if (!referenceKey) normalized.error = aPlusDouble
+    else if (!standalonePhotography && !referenceKey) normalized.error = aPlusDouble
         ? `第 ${displayNumber} 张请上传 A+ 上下两张 1464 × 600 图片`
         : `第 ${displayNumber} 张请上传要模仿的参考图`;
     else if (!photographer && productKeys.length !== 2) normalized.error = `第 ${displayNumber} 张请上传两张白底产品图，或开启“由摄影师决定”`;

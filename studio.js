@@ -556,50 +556,13 @@ const PHOTOGRAPHY_FORM = `
             <div class="photography-head">
                 <div>
                     <h2>图片拍摄</h2>
-                    <p>上传要模仿的参考图，摄影师补图后会自动完成精修、白底抠图和图生图。</p>
+                    <p>填写拍摄案例和备注，摄影师补图后会按每个图片位的设置处理并发给你。</p>
                 </div>
                 <span class="photography-badge">摄影师协助</span>
             </div>
-            <div class="photography-body">
-                <section class="photography-assets">
-                    <div class="photography-section-title">素材图片</div>
-                    <div class="photography-assets-grid">
-                        <div class="photography-upload is-required" id="photographyReferenceSlot">
-                            <label class="photography-upload-label" for="photographyReferenceInput">
-                                <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 16V4m0 0L7 9m5-5 5 5"/><path d="M5 14v5h14v-5"/></svg>
-                                <strong>要模仿的图</strong>
-                                <small>必填，单张最大 8 MB</small>
-                            </label>
-                        </div>
-                        <div class="photography-upload" id="photographyExampleSlot">
-                            <label class="photography-upload-label" for="photographyExampleInput">
-                                <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 16V4m0 0L7 9m5-5 5 5"/><path d="M5 14v5h14v-5"/></svg>
-                                <strong>上传拍摄案例图</strong>
-                                <small>可选，留空则按参考图拍摄</small>
-                            </label>
-                        </div>
-                        <div class="photography-note">
-                            <label for="photographyNote">拍摄备注 <span>可选</span></label>
-                            <textarea id="photographyNote" maxlength="300" placeholder="例如：参考这个角度、光线或摆放方式"></textarea>
-                        </div>
-                    </div>
-                    <input type="file" id="photographyReferenceInput" accept="image/*" hidden>
-                    <input type="file" id="photographyExampleInput" accept="image/*" hidden>
-                </section>
-                <aside class="photography-settings">
-                    <div class="photography-section-title">设置</div>
-                    <div class="photography-setting-row">
-                        <div class="photography-setting-copy"><strong>由摄影师决定</strong><small>开启后，此图片位暂时不需要用户上传白底图</small></div>
-                        <span class="photography-fixed-state">已开启</span>
-                    </div>
-                    <div class="photography-setting-row">
-                        <div class="photography-setting-copy"><strong>需要精修</strong><small id="photographyRetouchHint">已开启：先精修，再进行白底抠图</small></div>
-                        <div class="sheet-self-switch-control">
-                            <span class="sheet-self-switch-state" id="photographyRetouchState">已开启</span>
-                            <label class="sheet-self-switch" title="控制是否需要精修"><input type="checkbox" id="photographyRetouchToggle" aria-label="需要精修" checked><span></span></label>
-                        </div>
-                    </div>
-                </aside>
+            <div class="photography-slot-list" id="photographySlotList"></div>
+            <div class="sheet-self-add-row photography-add-row">
+                <button type="button" class="sheet-self-add" id="photographyAddSlot"><span aria-hidden="true">+</span> 添加图片位 <small id="photographySlotCount">1/8</small></button>
             </div>
             <div class="photography-actions">
                 <p>提交后会通知摄影师；完成后通过钉钉通知，无需停留在此页面。</p>
@@ -803,6 +766,7 @@ const MAX_RETOUCH_FILE_SIZE = 15 * 1024 * 1024;
 const MAX_VARIANT_FILE_SIZE = 15 * 1024 * 1024;
 const MAX_VARIANT_IMAGES = 20;
 const MAX_RETOUCH_IMAGES = 20;
+const PHOTOGRAPHY_SLOT_COUNT = 8;
 const A_PLUS_DOUBLE_WIDTH = 1464;
 const A_PLUS_DOUBLE_HALF_HEIGHT = 600;
 const A_PLUS_DOUBLE_SIZE = '1464x1200';
@@ -816,12 +780,19 @@ const aPlusDoubleState = {
     previousRefs: []
 };
 const photographyModeState = {
-    referenceKey: null,
-    photographyExampleKey: null,
-    photographyNote: '',
-    skipRetouch: false,
-    uploadingType: ''
+    slots: [createPhotographyModeSlot(0)]
 };
+
+function createPhotographyModeSlot(index) {
+    return {
+        index,
+        photographyExampleKey: null,
+        photographyNote: '',
+        skipRetouch: true,
+        cutoutEnabled: true,
+        uploading: false
+    };
+}
 
 function createEmptySheetSelfState() {
     return {
@@ -2705,112 +2676,151 @@ function sheetSelfEsc(value) {
 }
 
 function initPhotographyMode() {
-    const note = document.getElementById('photographyNote');
-    const retouchToggle = document.getElementById('photographyRetouchToggle');
-    if (note) {
-        note.value = photographyModeState.photographyNote;
-        note.addEventListener('input', event => {
-            photographyModeState.photographyNote = event.target.value;
-        });
-    }
-    if (retouchToggle) {
-        retouchToggle.checked = !photographyModeState.skipRetouch;
-        retouchToggle.addEventListener('change', event => {
-            photographyModeState.skipRetouch = !event.target.checked;
-            updatePhotographyRetouchState();
-        });
-    }
-    document.getElementById('photographyReferenceInput')?.addEventListener('change', event => {
-        const file = event.target.files?.[0];
-        event.target.value = '';
-        if (file) handlePhotographyModeFile('reference', file);
-    });
-    document.getElementById('photographyExampleInput')?.addEventListener('change', event => {
-        const file = event.target.files?.[0];
-        event.target.value = '';
-        if (file) handlePhotographyModeFile('example', file);
-    });
-    document.querySelector('.photography-assets')?.addEventListener('click', event => {
+    const list = document.getElementById('photographySlotList');
+    list?.addEventListener('click', event => {
         const preview = event.target.closest('[data-photography-preview]');
         if (preview) {
             openSheetSelfImagePreview(preview.dataset.photographyPreview, preview.dataset.previewLabel);
             return;
         }
-        const remove = event.target.closest('[data-photography-remove]');
-        if (!remove) return;
-        if (remove.dataset.photographyRemove === 'reference') photographyModeState.referenceKey = null;
-        else photographyModeState.photographyExampleKey = null;
-        renderPhotographyModeUploads();
+        const removeImage = event.target.closest('[data-photography-remove-image]');
+        if (removeImage) {
+            const slot = photographyModeState.slots[Number(removeImage.dataset.slotIndex)];
+            if (slot) slot.photographyExampleKey = null;
+            renderPhotographyModeSlots();
+            return;
+        }
+        const removeSlot = event.target.closest('[data-photography-remove-slot]');
+        if (!removeSlot || photographyModeState.slots.length <= 1) return;
+        photographyModeState.slots.splice(Number(removeSlot.dataset.slotIndex), 1);
+        photographyModeState.slots.forEach((slot, index) => { slot.index = index; });
+        renderPhotographyModeSlots();
+    });
+    list?.addEventListener('change', event => {
+        const slotIndex = Number(event.target.dataset.slotIndex);
+        const slot = photographyModeState.slots[slotIndex];
+        if (!slot) return;
+        if (event.target.matches('[data-photography-example-input]')) {
+            const file = event.target.files?.[0];
+            event.target.value = '';
+            if (file) handlePhotographyModeFile(slotIndex, file);
+            return;
+        }
+        if (event.target.matches('[data-photography-retouch]')) {
+            slot.skipRetouch = !event.target.checked;
+            renderPhotographyModeSlots();
+            return;
+        }
+        if (event.target.matches('[data-photography-cutout]')) {
+            slot.cutoutEnabled = event.target.checked;
+            renderPhotographyModeSlots();
+        }
+    });
+    list?.addEventListener('input', event => {
+        if (!event.target.matches('[data-photography-note]')) return;
+        const slot = photographyModeState.slots[Number(event.target.dataset.slotIndex)];
+        if (slot) slot.photographyNote = event.target.value;
+    });
+    document.getElementById('photographyAddSlot')?.addEventListener('click', () => {
+        if (photographyModeState.slots.length >= PHOTOGRAPHY_SLOT_COUNT) return;
+        photographyModeState.slots.push(createPhotographyModeSlot(photographyModeState.slots.length));
+        renderPhotographyModeSlots();
     });
     document.getElementById('photographySubmit')?.addEventListener('click', submitPhotographyMode);
-    renderPhotographyModeUploads();
-    updatePhotographyRetouchState();
+    renderPhotographyModeSlots();
 }
 
-function updatePhotographyRetouchState() {
-    const enabled = !photographyModeState.skipRetouch;
-    const toggle = document.getElementById('photographyRetouchToggle');
-    const state = document.getElementById('photographyRetouchState');
-    const hint = document.getElementById('photographyRetouchHint');
-    if (toggle) toggle.checked = enabled;
-    if (state) {
-        state.textContent = enabled ? '已开启' : '已关闭';
-        state.className = 'sheet-self-switch-state' + (enabled ? '' : ' is-off');
-    }
-    if (hint) hint.textContent = enabled
-        ? '已开启：先精修，再进行白底抠图'
-        : '已关闭：跳过精修，速度更快，适合场景图';
+function renderPhotographyModeSlots() {
+    const list = document.getElementById('photographySlotList');
+    if (!list) return;
+    list.innerHTML = photographyModeState.slots.map(renderPhotographyModeSlot).join('');
+    const count = document.getElementById('photographySlotCount');
+    const addButton = document.getElementById('photographyAddSlot');
+    if (count) count.textContent = `${photographyModeState.slots.length}/${PHOTOGRAPHY_SLOT_COUNT}`;
+    if (addButton) addButton.disabled = photographyModeState.slots.length >= PHOTOGRAPHY_SLOT_COUNT;
 }
 
-function renderPhotographyModeUploads() {
-    renderPhotographyModeUpload('photographyReferenceSlot', 'reference', photographyModeState.referenceKey, '要模仿的图', true);
-    renderPhotographyModeUpload('photographyExampleSlot', 'example', photographyModeState.photographyExampleKey, '拍摄案例图', false);
+function renderPhotographyModeSlot(slot, slotIndex) {
+    const retouchEnabled = !slot.skipRetouch;
+    const cutoutEnabled = slot.cutoutEnabled !== false;
+    const example = slot.photographyExampleKey?.key
+        ? (() => {
+            const imageUrl = sheetSelfImageUrl(slot.photographyExampleKey.key);
+            return `<div class="photography-upload${slot.uploading ? ' is-loading' : ''}">
+                <button type="button" class="photography-upload-preview" data-photography-preview="${sheetSelfEsc(imageUrl)}" data-preview-label="第 ${slotIndex + 1} 个图片位拍摄案例图" title="点击放大查看"><img src="${sheetSelfEsc(imageUrl)}" alt="拍摄案例图"></button>
+                <span class="photography-upload-badge">拍摄案例图</span>
+                <button type="button" class="photography-upload-remove" data-photography-remove-image data-slot-index="${slotIndex}" aria-label="移除拍摄案例图" title="移除拍摄案例图">×</button>
+            </div>`;
+        })()
+        : `<div class="photography-upload${slot.uploading ? ' is-loading' : ''}">
+            <label class="photography-upload-label" for="photographyExampleInput-${slotIndex}">
+                <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 16V4m0 0L7 9m5-5 5 5"/><path d="M5 14v5h14v-5"/></svg>
+                <strong>${slot.uploading ? '图片上传中...' : '上传拍摄案例图'}</strong>
+                <small>可选，留空则按备注拍摄</small>
+            </label>
+        </div>`;
+    return `<section class="photography-request-slot" data-photography-slot="${slotIndex}">
+        <div class="photography-slot-head">
+            <div><strong>图片位 ${slotIndex + 1}</strong><small>每个图片位可单独设置处理方式</small></div>
+            ${photographyModeState.slots.length > 1 ? `<button type="button" class="photography-slot-remove" data-photography-remove-slot data-slot-index="${slotIndex}" aria-label="删除图片位 ${slotIndex + 1}" title="删除图片位">×</button>` : ''}
+        </div>
+        <div class="photography-body">
+            <section class="photography-assets">
+                <div class="photography-section-title">拍摄要求</div>
+                <div class="photography-assets-grid photography-assets-grid-single">
+                    ${example}
+                    <div class="photography-note">
+                        <label for="photographyNote-${slotIndex}">拍摄备注 <span>可选</span></label>
+                        <textarea id="photographyNote-${slotIndex}" data-photography-note data-slot-index="${slotIndex}" maxlength="300" placeholder="例如：拍摄角度、光线或摆放方式">${sheetSelfEsc(slot.photographyNote)}</textarea>
+                    </div>
+                </div>
+                <input type="file" id="photographyExampleInput-${slotIndex}" data-photography-example-input data-slot-index="${slotIndex}" accept="image/*" hidden>
+            </section>
+            <aside class="photography-settings">
+                <div class="photography-section-title">设置</div>
+                <div class="photography-setting-row">
+                    <div class="photography-setting-copy"><strong>需要精修</strong><small>${retouchEnabled ? '已开启，自动精修拍摄原图' : '已关闭，为普通白底'}</small></div>
+                    <div class="sheet-self-switch-control">
+                        <span class="sheet-self-switch-state${retouchEnabled ? '' : ' is-off'}">${retouchEnabled ? '已开启' : '已关闭'}</span>
+                        <label class="sheet-self-switch" title="控制此图片位是否需要精修"><input type="checkbox" data-photography-retouch data-slot-index="${slotIndex}" aria-label="图片位 ${slotIndex + 1} 需要精修"${retouchEnabled ? ' checked' : ''}><span></span></label>
+                    </div>
+                </div>
+                <div class="photography-setting-row">
+                    <div class="photography-setting-copy"><strong>白底抠图</strong><small>${cutoutEnabled ? '已开启，自动抠成白底图' : '已关闭，保留拍摄背景'}</small></div>
+                    <div class="sheet-self-switch-control">
+                        <span class="sheet-self-switch-state${cutoutEnabled ? '' : ' is-off'}">${cutoutEnabled ? '已开启' : '已关闭'}</span>
+                        <label class="sheet-self-switch" title="控制此图片位是否需要白底抠图"><input type="checkbox" data-photography-cutout data-slot-index="${slotIndex}" aria-label="图片位 ${slotIndex + 1} 白底抠图"${cutoutEnabled ? ' checked' : ''}><span></span></label>
+                    </div>
+                </div>
+            </aside>
+        </div>
+    </section>`;
 }
 
-function renderPhotographyModeUpload(slotId, type, file, label, required) {
-    const slot = document.getElementById(slotId);
-    if (!slot) return;
-    const loading = photographyModeState.uploadingType === type;
-    slot.className = `photography-upload${required ? ' is-required' : ''}${loading ? ' is-loading' : ''}`;
-    if (file?.key) {
-        const imageUrl = sheetSelfImageUrl(file.key);
-        slot.innerHTML = `<button type="button" class="photography-upload-preview" data-photography-preview="${sheetSelfEsc(imageUrl)}" data-preview-label="${sheetSelfEsc(label)}" title="点击放大查看"><img src="${sheetSelfEsc(imageUrl)}" alt="${sheetSelfEsc(label)}"></button>
-            <span class="photography-upload-badge">${sheetSelfEsc(label)}</span>
-            <button type="button" class="photography-upload-remove" data-photography-remove="${type}" aria-label="移除${sheetSelfEsc(label)}" title="移除${sheetSelfEsc(label)}">×</button>`;
-        return;
-    }
-    const inputId = type === 'reference' ? 'photographyReferenceInput' : 'photographyExampleInput';
-    slot.innerHTML = `<label class="photography-upload-label" for="${inputId}">
-        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 16V4m0 0L7 9m5-5 5 5"/><path d="M5 14v5h14v-5"/></svg>
-        <strong>${loading ? '图片上传中...' : (type === 'reference' ? '要模仿的图' : '上传拍摄案例图')}</strong>
-        <small>${type === 'reference' ? '必填，单张最大 8 MB' : '可选，留空则按参考图拍摄'}</small>
-    </label>`;
-}
-
-async function handlePhotographyModeFile(type, file) {
-    if (photographyModeState.uploadingType) return;
+async function handlePhotographyModeFile(slotIndex, file) {
+    const slot = photographyModeState.slots[slotIndex];
+    if (!slot || photographyModeState.slots.some(item => item.uploading)) return;
     const status = document.getElementById('photographyStatus');
     const error = validateSheetSelfFile(file);
     if (error) {
-        showStudioFieldError(status, error, document.getElementById(type === 'reference' ? 'photographyReferenceSlot' : 'photographyExampleSlot'));
+        showStudioFieldError(status, error, document.querySelector(`[data-photography-slot="${slotIndex}"] .photography-upload`));
         return;
     }
-    photographyModeState.uploadingType = type;
+    slot.uploading = true;
     status.textContent = '正在上传图片...';
     status.className = 'studio-status';
-    renderPhotographyModeUploads();
+    renderPhotographyModeSlots();
     try {
         const [key] = await uploadImages([{ file, name: file.name }], 'studio/sheet-self');
-        if (type === 'reference') photographyModeState.referenceKey = key;
-        else photographyModeState.photographyExampleKey = key;
+        slot.photographyExampleKey = key;
         status.textContent = '图片已上传';
         status.className = 'studio-status ok';
     } catch (uploadError) {
         status.textContent = '上传失败：' + uploadError.message;
         status.className = 'studio-status err';
     } finally {
-        photographyModeState.uploadingType = '';
-        renderPhotographyModeUploads();
+        slot.uploading = false;
+        renderPhotographyModeSlots();
     }
 }
 
@@ -2819,16 +2829,12 @@ async function submitPhotographyMode() {
     const button = document.getElementById('photographySubmit');
     if (!currentUser) { showLoginModal(); return; }
     if (!hasAgreed()) { openGuide(); guideShowPage(2); return; }
-    if (button.dataset.loading === '1' || photographyModeState.uploadingType) return;
-    if (!photographyModeState.referenceKey?.key) {
-        showStudioFieldError(status, '请先上传要模仿的图', document.getElementById('photographyReferenceSlot'));
-        return;
-    }
+    if (button.dataset.loading === '1' || photographyModeState.slots.some(slot => slot.uploading)) return;
 
     const originalText = button.textContent;
     button.dataset.loading = '1';
     button.disabled = true;
-    button.textContent = '正在提交...';
+    button.textContent = `正在创建 ${photographyModeState.slots.length} 个图片位...`;
     status.textContent = '正在创建图片拍摄任务...';
     status.className = 'studio-status';
     try {
@@ -2838,33 +2844,26 @@ async function submitPhotographyMode() {
             body: JSON.stringify({
                 sourceMode: 'photography',
                 submitter: currentUser,
-                slots: [{
-                    index: 0,
+                slots: photographyModeState.slots.map((slot, index) => ({
+                    index,
                     photographer: true,
-                    skipRetouch: photographyModeState.skipRetouch,
-                    photographyExampleKey: photographyModeState.photographyExampleKey,
-                    photographyNote: photographyModeState.photographyNote,
-                    productName: '图片拍摄',
+                    skipRetouch: slot.skipRetouch === true,
+                    cutoutEnabled: slot.cutoutEnabled !== false,
+                    photographyExampleKey: slot.photographyExampleKey,
+                    photographyNote: slot.photographyNote,
+                    productName: `图片拍摄-${index + 1}`,
                     size: '1600x1600',
-                    referenceKey: photographyModeState.referenceKey,
+                    referenceKey: null,
                     productKeys: []
-                }]
+                }))
             })
         });
         const result = await response.json().catch(() => ({}));
         if (!response.ok || !result.ok) throw new Error(result.error || `提交失败 (${response.status})`);
-        Object.assign(photographyModeState, {
-            referenceKey: null,
-            photographyExampleKey: null,
-            photographyNote: '',
-            skipRetouch: false,
-            uploadingType: ''
-        });
-        document.getElementById('photographyNote').value = '';
-        renderPhotographyModeUploads();
-        updatePhotographyRetouchState();
+        photographyModeState.slots = [createPhotographyModeSlot(0)];
+        renderPhotographyModeSlots();
         status.textContent = '';
-        showSuccessModal({ ...result, waitingPhotography: true }, '摄影师补图后会自动处理，完成后通过钉钉通知。');
+        showSuccessModal({ ...result, waitingPhotography: true }, `已提交 ${result.photographerSlots || 1} 个图片位。摄影师补图后会按设置处理，完成后通过钉钉通知。`);
     } catch (error) {
         status.textContent = '提交失败：' + error.message;
         status.className = 'studio-status err';
