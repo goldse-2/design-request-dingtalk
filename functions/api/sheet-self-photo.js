@@ -27,11 +27,20 @@ export async function onRequestPost(context) {
 
     const duplicatedSource = files.length === 1;
     const processingFiles = duplicatedSource ? [files[0], files[0]] : files;
-    const requestedFlags = parseProcessingFlags(form.get('processingFlags'), files.length, legacyNeedsProcessing);
-    const processingFlags = duplicatedSource
-        ? [requestedFlags[0], requestedFlags[0]]
-        : requestedFlags;
-    const needsProcessing = processingFlags.some(Boolean);
+    const legacyFlags = parseProcessingFlags(form.get('processingFlags'), files.length, legacyNeedsProcessing);
+    const requestedRetouchFlags = form.has('retouchFlags')
+        ? parseProcessingFlags(form.get('retouchFlags'), files.length, !loaded.slot.skipRetouch)
+        : legacyFlags.map(flag => flag && loaded.slot.skipRetouch !== true);
+    const requestedCutoutFlags = form.has('cutoutFlags')
+        ? parseProcessingFlags(form.get('cutoutFlags'), files.length, true)
+        : legacyFlags;
+    const retouchFlags = duplicatedSource
+        ? [requestedRetouchFlags[0], requestedRetouchFlags[0]]
+        : requestedRetouchFlags;
+    const cutoutFlags = duplicatedSource
+        ? [requestedCutoutFlags[0], requestedCutoutFlags[0]]
+        : requestedCutoutFlags;
+    const needsProcessing = retouchFlags.some(Boolean) || cutoutFlags.some(Boolean);
     const sourceKeys = [];
     for (let index = 0; index < processingFiles.length; index++) {
         const file = processingFiles[index];
@@ -48,22 +57,27 @@ export async function onRequestPost(context) {
     try {
         const origin = new URL(request.url).origin;
         if (needsProcessing) {
-            await startSheetSelfPhotographySlot(env, loaded.parent, loaded.slot, sourceKeys, origin, processingFlags);
+            await startSheetSelfPhotographySlot(env, loaded.parent, loaded.slot, sourceKeys, origin, { retouchFlags, cutoutFlags });
+            const stage = retouchFlags.some(Boolean) ? 'retouch' : 'cutout';
             return Response.json({
                 ok: true,
                 parentId,
                 slotIndex,
-                stage: loaded.slot.skipRetouch ? 'cutout' : 'retouch',
+                stage,
                 needsProcessing: true,
-                skipRetouch: loaded.slot.skipRetouch === true,
+                retouchEnabled: retouchFlags.some(Boolean),
+                cutoutEnabled: cutoutFlags.some(Boolean),
                 duplicatedSource,
-                processingFlags,
-                mixedProcessing: processingFlags.some(Boolean) && processingFlags.some(flag => !flag)
+                retouchFlags,
+                cutoutFlags,
+                mixedProcessing: hasMixedSteps(retouchFlags, cutoutFlags)
             });
         }
         loaded.slot.sourceKeys = sourceKeys;
         loaded.slot.cutoutKeys = sourceKeys;
         loaded.slot.processingFlags = [false, false];
+        loaded.slot.retouchFlags = [false, false];
+        loaded.slot.cutoutFlags = [false, false];
         loaded.slot.processingSkipped = true;
         loaded.slot.error = '';
         loaded.slot.failedStage = '';
@@ -76,7 +90,7 @@ export async function onRequestPost(context) {
         await startSheetSelfProgramSlot(env, loaded.parent, loaded.slot, origin);
         return Response.json({ ok: true, parentId, slotIndex, stage: 'program', needsProcessing: false, duplicatedSource });
     } catch (error) {
-        const stageText = needsProcessing ? '精修' : '图生图';
+        const stageText = retouchFlags.some(Boolean) ? '精修' : (cutoutFlags.some(Boolean) ? '白底抠图' : '图生图');
         return Response.json({ ok: false, error: `图片已保存，但发送${stageText}失败：${error.message}` }, { status: 502 });
     }
 }
@@ -142,6 +156,8 @@ async function useLibraryImages(context, body) {
         loaded.slot.sourceKeys = sourceKeys;
         loaded.slot.cutoutKeys = sourceKeys;
         loaded.slot.processingFlags = [false, false];
+        loaded.slot.retouchFlags = [false, false];
+        loaded.slot.cutoutFlags = [false, false];
         loaded.slot.processingSkipped = true;
         loaded.slot.error = '';
         loaded.slot.failedStage = '';
@@ -205,4 +221,9 @@ function parseProcessingFlags(rawValue, fileCount, fallback) {
         if (index >= values.length) return fallback;
         return values[index] !== false && values[index] !== 'false';
     });
+}
+
+function hasMixedSteps(retouchFlags, cutoutFlags) {
+    const combinations = retouchFlags.map((retouch, index) => `${retouch ? 1 : 0}${cutoutFlags[index] ? 1 : 0}`);
+    return new Set(combinations).size > 1;
 }

@@ -57,41 +57,54 @@ export async function startSheetSelfProgramSlot(env, parent, slot, origin, force
     }
 }
 
-export async function startSheetSelfPhotographySlot(env, parent, slot, sourceKeys, origin, processingFlags = [true, true]) {
+export async function startSheetSelfPhotographySlot(env, parent, slot, sourceKeys, origin, options = {}) {
     if (!Array.isArray(sourceKeys) || sourceKeys.length !== 2) throw new Error('需要上传两张拍摄原图');
-    const normalizedFlags = sourceKeys.map((_, index) => processingFlags[index] !== false);
-    if (!normalizedFlags.some(Boolean)) throw new Error('至少一张图片需要处理');
-    const firstStage = slot.skipRetouch ? 'cutout' : 'retouch';
+    const legacyFlags = Array.isArray(options) ? options : null;
+    const retouchFlags = sourceKeys.map((_, index) => legacyFlags
+        ? legacyFlags[index] !== false && slot.skipRetouch !== true
+        : options.retouchFlags?.[index] === true);
+    const cutoutFlags = sourceKeys.map((_, index) => legacyFlags
+        ? legacyFlags[index] !== false
+        : options.cutoutFlags?.[index] === true);
+    const processingFlags = sourceKeys.map((_, index) => retouchFlags[index] || cutoutFlags[index]);
+    const firstStage = retouchFlags.some(Boolean) ? 'retouch' : (cutoutFlags.some(Boolean) ? 'cutout' : 'program');
     slot.sourceKeys = sourceKeys;
-    slot.processingFlags = normalizedFlags;
-    slot.processingSkipped = false;
-    slot.cutoutKeys = sourceKeys.map((source, index) => normalizedFlags[index] ? null : source);
+    slot.processingFlags = processingFlags;
+    slot.retouchFlags = retouchFlags;
+    slot.cutoutFlags = cutoutFlags;
+    slot.processingSkipped = !processingFlags.some(Boolean);
+    slot.cutoutKeys = sourceKeys.map((source, index) => processingFlags[index] ? null : source);
     slot.stage = firstStage;
     slot.error = '';
     slot.failedStage = '';
     slot.errorNotifiedAt = '';
     slot.children = slot.children || {};
     slot.children.retouch = sourceKeys.map((_, index) =>
-        normalizedFlags[index] && !slot.skipRetouch
+        retouchFlags[index]
             ? sheetSelfChildId(parent.id, slot.index, 'retouch', index)
             : '');
     slot.children.cutout = sourceKeys.map((_, index) =>
-        normalizedFlags[index]
+        cutoutFlags[index]
             ? sheetSelfChildId(parent.id, slot.index, 'cutout', index)
             : '');
     slot.children.program = sheetSelfChildId(parent.id, slot.index, 'program');
     await putSheetSelfSlot(env, slot);
 
+    if (!processingFlags.some(Boolean)) {
+        return [await startSheetSelfProgramSlot(env, parent, slot, origin)];
+    }
+
     const results = [];
     for (let sourceIndex = 0; sourceIndex < sourceKeys.length; sourceIndex++) {
-        if (!normalizedFlags[sourceIndex]) continue;
+        if (!processingFlags[sourceIndex]) continue;
+        const stage = retouchFlags[sourceIndex] ? 'retouch' : 'cutout';
         const task = makeChildTask(parent, slot, {
-            id: slot.skipRetouch ? slot.children.cutout[sourceIndex] : slot.children.retouch[sourceIndex],
-            mode: slot.skipRetouch ? 'cutout' : 'retouch',
+            id: stage === 'retouch' ? slot.children.retouch[sourceIndex] : slot.children.cutout[sourceIndex],
+            mode: stage,
             refKeys: [sourceKeys[sourceIndex]],
-            stage: firstStage,
+            stage,
             sourceIndex,
-            cutoutOutputFormat: slot.skipRetouch ? 'jpg' : ''
+            cutoutOutputFormat: stage === 'cutout' ? 'jpg' : ''
         });
         try {
             results.push({ status: 'fulfilled', value: await createAndDispatchChild(env, task, origin) });
@@ -122,51 +135,32 @@ export async function advanceSheetSelfWorkflow({ env, task, origin }) {
         if (workflow.stage === 'retouch') {
             const resultKey = task.resultKeys?.[0];
             if (!resultKey?.key) throw new Error('精修结果图片不存在');
-            slot.stage = 'cutout';
             slot.error = '';
             slot.failedStage = '';
-            await putSheetSelfSlot(env, slot);
-            const cutoutTaskId = slot.children.cutout[workflow.sourceIndex];
-            if (!cutoutTaskId) throw new Error('白底抠图任务状态不存在');
-            const cutoutTask = makeChildTask(parent, slot, {
-                id: cutoutTaskId,
-                mode: 'cutout',
-                refKeys: [resultKey],
-                stage: 'cutout',
-                sourceIndex: workflow.sourceIndex,
-                cutoutOutputFormat: 'jpg'
-            });
-            await createAndDispatchChild(env, cutoutTask, origin);
-            return { advanced: true, stage: 'cutout', nextTaskIds: [cutoutTask.id] };
+            const cutoutFlags = sheetSelfCutoutFlags(slot);
+            if (cutoutFlags[workflow.sourceIndex]) {
+                slot.stage = 'cutout';
+                await putSheetSelfSlot(env, slot);
+                const cutoutTaskId = slot.children.cutout[workflow.sourceIndex];
+                if (!cutoutTaskId) throw new Error('白底抠图任务状态不存在');
+                const cutoutTask = makeChildTask(parent, slot, {
+                    id: cutoutTaskId,
+                    mode: 'cutout',
+                    refKeys: [resultKey],
+                    stage: 'cutout',
+                    sourceIndex: workflow.sourceIndex,
+                    cutoutOutputFormat: 'jpg'
+                });
+                await createAndDispatchChild(env, cutoutTask, origin);
+                return { advanced: true, stage: 'cutout', nextTaskIds: [cutoutTask.id] };
+            }
+            slot.cutoutKeys = Array.isArray(slot.cutoutKeys) ? slot.cutoutKeys : [null, null];
+            slot.cutoutKeys[workflow.sourceIndex] = resultKey;
+            return advancePreparedSheetSelfSlot(env, parent, slot, origin);
         }
 
         if (workflow.stage === 'cutout') {
-            const cutoutTasks = await readTasks(env, slot.children.cutout || []);
-            const processingFlags = sheetSelfProcessingFlags(slot);
-            const taskBySource = new Map(cutoutTasks.map(child => [Number(child.workflow?.sourceIndex || 0), child]));
-            const cutoutKeys = Array.isArray(slot.cutoutKeys) ? [...slot.cutoutKeys] : [null, null];
-            let waiting = false;
-            for (let sourceIndex = 0; sourceIndex < 2; sourceIndex++) {
-                if (!processingFlags[sourceIndex]) {
-                    cutoutKeys[sourceIndex] = cutoutKeys[sourceIndex] || slot.sourceKeys?.[sourceIndex] || null;
-                    continue;
-                }
-                const child = taskBySource.get(sourceIndex);
-                if (!child || child.status !== 'done' || !child.resultKeys?.[0]?.key) {
-                    waiting = true;
-                    continue;
-                }
-                cutoutKeys[sourceIndex] = child.resultKeys[0];
-            }
-            slot.cutoutKeys = cutoutKeys;
-            if (waiting || cutoutKeys.some(item => !item?.key)) {
-                slot.stage = 'cutout';
-                await putSheetSelfSlot(env, slot);
-                return { advanced: true, stage: 'cutout', waiting: true };
-            }
-            await putSheetSelfSlot(env, slot);
-            await startSheetSelfProgramSlot(env, parent, slot, origin);
-            return { advanced: true, stage: 'program', nextTaskIds: [slot.children.program] };
+            return advancePreparedSheetSelfSlot(env, parent, slot, origin);
         }
 
         if (workflow.stage === 'program') {
@@ -201,6 +195,62 @@ export async function advanceSheetSelfWorkflow({ env, task, origin }) {
         return { advanced: false, error: String(error?.message || error) };
     }
     return { advanced: false };
+}
+
+async function advancePreparedSheetSelfSlot(env, parent, slot, origin) {
+    const prepared = await collectPreparedSheetSelfKeys(env, slot);
+    slot.cutoutKeys = prepared.keys;
+    if (!prepared.ready) {
+        slot.stage = prepared.waitingStage || 'cutout';
+        await putSheetSelfSlot(env, slot);
+        return { advanced: true, stage: slot.stage, waiting: true };
+    }
+    await putSheetSelfSlot(env, slot);
+    await startSheetSelfProgramSlot(env, parent, slot, origin);
+    return { advanced: true, stage: 'program', nextTaskIds: [slot.children.program] };
+}
+
+async function collectPreparedSheetSelfKeys(env, slot) {
+    const retouchFlags = sheetSelfRetouchFlags(slot);
+    const cutoutFlags = sheetSelfCutoutFlags(slot);
+    const retouchTasks = await readTasks(env, slot.children?.retouch || []);
+    const cutoutTasks = await readTasks(env, slot.children?.cutout || []);
+    const retouchBySource = new Map(retouchTasks.map(child => [Number(child.workflow?.sourceIndex || 0), child]));
+    const cutoutBySource = new Map(cutoutTasks.map(child => [Number(child.workflow?.sourceIndex || 0), child]));
+    const keys = Array.isArray(slot.cutoutKeys) ? [...slot.cutoutKeys] : [null, null];
+    let waitingRetouch = false;
+    let waitingCutout = false;
+
+    for (let sourceIndex = 0; sourceIndex < 2; sourceIndex++) {
+        if (keys[sourceIndex]?.key) continue;
+        if (cutoutFlags[sourceIndex]) {
+            const cutoutTask = cutoutBySource.get(sourceIndex);
+            if (cutoutTask?.status === 'done' && cutoutTask.resultKeys?.[0]?.key) {
+                keys[sourceIndex] = cutoutTask.resultKeys[0];
+                continue;
+            }
+            const retouchTask = retouchBySource.get(sourceIndex);
+            if (retouchFlags[sourceIndex] && retouchTask?.status !== 'done') waitingRetouch = true;
+            else waitingCutout = true;
+            continue;
+        }
+        if (retouchFlags[sourceIndex]) {
+            const retouchTask = retouchBySource.get(sourceIndex);
+            if (retouchTask?.status === 'done' && retouchTask.resultKeys?.[0]?.key) {
+                keys[sourceIndex] = retouchTask.resultKeys[0];
+            } else {
+                waitingRetouch = true;
+            }
+            continue;
+        }
+        keys[sourceIndex] = slot.sourceKeys?.[sourceIndex] || null;
+    }
+
+    return {
+        keys,
+        ready: keys.length === 2 && keys.every(item => item?.key),
+        waitingStage: waitingRetouch ? 'retouch' : (waitingCutout ? 'cutout' : '')
+    };
 }
 
 export async function retrySheetSelfSlot(env, parent, slot, origin) {
@@ -247,9 +297,12 @@ export async function retrySheetSelfSlot(env, parent, slot, origin) {
     if (programTasks[0]) await resetChildTimeoutForManualRetry(env, programTasks[0]);
 
     if (slot.photographer) {
-        if (!Array.isArray(slot.cutoutKeys) || slot.cutoutKeys.length !== 2 || slot.cutoutKeys.some(item => !item?.key)) {
-            throw new Error('两张白底图片尚未准备完成');
+        const prepared = await collectPreparedSheetSelfKeys(env, slot);
+        slot.cutoutKeys = prepared.keys;
+        if (!prepared.ready) {
+            throw new Error('两张处理图片尚未准备完成');
         }
+        await putSheetSelfSlot(env, slot);
     }
     await startSheetSelfProgramSlot(env, parent, slot, origin, true);
     return { stage: 'program' };
@@ -483,6 +536,20 @@ function sheetSelfProcessingFlags(slot) {
     }
     const needsProcessing = slot.processingSkipped !== true;
     return [needsProcessing, needsProcessing];
+}
+
+function sheetSelfRetouchFlags(slot) {
+    if (Array.isArray(slot.retouchFlags) && slot.retouchFlags.length >= 2) {
+        return [slot.retouchFlags[0] === true, slot.retouchFlags[1] === true];
+    }
+    return sheetSelfProcessingFlags(slot).map(flag => flag && slot.skipRetouch !== true);
+}
+
+function sheetSelfCutoutFlags(slot) {
+    if (Array.isArray(slot.cutoutFlags) && slot.cutoutFlags.length >= 2) {
+        return [slot.cutoutFlags[0] === true, slot.cutoutFlags[1] === true];
+    }
+    return sheetSelfProcessingFlags(slot);
 }
 
 async function resetChildTimeoutForManualRetry(env, task) {
