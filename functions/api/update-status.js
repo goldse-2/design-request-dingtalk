@@ -1,4 +1,5 @@
 import { RECORD_RETENTION_SECONDS } from '../_shared/studio-task-storage.js';
+import { createEtaDeadline, normalizeEtaSelection, scheduleEtaReminder } from '../_shared/eta-reminders.js';
 
 export async function onRequestPost(context) {
     const { request, env, waitUntil } = context;
@@ -6,7 +7,7 @@ export async function onRequestPost(context) {
     try { body = await request.json(); }
     catch { return Response.json({ ok: false, error: 'Invalid JSON' }, { status: 400 }); }
 
-    const { submissionId, action, message, eta, images, direction } = body;
+    const { submissionId, action, message, eta, etaDays, images, direction } = body;
     const completionKeys = Array.isArray(body.completionKeys)
         ? body.completionKeys.slice(0, 20).map(item => ({
             key: String(item?.key || '').trim(),
@@ -73,7 +74,18 @@ export async function onRequestPost(context) {
         const submission = JSON.parse(raw);
 
         if (action === 'eta' || action === 'processing') {
-            if (action === 'eta') { submission.eta = eta || ''; submission.etaNote = message || ''; }
+            if (action === 'eta') {
+                const etaSelection = normalizeEtaSelection(eta, etaDays);
+                if (!etaSelection) return Response.json({ ok: false, error: 'Invalid ETA option' }, { status: 400 });
+                const now = Date.now();
+                submission.eta = etaSelection.label;
+                submission.etaDays = etaSelection.days;
+                submission.etaNote = message || '';
+                submission.etaSetAt = now;
+                submission.etaDueAt = createEtaDeadline(etaSelection.days, now);
+                submission.etaOverdueNotifiedAt = '';
+                submission.etaOverdueReminderFor = 0;
+            }
             else { 
                 submission.status = 'processing'; 
                 submission.processingStartTime = Date.now();
@@ -82,6 +94,7 @@ export async function onRequestPost(context) {
             await env.SUBMISSIONS.put(submissionId, JSON.stringify(submission), {
                 metadata: { taskType: submission.taskType, timestamp: submission.timestamp }
             });
+            if (action === 'eta') await scheduleEtaReminder(env.SUBMISSIONS, submission);
         } else {
             submission.status = action === 'complete' ? 'completed' : 'rejected';
             submission.archived = true;
@@ -101,7 +114,15 @@ export async function onRequestPost(context) {
             if (waitUntil) waitUntil(p);
         }
 
-        return Response.json({ ok: true, action, submissionId });
+        return Response.json({
+            ok: true,
+            action,
+            submissionId,
+            eta: submission.eta || '',
+            etaDays: submission.etaDays,
+            etaSetAt: submission.etaSetAt || 0,
+            etaDueAt: submission.etaDueAt || 0
+        });
     } catch (err) {
         return Response.json({ ok: false, error: err.message }, { status: 500 });
     }

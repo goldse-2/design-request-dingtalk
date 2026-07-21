@@ -88,9 +88,11 @@ function showAdmin() {
     etaConfirmBtn.addEventListener('click', async () => {
         if (!pendingEtaId) return;
         if (!etaInput.value) { alert('请选择预计完成时间'); return; }
+        const selectedOption = etaInput.options[etaInput.selectedIndex];
+        const etaDays = Number(selectedOption.dataset.days);
         etaModal.hidden = true;
         etaModal.classList.remove('modal--visible');
-        await sendEta(pendingEtaId, etaInput.value, etaNote.value.trim());
+        await sendEta(pendingEtaId, etaInput.value, etaDays, etaNote.value.trim());
         pendingEtaId = null;
     });
 
@@ -99,6 +101,7 @@ function showAdmin() {
     document.getElementById('examplesAdminSection').hidden = false;
     initExamplesToggle();
     loadExamplesAdmin();
+    setInterval(refreshEtaCountdowns, 60 * 60 * 1000);
     document.getElementById('studioSection').hidden = false;
     loadStudioAdmin();
 }
@@ -443,7 +446,7 @@ function renderCard(sub) {
                 <span class="sub-product" id="product-${sub.id}">${esc(displayProductName)}</span>
                 <button type="button" onclick="editSubmissionName('${sub.id}')" title="修改名称" style="border:none;background:#f3f4f6;color:#6366f1;border-radius:7px;padding:3px 8px;cursor:pointer;font-size:0.75rem;font-weight:700">编辑名称</button>
                 <span class="tag tag-type">${esc(sub.taskType || '')}</span>
-                ${sub.eta ? `<span class="tag" style="background:#fef3c7;color:#f59e0b">⏰ 预计${esc(sub.eta)}完成</span>` : ''}
+                ${renderEtaBadge(sub)}
             </div>
             <div style="display:flex;align-items:center;gap:10px">
                 <div class="sub-meta">${dateStr}</div>
@@ -454,9 +457,9 @@ function renderCard(sub) {
             ${info['交表时间'] ? `<span class="sub-chip">交表 ${esc(info['交表时间'])}</span>` : ''}
             ${info['图片数量'] ? `<span class="sub-chip">${esc(String(info['图片数量']))}</span>` : ''}
             ${images.length > 0 ? `<span class="sub-chip">${images.length} 张图片需求</span>` : ''}
-            ${info['颜色要求'] ? `<span class="sub-chip">${esc(String(info['颜色要求']).slice(0, 20))}${String(info['颜色要求']).length > 20 ? '…' : ''}</span>` : ''}
+            ${info['颜色要求'] ? `<span class="sub-chip">${esc(String(info['颜色要求']))}</span>` : ''}
             ${info['品牌'] ? `<span class="sub-chip">品牌: ${esc(info['品牌'])}</span>` : ''}
-            ${info['亚马逊名称'] ? `<span class="sub-chip">亚马逊: ${esc(String(info['亚马逊名称']).slice(0, 30))}${String(info['亚马逊名称']).length > 30 ? '…' : ''}</span>` : ''}
+            ${info['亚马逊名称'] ? `<span class="sub-chip">亚马逊: ${esc(String(info['亚马逊名称']))}</span>` : ''}
             ${info['售后邮箱'] && info['售后邮箱'] !== '未提供' ? `<span class="sub-chip">📧 ${esc(info['售后邮箱'])}</span>` : ''}
             ${info['包装尺寸'] ? `<span class="sub-chip">📏 ${esc(info['包装尺寸'])}</span>` : ''}
             ${info['需要时间'] ? `<span class="sub-chip">⏰ ${esc(info['需要时间'])}</span>` : ''}
@@ -524,6 +527,88 @@ function renderCard(sub) {
             </div>
         </div>
     </div>`;
+}
+
+const ETA_DAY_MS = 24 * 60 * 60 * 1000;
+const ETA_SHANGHAI_OFFSET_MS = 8 * 60 * 60 * 1000;
+
+function normalizeEtaLabel(value) {
+    const labels = {
+        '即刻': '当天',
+        '当天': '当天',
+        '3-5天': '3天',
+        '3天': '3天',
+        '8-15天': '8天',
+        '8天': '8天',
+        '20天': '20天内',
+        '20天内': '20天内',
+        '30天': '30天内',
+        '30天内': '30天内'
+    };
+    return labels[String(value || '').trim()] || String(value || '').trim();
+}
+
+function getEtaCountdownState(sub) {
+    const dueAt = Number(sub?.etaDueAt || 0);
+    const label = normalizeEtaLabel(sub?.eta);
+    if (!dueAt || !Number.isFinite(dueAt)) {
+        return label ? { text: `预计${label}完成`, tone: 'pending', dueDate: '' } : null;
+    }
+
+    const now = Date.now();
+    const todayIndex = Math.floor((now + ETA_SHANGHAI_OFFSET_MS) / ETA_DAY_MS);
+    const dueDayIndex = Math.floor((dueAt + ETA_SHANGHAI_OFFSET_MS) / ETA_DAY_MS);
+    const dueDate = new Intl.DateTimeFormat('zh-CN', {
+        timeZone: 'Asia/Shanghai',
+        month: '2-digit',
+        day: '2-digit'
+    }).format(new Date(dueAt - 1));
+
+    if (now >= dueAt) {
+        return {
+            text: `已逾期 ${Math.max(1, todayIndex - dueDayIndex + 1)} 天`,
+            tone: 'overdue',
+            dueDate
+        };
+    }
+
+    const remainingDays = dueDayIndex - 1 - todayIndex;
+    return {
+        text: remainingDays <= 0 ? '今天到期' : `剩余 ${remainingDays} 天`,
+        tone: remainingDays <= 0 ? 'today' : 'pending',
+        dueDate
+    };
+}
+
+function getEtaBadgeColors(tone) {
+    if (tone === 'overdue') return { background: '#fef2f2', color: '#dc2626' };
+    if (tone === 'today') return { background: '#fff7ed', color: '#c2410c' };
+    return { background: '#fef3c7', color: '#b45309' };
+}
+
+function renderEtaBadge(sub) {
+    const state = getEtaCountdownState(sub);
+    if (!state) return '';
+    const colors = getEtaBadgeColors(state.tone);
+    const title = state.dueDate ? ` title="截止日期 ${esc(state.dueDate)}"` : '';
+    return `<span class="tag sub-eta-badge" data-eta-id="${esc(sub.id)}" style="background:${colors.background};color:${colors.color}"${title}>⏰ ${esc(state.text)}</span>`;
+}
+
+function updateEtaBadgeElement(badge, sub) {
+    const state = getEtaCountdownState(sub);
+    if (!state || !badge) return;
+    const colors = getEtaBadgeColors(state.tone);
+    badge.textContent = `⏰ ${state.text}`;
+    badge.style.background = colors.background;
+    badge.style.color = colors.color;
+    badge.title = state.dueDate ? `截止日期 ${state.dueDate}` : '';
+}
+
+function refreshEtaCountdowns() {
+    document.querySelectorAll('.sub-eta-badge[data-eta-id]').forEach(badge => {
+        const sub = allData.find(item => item.id === badge.dataset.etaId);
+        if (sub) updateEtaBadgeElement(badge, sub);
+    });
 }
 
 function toggleImages(el) {
@@ -684,13 +769,15 @@ function openReject(id) {
 
 function openEta(id) {
     pendingEtaId = id;
-    etaInput.value = '';
+    const submission = allData.find(item => item.id === id);
+    etaInput.value = normalizeEtaLabel(submission?.eta);
+    if (!etaInput.value) etaInput.value = '';
     etaNote.value = '';
     etaModal.removeAttribute('hidden');
     etaModal.classList.add('modal--visible');
 }
 
-async function sendEta(id, etaValue, note) {
+async function sendEta(id, etaValue, etaDays, note) {
     const card = document.getElementById(`card-${id}`);
     const etaText = etaValue;
 
@@ -699,7 +786,7 @@ async function sendEta(id, etaValue, note) {
         const res = await fetch('/api/update-status', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ submissionId: id, action: 'eta', eta: etaText, message: note })
+            body: JSON.stringify({ submissionId: id, action: 'eta', eta: etaText, etaDays, message: note })
         });
         const json = await res.json();
         if (res.ok && json.ok) {
@@ -707,16 +794,22 @@ async function sendEta(id, etaValue, note) {
                 card.style.opacity = '';
                 let badge = card.querySelector('.sub-eta-badge');
                 if (!badge) {
-                    badge = document.createElement('div');
-                    badge.className = 'sub-eta-badge';
-                    const body = card.querySelector('.sub-body');
-                    if (body) body.parentNode.insertBefore(badge, body.nextSibling);
-                    else card.appendChild(badge);
+                    badge = document.createElement('span');
+                    badge.className = 'tag sub-eta-badge';
+                    badge.dataset.etaId = id;
+                    const title = card.querySelector('.sub-card-title');
+                    if (title) title.appendChild(badge);
                 }
-                badge.textContent = `⏰ 预计完成：${etaText}`;
             }
             const sub = allData.find(s => s.id === id);
-            if (sub) sub.eta = etaText;
+            if (sub) {
+                sub.eta = json.eta || etaText;
+                sub.etaDays = json.etaDays;
+                sub.etaSetAt = json.etaSetAt;
+                sub.etaDueAt = json.etaDueAt;
+                const badge = card?.querySelector('.sub-eta-badge');
+                if (badge) updateEtaBadgeElement(badge, sub);
+            }
         } else {
             if (card) card.style.opacity = '';
             alert('发送失败：' + (json.error || res.status));

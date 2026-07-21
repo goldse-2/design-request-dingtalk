@@ -298,7 +298,18 @@ body {
 
 .sub-body { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px;     overflow-x: hidden;
 }
-.sub-chip { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 4px 10px; font-size: 0.8rem; color: #374151; }
+.sub-chip {
+    max-width: 100%;
+    padding: 4px 10px;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    background: #f9fafb;
+    color: #374151;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+    white-space: normal;
+}
 
 .sub-remarks { font-size: 0.85rem; color: #6b7280; background: #f9fafb; border-radius: 8px; padding: 8px 12px; margin-top: 8px; }
 

@@ -1386,8 +1386,11 @@ function resetAll() {
                     stopDurationTicker();
                     if (processingDuration) processingDuration.textContent = '等待处理';
                 }
-                if (task.eta && processingEta) processingEta.textContent = task.eta;
-                else if (processingEta) processingEta.textContent = task.status === 'processing' ? '-' : '排队中';
+                if (processingEta) {
+                    var currentEtaState = formatQueueEta(task);
+                    processingEta.textContent = currentEtaState.text || (task.status === 'processing' ? '-' : '排队中');
+                    processingEta.style.color = currentEtaState.overdue ? '#dc2626' : '#059669';
+                }
                 processingTask.hidden = false;
                 if (processingEmpty) processingEmpty.hidden = true;
             } else {
@@ -1426,7 +1429,8 @@ function resetAll() {
                 var avatarHtml = avatar
                     ? '<img class="queue-item-avatar" src="' + queueEscape(avatar) + '" alt="' + queueEscape(submitter) + '的头像" loading="lazy">'
                     : '<span class="queue-item-avatar queue-item-avatar-fallback" aria-label="' + queueEscape(submitter) + '">' + queueEscape(initial) + '</span>';
-                var etaText = task.eta ? '预计 ' + String(task.eta) : '排队中';
+                var queueEtaState = formatQueueEta(task);
+                var etaText = queueEtaState.text || '排队中';
                 return '<div class="queue-item">'
                     + '<time class="queue-item-time">' + queueEscape(dateText) + '</time>'
                     + avatarHtml
@@ -1434,7 +1438,7 @@ function resetAll() {
                     + '<div class="queue-item-task" title="' + queueEscape(taskName) + '">' + queueEscape(taskName) + '</div>'
                     + '<div class="queue-item-meta"><span class="queue-item-types">' + typeHtml + '</span><span class="queue-item-submitter">' + queueEscape(submitter) + '</span></div>'
                     + '</div>'
-                    + '<div class="queue-item-ticket"><strong>' + queueNumber + '</strong><small>' + queueEscape(etaText) + '</small></div>'
+                    + '<div class="queue-item-ticket"><strong>' + queueNumber + '</strong><small class="' + (queueEtaState.overdue ? 'is-overdue' : '') + '">' + queueEscape(etaText) + '</small></div>'
                     + '<span class="queue-item-chevron" aria-hidden="true">›</span>'
                     + '</div>';
             }).join('');
@@ -1454,6 +1458,27 @@ function resetAll() {
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#39;');
+    }
+
+    function formatQueueEta(task) {
+        var dueAt = Number(task && task.etaDueAt || 0);
+        var labelMap = { '即刻': '当天', '3-5天': '3天', '8-15天': '8天', '20天': '20天内', '30天': '30天内' };
+        var label = String(task && task.eta || '').trim();
+        label = labelMap[label] || label;
+        if (!dueAt || !Number.isFinite(dueAt)) {
+            return { text: label ? '预计 ' + label : '', overdue: false };
+        }
+
+        var now = Date.now();
+        var dayMs = 24 * 60 * 60 * 1000;
+        var offsetMs = 8 * 60 * 60 * 1000;
+        var todayIndex = Math.floor((now + offsetMs) / dayMs);
+        var dueDayIndex = Math.floor((dueAt + offsetMs) / dayMs);
+        if (now >= dueAt) {
+            return { text: '已逾期 ' + Math.max(1, todayIndex - dueDayIndex + 1) + ' 天', overdue: true };
+        }
+        var remainingDays = dueDayIndex - 1 - todayIndex;
+        return { text: remainingDays <= 0 ? '今天到期' : '剩余 ' + remainingDays + ' 天', overdue: false };
     }
 
     // Load once on page load, no auto-refresh

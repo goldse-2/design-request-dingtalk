@@ -190,6 +190,10 @@
     white-space: nowrap;
 }
 
+.queue-item-ticket small.is-overdue {
+    color: #dc2626;
+}
+
 .queue-item-chevron {
     color: #cbd5e1;
     font-size: 1.2rem;

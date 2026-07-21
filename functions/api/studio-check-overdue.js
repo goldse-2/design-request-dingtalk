@@ -7,6 +7,7 @@ import { studioTaskPutOptions } from '../_shared/studio-task-storage.js';
 import { advanceSheetSelfWorkflow, retrySheetSelfChildAfterTimeout } from '../_shared/sheet-self-workflow.js';
 import { acquireStudioRpaSlot, ensureStudioRpaSlot, releaseStudioRpaSlot } from '../_shared/studio-rpa-slot.js';
 import { advanceStudioPhotographyWorkflow, markStudioPhotographyRetouchTimedOut } from '../_shared/studio-photography-workflow.js';
+import { processDueEtaReminders, shouldRunEtaReminderCheck } from '../_shared/eta-reminders.js';
 
 export async function onRequestGet(context) {
     const { env, request, waitUntil } = context;
@@ -19,6 +20,15 @@ export async function onRequestGet(context) {
         const url = new URL(request.url);
         const rpaOnly = url.searchParams.get('rpaOnly') === '1';
         const imageOnly = url.searchParams.get('imageOnly') === '1';
+        let etaReminders = { checked: false, pending: 0, due: 0, notified: 0, errors: [] };
+        if (rpaOnly && shouldRunEtaReminderCheck(now)) {
+            try {
+                etaReminders = await processDueEtaReminders(env, now);
+            } catch (error) {
+                etaReminders.errors.push({ id: '', error: String(error?.message || error).slice(0, 200) });
+                console.error('ETA reminder check failed:', error.message);
+            }
+        }
         const autoSendThreshold = 2 * 60 * 1000;
         const resultTimeoutThreshold = 10 * 60 * 1000;
         const retouchTimeoutThreshold = 30 * 60 * 1000;
@@ -42,7 +52,8 @@ export async function onRequestGet(context) {
                 autoSentTasks: [],
                 autoErrors: [],
                 notified: 0,
-                tasks: []
+                tasks: [],
+                etaReminders
             });
         }
 
@@ -345,7 +356,8 @@ export async function onRequestGet(context) {
             imageOnly,
             queueType: imageOnly ? 'image' : 'rpa',
             queueRemaining: finalAutoQueue.length,
-            processingQueueRemaining: imageOnly ? null : finalProcessingQueue.length
+            processingQueueRemaining: imageOnly ? null : finalProcessingQueue.length,
+            etaReminders
         });
     } catch (err) {
         return Response.json({ ok: false, error: err.message }, { status: 500 });

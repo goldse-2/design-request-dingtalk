@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>管理台 - 作图中心</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=20260721-full-details">
 
 <style>
 .lib-admin-tab {
@@ -306,9 +306,11 @@
         <p style="color:#6b7280;font-size:0.9rem;margin-bottom:12px">选择预计完成时间，会通过钉钉通知提交人（不会从列表移除）</p>
         <select id="etaInput" class="filter-select" style="width:100%;margin-bottom:12px">
             <option value="">请选择预计完成时间</option>
-            <option value="即刻">即刻</option>
-            <option value="3-5天">3-5天</option>
-            <option value="8-15天">8-15天</option>
+            <option value="当天" data-days="0">当天</option>
+            <option value="3天" data-days="3">3天</option>
+            <option value="8天" data-days="8">8天</option>
+            <option value="20天内" data-days="20">20天内</option>
+            <option value="30天内" data-days="30">30天内</option>
         </select>
         <textarea id="etaNote" class="textarea" placeholder="补充说明（可选）" style="min-height:60px"></textarea>
         <div style="display:flex;gap:8px;margin-top:16px">
@@ -389,7 +391,7 @@ function setLibAdminTab(btn, tabKey) {
     });
 }
 </script>
-<script src="admin.js?v=20260720-photography-direct"></script>
+<script src="admin.js?v=20260721-eta-countdown"></script>
 </div>
 </body>
 </html>

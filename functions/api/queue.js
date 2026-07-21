@@ -49,6 +49,8 @@ function toPublicQueueItem(sub) {
         createdAt: sub.createdAt || '',
         processingStartTime: sub.processingStartTime || 0,
         eta: sub.eta || '',
+        etaDays: sub.etaDays,
+        etaDueAt: sub.etaDueAt || 0,
         priority: sub.priority,
         submitter: {
             name: sub.submitter?.name || '',
