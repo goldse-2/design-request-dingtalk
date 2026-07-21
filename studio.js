@@ -810,7 +810,6 @@ function createSheetSelfSlot(index) {
         index,
         noProductImage: false,
         photographer: true,
-        skipRetouch: false,
         photographyExampleKey: null,
         photographyNote: '',
         size: '1600x1600',
@@ -1865,7 +1864,9 @@ function initSheetSelfMode() {
             return;
         }
         if (event.target.matches('[data-sheet-photographer]')) {
-            sheetSelfState.slots[slotIndex].photographer = event.target.checked;
+            const slot = sheetSelfState.slots[slotIndex];
+            slot.photographer = event.target.checked;
+            if (slot.photographer) slot.noProductImage = false;
             persistSheetSelfDraft();
             renderSheetSelfGrid();
             return;
@@ -1873,13 +1874,8 @@ function initSheetSelfMode() {
         if (event.target.matches('[data-sheet-no-product]')) {
             const slot = sheetSelfState.slots[slotIndex];
             slot.noProductImage = event.target.checked;
+            if (slot.noProductImage) slot.photographer = false;
             slot.status = '';
-            persistSheetSelfDraft();
-            renderSheetSelfGrid();
-            return;
-        }
-        if (event.target.matches('[data-sheet-retouch]')) {
-            sheetSelfState.slots[slotIndex].skipRetouch = !event.target.checked;
             persistSheetSelfDraft();
             renderSheetSelfGrid();
             return;
@@ -2007,14 +2003,6 @@ function renderSheetSelfSlot(slot, slotIndex) {
         </div>
         <div class="sheet-self-product">
             <div class="sheet-self-field"><label>其他文案 <span class="sheet-self-field-note">可选，中文自动翻译成英语</span></label><textarea data-sheet-field="otherText" data-slot-index="${slotIndex}" maxlength="300" placeholder="可选，多个卖点可用分号分隔">${sheetSelfEsc(slot.otherText)}</textarea></div>
-            <div class="sheet-self-no-product">
-                <div class="sheet-self-photo-copy"><strong>无需上传产品</strong><small>根据参考图生成图片</small></div>
-                <div class="sheet-self-switch-control">
-                    <span class="sheet-self-switch-state${noProductImage ? ' is-on' : ' is-off'}">${noProductImage ? '已开启' : '已关闭'}</span>
-                    <label class="sheet-self-switch" title="无需产品图，直接根据参考图生成"><input type="checkbox" data-sheet-no-product data-slot-index="${slotIndex}" aria-label="无需上传产品"${noProductImage ? ' checked' : ''}><span></span></label>
-                </div>
-            </div>
-            ${noProductImage ? slotStatus : ''}
         </div>
         <div class="sheet-self-media">
             <div class="sheet-self-images${noProductImage ? ' is-no-product' : (slot.photographer ? ' is-photographer' : '')}">
@@ -2027,20 +2015,20 @@ function renderSheetSelfSlot(slot, slotIndex) {
             <input type="file" accept="image/*" data-sheet-upload="product" data-slot-index="${slotIndex}" id="sheetProductInput-${slotIndex}" multiple hidden${uploadDisabled}>
             <input type="file" accept="image/*" data-sheet-upload="photographyExample" data-slot-index="${slotIndex}" id="sheetPhotographyExampleInput-${slotIndex}" hidden${uploadDisabled}>
         </div>
-        ${noProductImage ? '' : `<div class="sheet-self-setting">
+        <div class="sheet-self-setting">
             <div class="sheet-self-photo-row">
                 <div class="sheet-self-photo-copy"><strong>由摄影师决定</strong><small>开启后，此图片位暂时不需要用户上传两张白底图</small></div>
                 <label class="sheet-self-switch" title="由摄影师提供两张拍摄原图"><input type="checkbox" data-sheet-photographer data-slot-index="${slotIndex}"${slot.photographer ? ' checked' : ''}><span></span></label>
             </div>
             <div class="sheet-self-photo-row">
-                <div class="sheet-self-photo-copy"><strong>需要精修</strong><small>${slot.skipRetouch ? '已关闭：跳过精修，速度更快，适合场景图' : '已开启：先精修，再进行白底抠图'}</small></div>
+                <div class="sheet-self-photo-copy"><strong>无需上传产品</strong><small>根据参考图生成图片</small></div>
                 <div class="sheet-self-switch-control">
-                    <span class="sheet-self-switch-state${slot.skipRetouch ? ' is-off' : ' is-on'}">${slot.skipRetouch ? '已关闭' : '已开启'}</span>
-                    <label class="sheet-self-switch" title="控制此图片位是否需要精修"><input type="checkbox" data-sheet-retouch data-slot-index="${slotIndex}" aria-label="需要精修"${slot.skipRetouch ? '' : ' checked'}><span></span></label>
+                    <span class="sheet-self-switch-state${noProductImage ? ' is-on' : ' is-off'}">${noProductImage ? '已开启' : '已关闭'}</span>
+                    <label class="sheet-self-switch" title="无需产品图，直接根据参考图生成"><input type="checkbox" data-sheet-no-product data-slot-index="${slotIndex}" aria-label="无需上传产品"${noProductImage ? ' checked' : ''}><span></span></label>
                 </div>
             </div>
             ${slotStatus}
-        </div>`}
+        </div>
     </section>`;
 }
 
@@ -2534,7 +2522,6 @@ function normalizeSheetSelfDraft(value) {
             ...empty,
             noProductImage: slot.noProductImage === true,
             photographer: sheetSelfDraftSlotHasContent(slot) ? slot.photographer === true : true,
-            skipRetouch: slot.skipRetouch === true,
             photographyExampleKey: normalizeSheetSelfFileKey(slot.photographyExampleKey),
             photographyNote: String(slot.photographyNote || '').slice(0, 300),
             size: aPlusDouble ? A_PLUS_DOUBLE_SIZE : requestedSize,
@@ -2565,7 +2552,6 @@ function sheetSelfDraftPayload() {
             index: slot.index,
             noProductImage: slot.noProductImage === true,
             photographer: slot.photographer === true,
-            skipRetouch: slot.skipRetouch === true,
             photographyExampleKey: slot.photographyExampleKey,
             photographyNote: slot.photographyNote,
             size: normalizeSheetSelfSize(slot.size),
@@ -2621,7 +2607,7 @@ async function submitSheetSelf() {
                 index: slot.index,
                 noProductImage: slot.noProductImage === true,
                 photographer: slot.noProductImage === true ? false : slot.photographer,
-                skipRetouch: slot.skipRetouch === true,
+                skipRetouch: true,
                 photographyExampleKey: slot.photographyExampleKey,
                 photographyNote: slot.photographyNote,
                 productName: sheetSelfState.productName,
