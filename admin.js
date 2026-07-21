@@ -3732,7 +3732,7 @@ async function toggleStudioHistory() {
     const willShow = content.hidden;
     content.hidden = !willShow;
     if (arrow) arrow.style.transform = willShow ? 'rotate(90deg)' : 'rotate(0deg)';
-    if (willShow && !studioHistoryLoaded) {
+    if (willShow) {
         await loadStudioHistory();
         studioHistoryLoaded = true;
     }
