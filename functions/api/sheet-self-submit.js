@@ -93,14 +93,18 @@ export async function onRequestPost(context) {
 function normalizeSlot(value, index, standalonePhotography = false) {
     const slot = value && typeof value === 'object' ? value : {};
     const referenceKey = normalizeFileKey(slot.referenceKey);
-    const productKeys = Array.isArray(slot.productKeys) ? slot.productKeys.slice(0, 2).map(normalizeFileKey).filter(Boolean) : [];
-    const photographer = standalonePhotography || slot.photographer === true;
+    const noProductImage = !standalonePhotography && slot.noProductImage === true;
+    const productKeys = noProductImage
+        ? []
+        : (Array.isArray(slot.productKeys) ? slot.productKeys.slice(0, 2).map(normalizeFileKey).filter(Boolean) : []);
+    const photographer = noProductImage ? false : (standalonePhotography || slot.photographer === true);
     const photographyExampleKey = photographer ? normalizeFileKey(slot.photographyExampleKey) : null;
     const requestedSize = normalizeSize(slot.size);
     const aPlusDouble = slot.aPlusDouble === true || requestedSize === '1464x1200';
     const normalized = {
         index,
         displayIndex: Number.isInteger(Number(slot.index)) && Number(slot.index) >= 0 && Number(slot.index) < SHEET_SELF_SLOT_COUNT ? Number(slot.index) : index,
+        noProductImage,
         photographer,
         skipRetouch: slot.skipRetouch === true,
         cutoutEnabled: slot.cutoutEnabled !== false,
@@ -129,7 +133,7 @@ function normalizeSlot(value, index, standalonePhotography = false) {
     else if (!standalonePhotography && !referenceKey) normalized.error = aPlusDouble
         ? `第 ${displayNumber} 张请上传 A+ 上下两张 1464 × 600 图片`
         : `第 ${displayNumber} 张请上传要模仿的参考图`;
-    else if (!photographer && productKeys.length !== 2) normalized.error = `第 ${displayNumber} 张请上传两张白底产品图，或开启“由摄影师决定”`;
+    else if (!noProductImage && !photographer && productKeys.length !== 2) normalized.error = `第 ${displayNumber} 张请上传两张白底产品图，或开启“无需上传产品”/“由摄影师决定”`;
     return normalized;
 }
 

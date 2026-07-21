@@ -808,6 +808,7 @@ function createEmptySheetSelfState() {
 function createSheetSelfSlot(index) {
     return {
         index,
+        noProductImage: false,
         photographer: true,
         skipRetouch: false,
         photographyExampleKey: null,
@@ -1869,6 +1870,14 @@ function initSheetSelfMode() {
             renderSheetSelfGrid();
             return;
         }
+        if (event.target.matches('[data-sheet-no-product]')) {
+            const slot = sheetSelfState.slots[slotIndex];
+            slot.noProductImage = event.target.checked;
+            slot.status = '';
+            persistSheetSelfDraft();
+            renderSheetSelfGrid();
+            return;
+        }
         if (event.target.matches('[data-sheet-retouch]')) {
             sheetSelfState.slots[slotIndex].skipRetouch = !event.target.checked;
             persistSheetSelfDraft();
@@ -1966,14 +1975,16 @@ function addSheetSelfSlot() {
 function renderSheetSelfSlot(slot, slotIndex) {
     const size = normalizeSheetSelfSize(slot.size);
     const isAPlus = size === A_PLUS_DOUBLE_SIZE;
+    const noProductImage = slot.noProductImage === true;
     const reference = renderSheetSelfImage(slot.referenceKey, slotIndex, 'reference', 0, isAPlus ? 'A+ 上下双图参考' : '要模仿的图', isAPlus ? 'a_plus' : 'reference');
-    const products = slot.photographer
+    const products = slot.photographer || noProductImage
         ? ''
         : [0, 1].map(index => renderSheetSelfImage(slot.productKeys[index], slotIndex, 'product', index, `白底产品图 ${index + 1}`)).join('');
     const uploadDisabled = slot.uploading ? ' disabled' : '';
     const copyDisabled = !slot.referenceKey?.key || slot.copyAiBusy ? ' disabled' : '';
     const copyStatus = slot.copyAiStatus || (slot.referenceKey?.key ? '参考图已上传，可以生成' : '请先上传要模仿的图');
     const copyState = slot.copyAiState || (slot.referenceKey?.key ? 'success' : '');
+    const slotStatus = `<div class="sheet-self-slot-status${slot.status?.startsWith('失败') ? ' err' : ''}">${sheetSelfEsc(slot.status || (slot.uploading ? '图片上传中，请稍候...' : ''))}</div>`;
     return `<section class="sheet-self-slot" data-sheet-slot="${slotIndex}">
         <div class="sheet-self-slot-head">
             <div class="sheet-self-slot-title"><span class="sheet-self-slot-number">${slotIndex + 1}</span><span>第 ${slotIndex + 1} 张图片</span></div>
@@ -1985,6 +1996,14 @@ function renderSheetSelfSlot(slot, slotIndex) {
         </div>
         <div class="sheet-self-product">
             <div class="sheet-self-field"><label>其他文案 <span class="sheet-self-field-note">可选，中文自动翻译成英语</span></label><textarea data-sheet-field="otherText" data-slot-index="${slotIndex}" maxlength="300" placeholder="可选，多个卖点可用分号分隔">${sheetSelfEsc(slot.otherText)}</textarea></div>
+            <div class="sheet-self-no-product">
+                <div class="sheet-self-photo-copy"><strong>无需上传产品</strong><small>根据参考图生成图片</small></div>
+                <div class="sheet-self-switch-control">
+                    <span class="sheet-self-switch-state${noProductImage ? ' is-on' : ' is-off'}">${noProductImage ? '已开启' : '已关闭'}</span>
+                    <label class="sheet-self-switch" title="无需产品图，直接根据参考图生成"><input type="checkbox" data-sheet-no-product data-slot-index="${slotIndex}" aria-label="无需上传产品"${noProductImage ? ' checked' : ''}><span></span></label>
+                </div>
+            </div>
+            ${noProductImage ? slotStatus : ''}
         </div>
         <div class="sheet-self-fields">
             <div class="sheet-self-copy-tools">
@@ -1998,17 +2017,17 @@ function renderSheetSelfSlot(slot, slotIndex) {
             <div class="sheet-self-field"><label>副标题 <span class="sheet-self-field-note">可选，中文自动翻译成英语</span></label><input data-sheet-field="subtitle" data-slot-index="${slotIndex}" maxlength="100" value="${sheetSelfEsc(slot.subtitle)}" placeholder="可选"></div>
         </div>
         <div class="sheet-self-media">
-            <div class="sheet-self-images${slot.photographer ? ' is-photographer' : ''}">
+            <div class="sheet-self-images${noProductImage ? ' is-no-product' : (slot.photographer ? ' is-photographer' : '')}">
                 ${reference}
                 ${products}
-                ${slot.photographer ? renderSheetSelfPhotographyBrief(slot, slotIndex) : ''}
+                ${!noProductImage && slot.photographer ? renderSheetSelfPhotographyBrief(slot, slotIndex) : ''}
             </div>
             ${isAPlus ? `<div class="sheet-self-a-plus-note">输出 1464 × 1200，完成后自动拆成上下两张 1464 × 600${slot.referenceKey?.key ? `<button type="button" data-sheet-a-plus-edit data-slot-index="${slotIndex}">重新上传</button>` : ''}</div>` : ''}
             <input type="file" accept="image/*" data-sheet-upload="reference" data-slot-index="${slotIndex}" id="sheetRefInput-${slotIndex}" hidden${uploadDisabled}>
             <input type="file" accept="image/*" data-sheet-upload="product" data-slot-index="${slotIndex}" id="sheetProductInput-${slotIndex}" multiple hidden${uploadDisabled}>
             <input type="file" accept="image/*" data-sheet-upload="photographyExample" data-slot-index="${slotIndex}" id="sheetPhotographyExampleInput-${slotIndex}" hidden${uploadDisabled}>
         </div>
-        <div class="sheet-self-setting">
+        ${noProductImage ? '' : `<div class="sheet-self-setting">
             <div class="sheet-self-photo-row">
                 <div class="sheet-self-photo-copy"><strong>由摄影师决定</strong><small>开启后，此图片位暂时不需要用户上传两张白底图</small></div>
                 <label class="sheet-self-switch" title="由摄影师提供两张拍摄原图"><input type="checkbox" data-sheet-photographer data-slot-index="${slotIndex}"${slot.photographer ? ' checked' : ''}><span></span></label>
@@ -2020,8 +2039,8 @@ function renderSheetSelfSlot(slot, slotIndex) {
                     <label class="sheet-self-switch" title="控制此图片位是否需要精修"><input type="checkbox" data-sheet-retouch data-slot-index="${slotIndex}" aria-label="需要精修"${slot.skipRetouch ? '' : ' checked'}><span></span></label>
                 </div>
             </div>
-            <div class="sheet-self-slot-status${slot.status?.startsWith('失败') ? ' err' : ''}">${sheetSelfEsc(slot.status || (slot.uploading ? '图片上传中，请稍候...' : ''))}</div>
-        </div>
+            ${slotStatus}
+        </div>`}
     </section>`;
 }
 
@@ -2513,6 +2532,7 @@ function normalizeSheetSelfDraft(value) {
         const aPlusDouble = requestedSize === A_PLUS_DOUBLE_SIZE || slot.aPlusDouble === true;
         return {
             ...empty,
+            noProductImage: slot.noProductImage === true,
             photographer: sheetSelfDraftSlotHasContent(slot) ? slot.photographer === true : true,
             skipRetouch: slot.skipRetouch === true,
             photographyExampleKey: normalizeSheetSelfFileKey(slot.photographyExampleKey),
@@ -2537,12 +2557,13 @@ function normalizeSheetSelfFileKey(value) {
 
 function sheetSelfDraftPayload() {
     return {
-        version: 4,
+        version: 5,
         productName: sheetSelfState.productName,
         visibleSlotCount: sheetSelfState.slots.length,
         savedAt: sheetSelfState.savedAt || new Date().toISOString(),
         slots: sheetSelfState.slots.map(slot => ({
             index: slot.index,
+            noProductImage: slot.noProductImage === true,
             photographer: slot.photographer === true,
             skipRetouch: slot.skipRetouch === true,
             photographyExampleKey: slot.photographyExampleKey,
@@ -2575,13 +2596,13 @@ async function submitSheetSelf() {
         return;
     }
     const invalidSlot = activeSlots.find(slot => !slot.referenceKey?.key
-        || (!slot.photographer && slot.productKeys.length !== 2));
+        || (!slot.noProductImage && !slot.photographer && slot.productKeys.length !== 2));
     if (invalidSlot) {
         const invalidIndex = invalidSlot.index;
         const slot = invalidSlot;
         const message = !slot.referenceKey?.key
                 ? (slot.aPlusDouble ? `第 ${invalidIndex + 1} 张请上传 A+ 上下两张 1464 × 600 图片` : `第 ${invalidIndex + 1} 张请上传要模仿的图`)
-                : `第 ${invalidIndex + 1} 张请上传两张白底产品图，或开启“由摄影师决定”`;
+                : `第 ${invalidIndex + 1} 张请上传两张白底产品图，或开启“无需上传产品”/“由摄影师决定”`;
         showStudioFieldError(status, message, document.querySelector(`[data-sheet-slot="${invalidIndex}"]`));
         return;
     }
@@ -2598,7 +2619,8 @@ async function submitSheetSelf() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ submitter: currentUser, slots: activeSlots.map(slot => ({
                 index: slot.index,
-                photographer: slot.photographer,
+                noProductImage: slot.noProductImage === true,
+                photographer: slot.noProductImage === true ? false : slot.photographer,
                 skipRetouch: slot.skipRetouch === true,
                 photographyExampleKey: slot.photographyExampleKey,
                 photographyNote: slot.photographyNote,
@@ -2609,7 +2631,7 @@ async function submitSheetSelf() {
                 subtitle: slot.subtitle,
                 otherText: slot.otherText,
                 referenceKey: slot.referenceKey,
-                productKeys: slot.productKeys
+                productKeys: slot.noProductImage === true ? [] : slot.productKeys
             })) })
         });
         const result = await response.json().catch(() => ({}));
@@ -2646,6 +2668,7 @@ function sheetSelfSlotHasContent(slot) {
         || slot.photographyNote.trim()
         || normalizeSheetSelfSize(slot.size) !== '1600x1600'
         || slot.aPlusDouble === true
+        || slot.noProductImage === true
         || slot.referenceKey?.key
         || slot.photographyExampleKey?.key
         || slot.productKeys.length);
@@ -2659,6 +2682,7 @@ function sheetSelfDraftSlotHasContent(slot) {
         || String(slot?.photographyNote || '').trim()
         || normalizeSheetSelfSize(slot?.size) !== '1600x1600'
         || slot?.aPlusDouble === true
+        || slot?.noProductImage === true
         || slot?.referenceKey?.key
         || slot?.photographyExampleKey?.key
         || (Array.isArray(slot?.productKeys) && slot.productKeys.length));

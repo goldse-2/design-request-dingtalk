@@ -69,6 +69,7 @@ function normalizeDraft(value) {
         const aPlusDouble = slot.aPlusDouble === true || requestedSize === '1464x1200';
         return {
             index,
+            noProductImage: slot.noProductImage === true,
             photographer: draftSlotHasContent(slot) ? slot.photographer === true : true,
             skipRetouch: slot.skipRetouch === true,
             photographyExampleKey: normalizeFileKey(slot.photographyExampleKey),
@@ -83,7 +84,7 @@ function normalizeDraft(value) {
         };
     });
     return {
-        version: 4,
+        version: 5,
         productName: cleanText(value?.productName || legacyProductName, 100),
         visibleSlotCount,
         slots,
@@ -104,6 +105,7 @@ function draftSlotHasContent(slot) {
         || cleanText(slot?.photographyNote, 300)
         || normalizeSize(slot?.size) !== '1600x1600'
         || slot?.aPlusDouble === true
+        || slot?.noProductImage === true
         || slot?.referenceKey?.key
         || slot?.photographyExampleKey?.key
         || (Array.isArray(slot?.productKeys) && slot.productKeys.some(item => item?.key)));

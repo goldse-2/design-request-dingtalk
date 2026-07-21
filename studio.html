@@ -330,6 +330,10 @@
         .sheet-self-media { display:flex; flex-direction:column; min-width:0; }
         .sheet-self-images { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; }
         .sheet-self-images.is-photographer { grid-template-columns:minmax(120px,180px) minmax(220px,1fr); }
+        .sheet-self-images.is-no-product .sheet-self-image-slot.is-reference { grid-column:3; }
+        .sheet-self-no-product { display:flex; align-items:center; justify-content:space-between; gap:9px; padding-top:9px; border-top:1px solid #edf0f4; }
+        .sheet-self-no-product .sheet-self-photo-copy strong { font-size:.7rem; }
+        .sheet-self-no-product .sheet-self-photo-copy small { font-size:.62rem; }
         .sheet-self-a-plus-note { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:7px; color:#047857; font-size:.65rem; line-height:1.4; }
         .sheet-self-a-plus-note button { flex-shrink:0; padding:3px 6px; border:1px solid #a7f3d0; border-radius:5px; background:#ecfdf5; color:#047857; font-size:.63rem; font-weight:800; cursor:pointer; }
         .sheet-self-image-slot { position:relative; min-width:0; height:112px; border:1px dashed #cbd5e1; border-radius:6px; overflow:hidden; background:#f8fafc; }
@@ -450,6 +454,8 @@
             .sheet-self-copy-tools .program-ai-btn { width:100%; }
             .sheet-self-image-slot { height:auto; aspect-ratio:1; }
             .sheet-self-images.is-photographer { grid-template-columns:minmax(0,1fr); }
+            .sheet-self-images.is-no-product { grid-template-columns:minmax(0,1fr); }
+            .sheet-self-images.is-no-product .sheet-self-image-slot.is-reference { grid-column:1; }
             .sheet-self-photography-brief { grid-template-columns:minmax(0,1fr) minmax(0,1fr); }
             .sheet-self-submit { width:100%; }
             .photography-head, .photography-actions { align-items:stretch; flex-direction:column; padding-left:16px; padding-right:16px; }
