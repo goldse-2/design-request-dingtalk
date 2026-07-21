@@ -8,6 +8,7 @@ import { advanceSheetSelfWorkflow, retrySheetSelfChildAfterTimeout } from '../_s
 import { acquireStudioRpaSlot, ensureStudioRpaSlot, releaseStudioRpaSlot } from '../_shared/studio-rpa-slot.js';
 import { advanceStudioPhotographyWorkflow, markStudioPhotographyRetouchTimedOut } from '../_shared/studio-photography-workflow.js';
 import { processDueEtaReminders, shouldRunEtaReminderCheck } from '../_shared/eta-reminders.js';
+import { createProgramRpaParams } from '../_shared/studio-no-product.js';
 
 export async function onRequestGet(context) {
     const { env, request, waitUntil } = context;
@@ -168,12 +169,12 @@ export async function onRequestGet(context) {
                         payload.params["描述"] = await translateForRpa(env, payload.params["描述"]);
                     } else if (task.mode === 'program') {
                         const translatedFields = await translateProgramFieldsForRpa(env, {
-                            productName: task.productName || '-',
+                            productName: task.noProductImage === true ? '-' : (task.productName || '-'),
                             title: task.title || '-',
                             subtitle: task.subtitle || '-',
                             otherText: task.otherText || '-'
                         });
-                        payload.params["产品名称"] = translatedFields.productName;
+                        if (task.noProductImage !== true) payload.params["产品名称"] = translatedFields.productName;
                         payload.params["标题"] = translatedFields.title;
                         payload.params["副标题"] = translatedFields.subtitle;
                         payload.params["其他文案"] = translatedFields.otherText;
@@ -803,17 +804,16 @@ function buildRpaPayload(task, origin) {
         return {
             pickedSize,
             payload: {
-                params: {
-                    "产品名称": task.productName || '-',
-                    "标题": task.title || '-',
-                    "副标题": task.subtitle || '-',
-                    "其他文案": task.otherText || '-',
-                    "竞品参考图链接": refUrls[0]?.url || '-',
-                    "白底参考图链接一": productUrls[0]?.url || '-',
-                    "白底参考图链接二": productUrls[1]?.url || '-',
-                    "任务ID": task.id,
-                    "尺寸要求": formatSizeRequirement(pickedSize)
-                }
+                params: createProgramRpaParams({
+                    task,
+                    productName: task.productName || '-',
+                    title: task.title || '-',
+                    subtitle: task.subtitle || '-',
+                    otherText: task.otherText || '-',
+                    referenceUrl: refUrls[0]?.url,
+                    productUrls,
+                    sizeRequirement: formatSizeRequirement(pickedSize)
+                })
             }
         };
     }
@@ -892,12 +892,12 @@ async function resendStudioTaskAfterResultTimeout(env, task, origin) {
             payload.params["描述"] = await translateForRpa(env, payload.params["描述"]);
         } else if (task.mode === 'program') {
             const translatedFields = await translateProgramFieldsForRpa(env, {
-                productName: task.productName || '-',
+                productName: task.noProductImage === true ? '-' : (task.productName || '-'),
                 title: task.title || '-',
                 subtitle: task.subtitle || '-',
                 otherText: task.otherText || '-'
             });
-            payload.params["产品名称"] = translatedFields.productName;
+            if (task.noProductImage !== true) payload.params["产品名称"] = translatedFields.productName;
             payload.params["标题"] = translatedFields.title;
             payload.params["副标题"] = translatedFields.subtitle;
             payload.params["其他文案"] = translatedFields.otherText;

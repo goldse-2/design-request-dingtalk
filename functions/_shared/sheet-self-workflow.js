@@ -2,6 +2,7 @@ import { dispatchStudioTaskToRpa } from '../api/studio-webhook.js';
 import { sendStudioResultImages } from './studio-dingtalk.js';
 import { acquireStudioRpaSlot, queueStudioRpaTask, releaseStudioRpaSlot } from './studio-rpa-slot.js';
 import { RECORD_RETENTION_SECONDS, studioTaskPutOptions } from './studio-task-storage.js';
+import { NO_PRODUCT_ANALYZE_PROMPT } from './studio-no-product.js';
 
 export const SHEET_SELF_SLOT_COUNT = 8;
 
@@ -45,7 +46,7 @@ export async function startSheetSelfProgramSlot(env, parent, slot, origin, force
     const task = makeChildTask(parent, slot, {
         id: slot.children.program,
         mode: 'program',
-        productKeys: slot.photographer ? slot.cutoutKeys : slot.productKeys,
+        productKeys: slot.noProductImage === true ? [] : (slot.photographer ? slot.cutoutKeys : slot.productKeys),
         refKeys: [slot.referenceKey],
         stage: 'program'
     });
@@ -436,13 +437,14 @@ function makeChildTask(parent, slot, options) {
         want: '',
         note: '',
         scene: '',
-        analyzePrompt: '',
+        analyzePrompt: slot.noProductImage === true ? (slot.analyzePrompt || NO_PRODUCT_ANALYZE_PROMPT) : '',
         size: options.mode === 'program' ? (slot.aPlusDouble ? '1464x1200' : slot.size || '1600x1600') : '',
         imageName: `${taskLabel}-第${Number(slot.displayIndex ?? slot.index) + 1}张`,
         productName: slot.productName || '-',
         title: slot.title || '',
         subtitle: slot.subtitle || '',
         otherText: slot.otherText || '',
+        noProductImage: slot.noProductImage === true,
         productKeys: options.productKeys || [],
         refKeys: options.refKeys || [],
         modelKeys: [],

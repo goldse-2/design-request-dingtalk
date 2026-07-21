@@ -2,6 +2,7 @@ import { getStudioRpaQueueInfo, queueStudioRpaTask } from '../_shared/studio-rpa
 import { wakeStudioRpaQueue } from '../_shared/studio-rpa-wakeup.js';
 import { studioTaskPutOptions } from '../_shared/studio-task-storage.js';
 import { startStudioPhotographyRetouchWorkflow } from '../_shared/studio-photography-workflow.js';
+import { NO_PRODUCT_ANALYZE_PROMPT } from '../_shared/studio-no-product.js';
 
 const MAX_PHOTO_SIZE = 15 * 1024 * 1024;
 
@@ -10,6 +11,9 @@ export async function onRequestPost(context) {
     if (!env.SUBMISSIONS || !env.SUBMISSION_FILES) {
         return Response.json({ ok: false, error: 'Storage not configured' }, { status: 500 });
     }
+
+    const contentType = request.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) return handleJsonRequest(context);
 
     let form;
     try { form = await request.formData(); }
@@ -114,6 +118,66 @@ export async function onRequestPost(context) {
         task.photographyQueueError = error.message || String(error);
         await env.SUBMISSIONS.put(taskId, JSON.stringify(task), studioTaskPutOptions(task)).catch(() => {});
         return Response.json({ ok: false, error: `图片已保存，但加入作图队列失败：${error.message}` }, { status: 500 });
+    }
+}
+
+async function handleJsonRequest(context) {
+    const { request, env, waitUntil } = context;
+    let body;
+    try { body = await request.json(); }
+    catch { return Response.json({ ok: false, error: '请求格式错误' }, { status: 400 }); }
+    if (body.action !== 'no_product') {
+        return Response.json({ ok: false, error: '不支持的操作' }, { status: 400 });
+    }
+
+    const taskId = String(body.taskId || '').trim();
+    if (!taskId) return Response.json({ ok: false, error: '缺少任务ID' }, { status: 400 });
+    const raw = await env.SUBMISSIONS.get(taskId);
+    if (!raw) return Response.json({ ok: false, error: '任务不存在' }, { status: 404 });
+
+    let task;
+    try { task = JSON.parse(raw); }
+    catch { return Response.json({ ok: false, error: '任务数据损坏' }, { status: 500 }); }
+    if (task.kind !== 'studio' || task.mode !== 'program' || task.photographerDecision !== true) {
+        return Response.json({ ok: false, error: '该任务不是等待摄影补图的图生图任务' }, { status: 400 });
+    }
+    if (task.noProductImage === true && ['pending', 'processing', 'done'].includes(task.status)) {
+        return Response.json({ ok: true, duplicate: true, id: taskId, status: task.status, noProductImage: true });
+    }
+    if (task.status !== 'waiting_photos') {
+        return Response.json({ ok: false, error: '该任务已经进入作图流程，请刷新管理台' }, { status: 409 });
+    }
+
+    const now = new Date().toISOString();
+    task.noProductImage = true;
+    task.analyzePrompt = NO_PRODUCT_ANALYZE_PROMPT;
+    task.productKeys = [];
+    task.photographySourceKeys = [];
+    task.photographyUploadedCount = 0;
+    task.photographyRetouchEnabled = false;
+    task.photographyRetouchError = '';
+    task.photographyQueueError = '';
+    task.photographyWorkflow = { state: 'skipped_no_product', completedAt: now };
+    task.photographyCompletedAt = now;
+    task.noProductSelectedAt = now;
+    task.status = 'pending';
+    task.sentToRpa = false;
+    task.sentToRpaAt = '';
+    task.pausedAuto = false;
+    task.overdueNotified = false;
+    task.autoRpaLastError = '';
+
+    try {
+        await env.SUBMISSIONS.put(taskId, JSON.stringify(task), studioTaskPutOptions(task));
+        const queued = await queueStudioRpaTask(env, taskId);
+        const queueInfo = await getStudioRpaQueueInfo(env, task, queued.queueIds).catch(() => null);
+        wakeStudioRpaQueue(request, waitUntil);
+        return Response.json({ ok: true, id: taskId, status: task.status, noProductImage: true, queueInfo });
+    } catch (error) {
+        task.status = 'waiting_photos';
+        task.photographyQueueError = error.message || String(error);
+        await env.SUBMISSIONS.put(taskId, JSON.stringify(task), studioTaskPutOptions(task)).catch(() => {});
+        return Response.json({ ok: false, error: `已切换为无需图片，但加入作图队列失败：${error.message}` }, { status: 500 });
     }
 }
 

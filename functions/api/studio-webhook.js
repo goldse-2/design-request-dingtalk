@@ -1,6 +1,7 @@
 import { taskNeedsRpaTranslation, translateForRpa, translateProgramFieldsForRpa } from '../_shared/ai-translate.js';
 import { acquireStudioRpaSlot, queueStudioRpaTask, releaseStudioRpaSlot } from '../_shared/studio-rpa-slot.js';
 import { studioTaskPutOptions } from '../_shared/studio-task-storage.js';
+import { createProgramRpaParams } from '../_shared/studio-no-product.js';
 
 export async function onRequestPost(context) {
     const { request, env } = context;
@@ -92,23 +93,22 @@ export async function dispatchStudioTaskToRpa({ env, task, origin, webhookUrl, p
     } else if (task.mode === 'program') {
         pickedSize = normalizeStudioSize(task.size, task.desc || '');
         const translatedFields = await translateProgramFieldsForRpa(env, {
-            productName: task.productName || '-',
+            productName: task.noProductImage === true ? '-' : (task.productName || '-'),
             title: task.title || '-',
             subtitle: task.subtitle || '-',
             otherText: task.otherText || '-'
         });
         payload = {
-            params: {
-                "产品名称": translatedFields.productName,
-                "标题": translatedFields.title,
-                "副标题": translatedFields.subtitle,
-                "其他文案": translatedFields.otherText,
-                "竞品参考图链接": refUrls[0]?.url || '-',
-                "白底参考图链接一": productUrls[0]?.url || '-',
-                "白底参考图链接二": productUrls[1]?.url || '-',
-                "任务ID": task.id,
-                "尺寸要求": formatSizeRequirement(pickedSize)
-            }
+            params: createProgramRpaParams({
+                task,
+                productName: translatedFields.productName,
+                title: translatedFields.title,
+                subtitle: translatedFields.subtitle,
+                otherText: translatedFields.otherText,
+                referenceUrl: refUrls[0]?.url,
+                productUrls,
+                sizeRequirement: formatSizeRequirement(pickedSize)
+            })
         };
     } else {
         const userDesc = [task.desc, task.want, task.note].filter(Boolean).join('；');

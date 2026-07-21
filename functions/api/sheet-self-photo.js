@@ -1,4 +1,5 @@
-import { SHEET_SELF_SLOT_COUNT, getSheetSelfSlot, retrySheetSelfSlot, startSheetSelfPhotographySlot } from '../_shared/sheet-self-workflow.js';
+import { SHEET_SELF_SLOT_COUNT, getSheetSelfSlot, retrySheetSelfSlot, startSheetSelfPhotographySlot, startSheetSelfProgramSlot } from '../_shared/sheet-self-workflow.js';
+import { NO_PRODUCT_ANALYZE_PROMPT } from '../_shared/studio-no-product.js';
 
 export async function onRequestPost(context) {
     const { request, env } = context;
@@ -84,9 +85,46 @@ async function handleJsonRequest(context) {
     try { body = await request.json(); }
     catch { return Response.json({ ok: false, error: '请求格式错误' }, { status: 400 }); }
     if (body.action === 'library') return useLibraryImages(context, body);
+    if (body.action === 'no_product') return startWithoutProductImages(context, body);
     if (body.action !== 'retry') return Response.json({ ok: false, error: '不支持的操作' }, { status: 400 });
 
     return retrySlot(context, body);
+}
+
+async function startWithoutProductImages(context, body) {
+    const { request, env } = context;
+    const parentId = String(body.parentId || '').trim();
+    const slotIndex = Number(body.slotIndex);
+    const loaded = await loadParentAndSlot(env, parentId, slotIndex);
+    if (loaded.error) return loaded.error;
+    if (!loaded.slot.photographer || loaded.slot.photographyOnly) {
+        return Response.json({ ok: false, error: '该图片位不支持无需图片处理' }, { status: 400 });
+    }
+    if (loaded.slot.noProductImage === true && ['program', 'done'].includes(loaded.slot.stage)) {
+        return Response.json({ ok: true, duplicate: true, parentId, slotIndex, stage: loaded.slot.stage });
+    }
+    if (loaded.slot.stage !== 'waiting_photos') {
+        return Response.json({ ok: false, error: '该图片位已经进入处理流程，请刷新管理台' }, { status: 409 });
+    }
+
+    loaded.slot.noProductImage = true;
+    loaded.slot.analyzePrompt = NO_PRODUCT_ANALYZE_PROMPT;
+    loaded.slot.productKeys = [];
+    loaded.slot.sourceKeys = [];
+    loaded.slot.cutoutKeys = [];
+    loaded.slot.processingFlags = [false, false];
+    loaded.slot.retouchFlags = [false, false];
+    loaded.slot.cutoutFlags = [false, false];
+    loaded.slot.processingSkipped = true;
+    loaded.slot.noProductSelectedAt = new Date().toISOString();
+    loaded.slot.children = {};
+
+    try {
+        await startSheetSelfProgramSlot(env, loaded.parent, loaded.slot, new URL(request.url).origin);
+        return Response.json({ ok: true, parentId, slotIndex, stage: loaded.slot.stage, noProductImage: true });
+    } catch (error) {
+        return Response.json({ ok: false, error: `已切换为无需图片，但加入图生图队列失败：${error.message}` }, { status: 502 });
+    }
 }
 
 async function retrySlot(context, body) {

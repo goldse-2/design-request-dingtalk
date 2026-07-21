@@ -2108,6 +2108,12 @@ function renderStudioTask(task) {
         example.onclick = () => openAdminImagePreview(exampleUrl, task.photographyExampleKey.name || '拍摄案例图');
         card.appendChild(example);
     }
+    if (task.noProductImage === true) {
+        const noProductNotice = document.createElement('div');
+        noProductNotice.textContent = '无需产品图，已跳过摄影、精修和白底抠图';
+        noProductNotice.style.cssText = 'display:inline-flex;margin:8px 0 2px;padding:5px 9px;border:1px solid #d1d5db;border-radius:6px;background:#f9fafb;color:#374151;font-size:.72rem;font-weight:700';
+        card.appendChild(noProductNotice);
+    }
 
     const editBtn = document.createElement('button');
     editBtn.type = 'button';
@@ -2158,7 +2164,7 @@ function renderStudioTask(task) {
 
     // Action bar: only 反馈 and 发送给RPA
     const actions = document.createElement('div');
-    actions.style.cssText = 'display:flex;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid #f3f4f6;justify-content:flex-end';
+    actions.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid #f3f4f6;justify-content:flex-end';
 
     const feedbackBtn = document.createElement('button');
     feedbackBtn.textContent = '💬 发送反馈';
@@ -2186,7 +2192,16 @@ function renderStudioTask(task) {
         photographyBtn.textContent = '上传拍摄图片并开始作图';
         photographyBtn.style.cssText = 'font-size:.82rem;color:#fff;background:#111827;border:0;border-radius:7px;padding:8px 16px;cursor:pointer;font-weight:700';
         photographyBtn.onclick = () => openStudioPhotographyUpload(task, photographyBtn);
-        actions.append(photographyBtn);
+        if (task.mode === 'program') {
+            const noProductButton = document.createElement('button');
+            noProductButton.type = 'button';
+            noProductButton.textContent = '无需图片';
+            noProductButton.title = '跳过产品图、精修和白底抠图，直接按参考设计图开始作图';
+            noProductButton.style.cssText = 'font-size:.82rem;color:#374151;background:#fff;border:1px solid #cbd5e1;border-radius:7px;padding:8px 14px;cursor:pointer;font-weight:700';
+            noProductButton.onclick = () => startWithoutProductImages('/api/studio-photography-photo', { action: 'no_product', taskId: task.id }, noProductButton);
+            actions.appendChild(noProductButton);
+        }
+        actions.appendChild(photographyBtn);
     } else if (photographyRetouching) {
         const retouchingLabel = document.createElement('span');
         const completedCount = Number(task.photographyWorkflow?.completedCount || 0);
@@ -2350,6 +2365,28 @@ function openStudioPhotographyUpload(task, cardButton) {
     };
 }
 
+async function startWithoutProductImages(endpoint, payload, button) {
+    if (!confirm('确认这里不需要产品图吗？系统会跳过摄影、精修和白底抠图，直接按参考设计图开始作图。')) return;
+    const originalText = button.textContent;
+    button.disabled = true;
+    button.textContent = '正在加入队列...';
+    try {
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.ok) throw new Error(result.error || `操作失败 (${response.status})`);
+        button.textContent = result.duplicate ? '已在处理' : '已进入作图队列';
+        setTimeout(() => loadStudioAdmin(), 500);
+    } catch (error) {
+        alert(error.message || '无需图片操作失败');
+        button.disabled = false;
+        button.textContent = originalText;
+    }
+}
+
 function startCountdownTimer(taskId, createdAt) {
     const countdownEl = document.getElementById('countdown-' + taskId);
     if (!countdownEl) return;
@@ -2424,7 +2461,9 @@ function renderSheetSelfAdminSlot(task, slot) {
     const displayNumber = Number(slot.displayIndex ?? slot.index) + 1;
     const referenceUrl = slot.referenceKey?.key ? '/api/library-file/' + encodeURIComponent(slot.referenceKey.key) : '';
     const photographyExampleUrl = slot.photographyExampleKey?.key ? '/api/library-file/' + encodeURIComponent(slot.photographyExampleKey.key) : '';
-    const photographyBrief = slot.photographer === true
+    const photographyBrief = slot.noProductImage === true
+        ? '<span style="display:block;margin-top:3px;color:#374151;font-size:.68rem">无需产品图，已直接进入图生图</span>'
+        : slot.photographer === true
         ? `<span style="display:block;margin-top:3px;color:${photographyExampleUrl ? '#2563eb' : '#64748b'};font-size:.68rem">${photographyExampleUrl ? '已提供拍摄案例图' : (slot.photographyOnly ? '未提供拍摄案例图' : '拍摄案例：按参考图')}</span>${slot.photographyNote ? `<span style="display:block;margin-top:3px;overflow:hidden;color:#4b5563;font-size:.68rem;line-height:1.35;text-overflow:ellipsis" title="${esc(slot.photographyNote)}">备注：${esc(slot.photographyNote)}</span>` : ''}`
         : '';
     row.innerHTML = `<div class="sheet-self-admin-product" style="display:flex;align-items:center;gap:10px;min-width:0">
@@ -2445,6 +2484,15 @@ function renderSheetSelfAdminSlot(task, slot) {
     actions.className = 'sheet-self-admin-actions';
     actions.style.cssText = 'display:flex;align-items:center;gap:7px;justify-content:flex-end;flex-wrap:wrap';
     if (slot.stage === 'waiting_photos') {
+        if (!slot.photographyOnly) {
+            const noProductButton = document.createElement('button');
+            noProductButton.type = 'button';
+            noProductButton.textContent = '无需图片';
+            noProductButton.title = '跳过产品图、精修和白底抠图，直接按参考设计图开始作图';
+            noProductButton.style.cssText = 'border:1px solid #cbd5e1;border-radius:6px;background:#fff;color:#374151;padding:7px 11px;font-size:.74rem;font-weight:700;cursor:pointer;white-space:nowrap';
+            noProductButton.onclick = () => startWithoutProductImages('/api/sheet-self-photo', { action: 'no_product', parentId: task.id, slotIndex: slot.index }, noProductButton);
+            actions.appendChild(noProductButton);
+        }
         const uploadButton = document.createElement('button');
         uploadButton.type = 'button';
         uploadButton.textContent = '上传原图';
@@ -2541,7 +2589,7 @@ function openAdminImagePreview(imageUrl, title) {
 }
 
 function renderSheetSelfProgress(slot) {
-    const usesFullWorkflow = slot.photographer === true;
+    const usesFullWorkflow = slot.photographer === true && slot.noProductImage !== true;
     const hasRetouch = Array.isArray(slot.retouchFlags)
         ? slot.retouchFlags.some(flag => flag === true)
         : slot.skipRetouch !== true;
