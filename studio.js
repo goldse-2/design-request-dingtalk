@@ -475,7 +475,10 @@ const PROGRAM_FORM = `
                 </div>
 ${renderAPlusDoubleLauncher('program')}
             </div>
-            <div class="sf-section">
+            <div class="sf-section" id="programPhotographerDecisionSection">
+${renderShootRequestLauncher('program')}
+            </div>
+            <div class="sf-section" id="progProductSection">
                 <div class="sf-label">白底产品图 <span class="sf-req">*</span> <span class="sf-sub">(2张)</span></div>
                 <div class="program-product-hint">有不同角度时，请上传两个不同角度；没有其他角度时，请将同一张图片上传两次。</div>
                 <div class="sf-upload-row">
@@ -487,7 +490,6 @@ ${renderAPlusDoubleLauncher('program')}
                     </div>
                     <div class="sf-preview-list" id="progProductThumbs"></div>
                 </div>
-${renderShootRequestLauncher('program')}
             </div>
             <div class="sf-section" id="progSizeSection">
                 <div class="sf-label">尺寸 <span class="sf-req">*</span></div>
@@ -1220,11 +1222,13 @@ function initInlineShootRequest(mode) {
     const panel = document.getElementById(`${mode}PhotographerPanel`);
     const input = document.getElementById(`${mode}PhotographerInput`);
     const remove = document.getElementById(`${mode}PhotographerRemove`);
+    const productSection = mode === 'program' ? document.getElementById('progProductSection') : null;
     if (!state || !toggle || !panel || !input || !remove) return;
 
     const applyToggleState = () => {
         state.enabled = toggle.checked;
         panel.hidden = !state.enabled;
+        if (productSection) productSection.hidden = state.enabled;
         toggle.setAttribute('aria-expanded', String(state.enabled));
         const label = document.getElementById(`${mode}PhotographerState`);
         if (label) {
@@ -5004,7 +5008,7 @@ function submitProgram() {
     if (!size) { showStudioFieldError(status, '请选择或填写尺寸', document.getElementById('progSizeSelectPicker')); return; }
     if (uploads.progRef.length !== 1) { showStudioFieldError(status, '请上传1张要模仿的图', document.getElementById('progRefDrop')); return; }
     if (!photographerDecision && uploads.progProduct.length !== 2) { showStudioFieldError(status, '请上传2张白底产品图（当前' + uploads.progProduct.length + '张）', document.getElementById('progProductDrop')); return; }
-    submitTask('program', { productName, title, subtitle, otherText, size, aPlusDouble, analyzePrompt: ANALYZE_PROMPT, photographerDecision, photographyNote, photographyExampleImage: inlineShootRequestState.program.image, refImages: uploads.progRef, productImages: uploads.progProduct }, status, document.getElementById('progSubmit'), showSuccessModal);
+    submitTask('program', { productName, title, subtitle, otherText, size, aPlusDouble, analyzePrompt: ANALYZE_PROMPT, photographerDecision, photographyNote, photographyExampleImage: inlineShootRequestState.program.image, refImages: uploads.progRef, productImages: photographerDecision ? [] : uploads.progProduct }, status, document.getElementById('progSubmit'), showSuccessModal);
 }
 
 function submitRetouch() {
