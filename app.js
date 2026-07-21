@@ -1391,13 +1391,34 @@ function resetAll() {
             if (queueEmpty) queueEmpty.hidden = true;
             queueList.hidden = false;
             queueList.innerHTML = pendingTasks.slice(0, 10).map(function(task, index) {
-                var time = task.createdAt ? new Date(task.createdAt).toLocaleString('zh-CN', {month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'}) : '';
+                var dateSource = task.createdAt || task.timestamp;
+                var date = dateSource ? new Date(dateSource) : null;
+                var dateText = date && Number.isFinite(date.getTime())
+                    ? new Intl.DateTimeFormat('zh-CN', { timeZone:'Asia/Shanghai', month:'2-digit', day:'2-digit' }).format(date).replace(/-/g, '/')
+                    : '--/--';
                 var queueNumber = 'A' + String(index + 1).padStart(2, '0');
-                var submitter = task.submitter ? task.submitter.name : '';
-                var avatar = task.submitter && task.submitter.avatar ? task.submitter.avatar : '';
-                var taskName = (task.data && task.data.basicInfo && task.data.basicInfo['\u578b\u53f7']) || task.taskType || '';
-                var etaBadge = task.eta ? '<span style="background:#fef3c7;color:#f59e0b;padding:3px 10px;border-radius:10px;font-size:0.72rem;font-weight:600;white-space:nowrap">⏰ 预计' + task.eta + '完成</span>' : '';
-                return '<div class="queue-item"><span class="queue-item-time">' + time + '</span><span class="queue-item-number">' + queueNumber + '</span><div class="queue-item-body"><div class="queue-item-task">' + taskName + '</div><div class="queue-item-submitter">' + (avatar ? '<img src="' + avatar + '" alt="">' : '') + '<span>' + submitter + '</span></div></div><div style="display:flex;align-items:center;gap:8px;flex-shrink:0">' + etaBadge + '<span class="queue-item-status pending">Pending</span></div></div>';
+                var submitter = task.submitter && task.submitter.name ? String(task.submitter.name).trim() : '匿名';
+                var avatar = task.submitter && task.submitter.avatar ? String(task.submitter.avatar).trim() : '';
+                var taskName = (task.data && task.data.basicInfo && task.data.basicInfo['\u578b\u53f7']) || task.taskType || '未命名任务';
+                var taskTypes = String(task.taskType || '未分类').split(/\s*-\s*/).filter(Boolean);
+                var typeHtml = taskTypes.map(function(type, typeIndex) {
+                    return '<span class="queue-item-type' + (typeIndex === 0 ? ' is-primary' : '') + '">' + queueEscape(type) + '</span>';
+                }).join('');
+                var initial = Array.from(submitter).slice(-2).join('') || '用户';
+                var avatarHtml = avatar
+                    ? '<img class="queue-item-avatar" src="' + queueEscape(avatar) + '" alt="' + queueEscape(submitter) + '的头像" loading="lazy">'
+                    : '<span class="queue-item-avatar queue-item-avatar-fallback" aria-label="' + queueEscape(submitter) + '">' + queueEscape(initial) + '</span>';
+                var etaText = task.eta ? '预计 ' + String(task.eta) : '排队中';
+                return '<div class="queue-item">'
+                    + '<time class="queue-item-time">' + queueEscape(dateText) + '</time>'
+                    + avatarHtml
+                    + '<div class="queue-item-body">'
+                    + '<div class="queue-item-task" title="' + queueEscape(taskName) + '">' + queueEscape(taskName) + '</div>'
+                    + '<div class="queue-item-meta"><span class="queue-item-types">' + typeHtml + '</span><span class="queue-item-submitter">' + queueEscape(submitter) + '</span></div>'
+                    + '</div>'
+                    + '<div class="queue-item-ticket"><strong>' + queueNumber + '</strong><small>' + queueEscape(etaText) + '</small></div>'
+                    + '<span class="queue-item-chevron" aria-hidden="true">›</span>'
+                    + '</div>';
             }).join('');
         } catch (err) {
             console.error('Queue load failed:', err);
@@ -1406,6 +1427,15 @@ function resetAll() {
             if (processingEmpty) processingEmpty.hidden = false;
             if (processingTask) processingTask.hidden = true;
         }
+    }
+
+    function queueEscape(value) {
+        return String(value || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
     }
 
     // Load once on page load, no auto-refresh
