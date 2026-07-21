@@ -539,7 +539,7 @@ const SHEET_SELF_FORM = `
                 </div>
                 <small>只需填写一次，提交时会自动用于下面所有已填写的图片位。</small>
             </div>
-            <div class="sheet-self-table-head" aria-hidden="true"><span>图片 / 尺寸</span><span class="sheet-self-table-title">其他文案 <small>可选，输入中文会自动翻译成英语，英语默认</small></span><span class="sheet-self-table-title">标题与副标题 <small>可选，输入中文会自动翻译成英语，英语默认</small></span><span>素材图片</span><span>设置</span></div>
+            <div class="sheet-self-table-head" aria-hidden="true"><span>图片 / 尺寸</span><span class="sheet-self-table-title">标题与副标题 <small>可选，输入中文会自动翻译成英语，英语默认</small></span><span class="sheet-self-table-title">其他文案 <small>可选，输入中文会自动翻译成英语，英语默认</small></span><span>素材图片</span><span>设置</span></div>
             <div class="sheet-self-grid" id="sheetSelfGrid"></div>
             <div class="sheet-self-add-row">
                 <button type="button" class="sheet-self-add" id="sheetSelfAddSlot"><span aria-hidden="true">+</span> 添加图片位 <small id="sheetSelfSlotCount">3/8</small></button>
@@ -1994,17 +1994,6 @@ function renderSheetSelfSlot(slot, slotIndex) {
                 <option value="1464x1200"${isAPlus ? ' selected' : ''}>A+ 连续双图</option>
             </select></label>
         </div>
-        <div class="sheet-self-product">
-            <div class="sheet-self-field"><label>其他文案 <span class="sheet-self-field-note">可选，中文自动翻译成英语</span></label><textarea data-sheet-field="otherText" data-slot-index="${slotIndex}" maxlength="300" placeholder="可选，多个卖点可用分号分隔">${sheetSelfEsc(slot.otherText)}</textarea></div>
-            <div class="sheet-self-no-product">
-                <div class="sheet-self-photo-copy"><strong>无需上传产品</strong><small>根据参考图生成图片</small></div>
-                <div class="sheet-self-switch-control">
-                    <span class="sheet-self-switch-state${noProductImage ? ' is-on' : ' is-off'}">${noProductImage ? '已开启' : '已关闭'}</span>
-                    <label class="sheet-self-switch" title="无需产品图，直接根据参考图生成"><input type="checkbox" data-sheet-no-product data-slot-index="${slotIndex}" aria-label="无需上传产品"${noProductImage ? ' checked' : ''}><span></span></label>
-                </div>
-            </div>
-            ${noProductImage ? slotStatus : ''}
-        </div>
         <div class="sheet-self-fields">
             <div class="sheet-self-copy-tools">
                 <button type="button" class="program-ai-btn${slot.copyAiBusy ? ' loading' : ''}" data-sheet-generate-copy data-slot-index="${slotIndex}"${copyDisabled}>
@@ -2015,6 +2004,17 @@ function renderSheetSelfSlot(slot, slotIndex) {
             </div>
             <div class="sheet-self-field"><label>标题 <span class="sheet-self-field-note">可选，中文自动翻译成英语</span></label><input data-sheet-field="title" data-slot-index="${slotIndex}" maxlength="100" value="${sheetSelfEsc(slot.title)}" placeholder="可选"></div>
             <div class="sheet-self-field"><label>副标题 <span class="sheet-self-field-note">可选，中文自动翻译成英语</span></label><input data-sheet-field="subtitle" data-slot-index="${slotIndex}" maxlength="100" value="${sheetSelfEsc(slot.subtitle)}" placeholder="可选"></div>
+        </div>
+        <div class="sheet-self-product">
+            <div class="sheet-self-field"><label>其他文案 <span class="sheet-self-field-note">可选，中文自动翻译成英语</span></label><textarea data-sheet-field="otherText" data-slot-index="${slotIndex}" maxlength="300" placeholder="可选，多个卖点可用分号分隔">${sheetSelfEsc(slot.otherText)}</textarea></div>
+            <div class="sheet-self-no-product">
+                <div class="sheet-self-photo-copy"><strong>无需上传产品</strong><small>根据参考图生成图片</small></div>
+                <div class="sheet-self-switch-control">
+                    <span class="sheet-self-switch-state${noProductImage ? ' is-on' : ' is-off'}">${noProductImage ? '已开启' : '已关闭'}</span>
+                    <label class="sheet-self-switch" title="无需产品图，直接根据参考图生成"><input type="checkbox" data-sheet-no-product data-slot-index="${slotIndex}" aria-label="无需上传产品"${noProductImage ? ' checked' : ''}><span></span></label>
+                </div>
+            </div>
+            ${noProductImage ? slotStatus : ''}
         </div>
         <div class="sheet-self-media">
             <div class="sheet-self-images${noProductImage ? ' is-no-product' : (slot.photographer ? ' is-photographer' : '')}">
