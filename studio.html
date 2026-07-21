@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>图片制作 - 作图中心</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-    <link rel="stylesheet" href="style.css?v=20260720-submit-dock">
+    <link rel="stylesheet" href="style.css?v=20260721-upload-progress">
     <style>
         .size-resize-hint { margin-top: 8px; padding: 9px 11px; border-left: 3px solid #4f46e5; background: #f5f5ff; color: #4b5563; font-size: 0.8rem; line-height: 1.5; }
         .size-resize-hint a { color: #4338ca; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
@@ -195,6 +195,21 @@
         .retouch-selected-item img { width:48px; height:48px; object-fit:cover; border-radius:6px; border:1px solid #e5e7eb; background:#fff; }
         .retouch-selected-name { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #374151; font-size: .78rem; }
         .retouch-selected-remove { width: 28px; height: 28px; border: none; border-radius: 6px; background: #fee2e2; color: #b91c1c; font-size: 1rem; cursor: pointer; }
+        .batch-submit-progress { margin-top:10px; padding:11px 12px; border:1px solid #dbe2ea; border-radius:8px; background:#f8fafc; color:#334155; }
+        .batch-submit-progress-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px; }
+        .batch-submit-progress-head strong { min-width:0; overflow:hidden; color:#111827; font-size:.78rem; line-height:1.4; text-overflow:ellipsis; white-space:nowrap; }
+        .batch-submit-progress-head span { flex:none; color:#475569; font-size:.74rem; font-weight:800; font-variant-numeric:tabular-nums; }
+        .batch-submit-progress-track { position:relative; width:100%; height:8px; overflow:hidden; border-radius:4px; background:#e5e7eb; }
+        .batch-submit-progress-bar { display:block; width:0; height:100%; border-radius:4px; background:#111827; transition:width .18s ease; }
+        .batch-submit-progress-meta { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-top:8px; color:#64748b; font-size:.68rem; line-height:1.45; }
+        .batch-submit-progress-meta span:first-child { min-width:0; overflow-wrap:anywhere; }
+        .batch-submit-progress-meta span:last-child { flex:none; white-space:nowrap; }
+        .batch-submit-progress.is-retrying { border-color:#fde68a; background:#fffbeb; }
+        .batch-submit-progress.is-retrying .batch-submit-progress-bar { background:#d97706; }
+        .batch-submit-progress.is-success { border-color:#a7f3d0; background:#ecfdf5; }
+        .batch-submit-progress.is-success .batch-submit-progress-bar { background:#059669; }
+        .batch-submit-progress.is-error { border-color:#fecaca; background:#fef2f2; }
+        .batch-submit-progress.is-error .batch-submit-progress-bar { background:#dc2626; }
         .retouch-queue-head { display:flex; align-items:center; gap:12px; }
         .retouch-queue-summary { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px; color:#6b7280; font-size:.76rem; }
         .retouch-queue-summary span { padding:5px 8px; border-radius:6px; background:#f3f4f6; }
@@ -650,6 +665,6 @@
     帮助中心
 </button>
 
-    <script src="studio.js?v=20260720-photography-slots"></script>
+    <script src="studio.js?v=20260721-upload-progress"></script>
 </body>
 </html>

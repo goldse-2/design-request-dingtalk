@@ -11,6 +11,7 @@ export async function onRequestPost(context) {
 
     const file = formData.get('file');
     const prefix = String(formData.get('prefix') || 'studio/upload');
+    const uploadId = normalizeUploadId(formData.get('uploadId'));
 
     if (!file || typeof file === 'string') {
         return Response.json({ ok: false, error: 'No file provided' }, { status: 400 });
@@ -20,20 +21,44 @@ export async function onRequestPost(context) {
     }
     const maxSize = prefix === 'studio/resize'
         ? 20 * 1024 * 1024
-        : (prefix === 'studio/retouch' || prefix === 'studio/variant' || prefix === 'shoot/complete')
+        : (['studio/retouch', 'studio/cutout', 'studio/variant', 'studio/sheet-self', 'shoot/complete'].includes(prefix))
             ? 15 * 1024 * 1024
             : 8 * 1024 * 1024;
     if (file.size > maxSize) {
         return Response.json({ ok: false, error: `Image must not exceed ${Math.round(maxSize / 1024 / 1024)}MB` }, { status: 413 });
     }
 
-    const ext = (file.name || 'img.png').split('.').pop().toLowerCase();
-    const key = `${prefix}/${crypto.randomUUID()}.${ext}`;
-    const bytes = await file.arrayBuffer();
+    const ext = safeImageExtension(file.name, file.type);
+    const key = `${prefix}/${uploadId || crypto.randomUUID()}.${ext}`;
 
-    await env.SUBMISSION_FILES.put(key, bytes, {
-        httpMetadata: { contentType: file.type || 'image/png' }
-    });
+    try {
+        const bytes = await file.arrayBuffer();
+        await env.SUBMISSION_FILES.put(key, bytes, {
+            httpMetadata: { contentType: file.type || 'image/png' }
+        });
+    } catch (error) {
+        console.error('Studio image upload failed:', error?.message || error);
+        return Response.json({
+            ok: false,
+            error: '图片存储暂时不可用，请稍后重试'
+        }, {
+            status: 503,
+            headers: { 'Retry-After': '1' }
+        });
+    }
 
     return Response.json({ ok: true, key, name: file.name });
+}
+
+function normalizeUploadId(value) {
+    const id = String(value || '').trim();
+    return /^[a-z0-9-]{8,80}$/i.test(id) ? id : '';
+}
+
+function safeImageExtension(name, type) {
+    const extension = String(name || '').split('.').pop().toLowerCase();
+    if (['jpg', 'jpeg', 'png', 'webp'].includes(extension)) return extension;
+    if (type === 'image/jpeg') return 'jpg';
+    if (type === 'image/webp') return 'webp';
+    return 'png';
 }

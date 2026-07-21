@@ -45,14 +45,48 @@ export async function onRequestPost(context) {
         return Response.json({ ok: false, error: 'Storage not configured' }, { status: 500 });
     }
 
-    const taskId = 'studio-' + crypto.randomUUID();
+    const clientRequestId = normalizeClientRequestId(body.clientRequestId);
+    const taskId = clientRequestId ? `studio-${clientRequestId}` : 'studio-' + crypto.randomUUID();
     const timestamp = Date.now();
     const waitingPhotography = photographerDecision === true;
+
+    if (clientRequestId) {
+        const existingRaw = await env.SUBMISSIONS.get(taskId).catch(() => null);
+        if (existingRaw) {
+            let existingTask;
+            try { existingTask = JSON.parse(existingRaw); } catch {}
+            if (!existingTask || existingTask.kind !== 'studio' || existingTask.mode !== mode) {
+                return Response.json({ ok: false, error: '重复请求编号与已有任务不一致' }, { status: 409 });
+            }
+
+            let existingQueueResult = null;
+            if (!existingTask.photographerDecision && existingTask.status === 'pending' && !existingTask.sentToRpa) {
+                const isBackgroundImageTask = existingTask.mode === 'variant' || existingTask.mode === 'resize_ai';
+                if (isBackgroundImageTask) {
+                    await appendQueue(env.SUBMISSIONS, 'studio:imageQueue:v2', taskId);
+                } else {
+                    existingQueueResult = await queueStudioRpaTask(env, taskId);
+                }
+            }
+            const existingQueueInfo = existingQueueResult && !existingTask.silent
+                ? await getStudioRpaQueueInfo(env, existingTask, existingQueueResult.queueIds).catch(() => defaultQueueInfo(mode))
+                : defaultQueueInfo(mode);
+            return Response.json({
+                ok: true,
+                id: taskId,
+                duplicate: true,
+                waitingPhotography: Boolean(existingTask.photographerDecision),
+                queued: existingTask.status === 'pending' && !existingTask.sentToRpa,
+                queueInfo: existingQueueInfo
+            });
+        }
+    }
 
     const silent = internalTaskOptions?.silent === true;
     const libraryReplacement = normalizeLibraryReplacement(internalTaskOptions?.libraryReplacement);
     const task = {
         id: taskId,
+        clientRequestId,
         kind: 'studio',
         mode,
         submitter,
@@ -197,6 +231,11 @@ function normalizePhotographyExample(value) {
         key,
         name: String(value.name || '拍摄案例图').replace(/[\\/:*?"<>|\r\n]/g, '_').slice(0, 160) || '拍摄案例图'
     };
+}
+
+function normalizeClientRequestId(value) {
+    const id = String(value || '').trim();
+    return /^[a-z0-9-]{8,80}$/i.test(id) ? id : '';
 }
 
 function defaultQueueInfo(mode) {

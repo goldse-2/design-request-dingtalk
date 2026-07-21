@@ -636,7 +636,7 @@ const RETOUCH_FORM = `
                 </div>
                 <button class="sf-submit" id="retouchSubmit">开始精修</button>
                 <div class="retouch-shoot-hint">需要拍摄可以在这里提交<a href="library.html?shoot=1">拍摄需求</a></div>
-                <div id="retouchStatus" class="studio-status" style="margin-top:10px"></div>
+                <div id="retouchStatus" class="studio-status" style="margin-top:10px" aria-live="polite"></div>
             </div>
             <div class="studio-panel cutout-panel">
                 <div class="cutout-panel-title">白底抠图</div>
@@ -660,7 +660,7 @@ const RETOUCH_FORM = `
                 </div>
                 <button class="sf-submit" id="cutoutSubmit">开始白底抠图</button>
                 <div class="cutout-auto-hint">无需审核，提交后立即发送处理；完成后会通过钉钉通知。</div>
-                <div id="cutoutStatus" class="studio-status" style="margin-top:10px"></div>
+                <div id="cutoutStatus" class="studio-status" style="margin-top:10px" aria-live="polite"></div>
             </div>
         </div>
         <div class="studio-preview retouch-preview">
@@ -2920,7 +2920,7 @@ function wireBatchImageUpload({ inputId, dropZoneId, selectedId, hintId, statusI
                 return;
             }
             uploads[uploadKey].push({
-                batchId: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
+                batchId: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
                 name: file.name,
                 mimeType: file.type || 'image/jpeg',
                 file,
@@ -4335,19 +4335,132 @@ function updateCharCount(el, countId, max) {
     el.style.borderColor = n > max * 0.9 ? (n >= max ? '#ef4444' : '#f59e0b') : '';
 }
 
-async function uploadImages(files, prefix) {
+const STUDIO_UPLOAD_MAX_ATTEMPTS = 3;
+
+function waitForStudioUploadRetry(delayMs) {
+    return new Promise(resolve => setTimeout(resolve, delayMs));
+}
+
+function makeStudioUploadError(message, retryable, status = 0) {
+    const error = new Error(message);
+    error.retryable = retryable;
+    error.status = status;
+    return error;
+}
+
+function uploadStudioImageOnce({ blob, name, prefix, uploadId, onProgress }) {
+    return new Promise((resolve, reject) => {
+        const formData = new FormData();
+        formData.append('file', blob, name);
+        formData.append('prefix', prefix);
+        formData.append('uploadId', uploadId);
+
+        const request = new XMLHttpRequest();
+        request.open('POST', '/api/studio-upload');
+        request.timeout = 120000;
+        request.upload.onprogress = event => {
+            if (event.lengthComputable && onProgress) onProgress(event.loaded / event.total);
+        };
+        request.onload = () => {
+            let result = {};
+            try { result = JSON.parse(request.responseText || '{}'); } catch {}
+            if (request.status >= 200 && request.status < 300 && result.ok) {
+                if (onProgress) onProgress(1);
+                resolve(result);
+                return;
+            }
+            const retryable = request.status === 408 || request.status === 425 || request.status === 429 || request.status >= 500;
+            const fallback = request.status === 413
+                ? '图片超过允许大小'
+                : `上传服务返回错误 (${request.status || '未知'})`;
+            reject(makeStudioUploadError(result.error || fallback, retryable, request.status));
+        };
+        request.onerror = () => reject(makeStudioUploadError('网络连接中断', true));
+        request.ontimeout = () => reject(makeStudioUploadError('上传超时', true, 408));
+        request.onabort = () => reject(makeStudioUploadError('上传已取消', false));
+        request.send(formData);
+    });
+}
+
+async function uploadStudioImageWithRetry(options) {
+    let lastError;
+    for (let attempt = 1; attempt <= STUDIO_UPLOAD_MAX_ATTEMPTS; attempt += 1) {
+        try {
+            return await uploadStudioImageOnce(options);
+        } catch (error) {
+            lastError = error;
+            if (!error.retryable || attempt >= STUDIO_UPLOAD_MAX_ATTEMPTS) break;
+            options.onRetry?.({
+                attempt: attempt + 1,
+                maxAttempts: STUDIO_UPLOAD_MAX_ATTEMPTS,
+                error
+            });
+            await waitForStudioUploadRetry(700 * attempt);
+        }
+    }
+    if (lastError?.retryable) {
+        throw new Error(`${lastError.message}，自动重试 ${STUDIO_UPLOAD_MAX_ATTEMPTS} 次仍未成功`);
+    }
+    throw lastError || new Error('图片上传失败');
+}
+
+async function uploadImages(files, prefix, options = {}) {
     const keys = [];
-    for (const f of files) {
-        const fd = new FormData();
+    for (let index = 0; index < files.length; index += 1) {
+        const f = files[index];
         const blob = f.file || await fetch('data:' + f.mimeType + ';base64,' + f.base64).then(r => r.blob());
-        fd.append('file', blob, f.name);
-        fd.append('prefix', prefix);
-        const res = await fetch('/api/studio-upload', { method: 'POST', body: fd });
-        const json = await res.json();
-        if (!res.ok || !json.ok) throw new Error('上传图片失败: ' + (json.error || res.status));
+        const uploadId = f.uploadId || f.batchId || (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+        f.uploadId = uploadId;
+        const json = await uploadStudioImageWithRetry({
+            blob,
+            name: f.name || `image-${index + 1}.jpg`,
+            prefix,
+            uploadId,
+            onProgress: ratio => options.onProgress?.({ index, total: files.length, ratio }),
+            onRetry: retry => options.onRetry?.({ index, total: files.length, ...retry })
+        });
         keys.push({ key: json.key, name: json.name });
     }
     return keys;
+}
+
+async function submitStudioTaskWithRetry(payload, onRetry) {
+    let lastError;
+    for (let attempt = 1; attempt <= STUDIO_UPLOAD_MAX_ATTEMPTS; attempt += 1) {
+        try {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 30000);
+            let response;
+            try {
+                response = await fetch('/api/studio-submit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                    signal: controller.signal
+                });
+            } finally {
+                clearTimeout(timeout);
+            }
+            const result = await response.json().catch(() => ({}));
+            if (response.ok && result.ok) return result;
+            const retryable = response.status === 408 || response.status === 425 || response.status === 429 || response.status >= 500;
+            throw makeStudioUploadError(result.error || `创建任务失败 (${response.status})`, retryable, response.status);
+        } catch (error) {
+            const normalized = error?.name === 'AbortError'
+                ? makeStudioUploadError('创建任务超时', true, 408)
+                : error instanceof TypeError
+                    ? makeStudioUploadError('网络连接中断', true)
+                    : error;
+            lastError = normalized;
+            if (!normalized?.retryable || attempt >= STUDIO_UPLOAD_MAX_ATTEMPTS) break;
+            onRetry?.({ attempt: attempt + 1, maxAttempts: STUDIO_UPLOAD_MAX_ATTEMPTS, error: normalized });
+            await waitForStudioUploadRetry(700 * attempt);
+        }
+    }
+    if (lastError?.retryable) {
+        throw new Error(`${lastError.message}，自动重试 ${STUDIO_UPLOAD_MAX_ATTEMPTS} 次仍未成功`);
+    }
+    throw lastError || new Error('创建任务失败');
 }
 
 async function submitTask(mode, payload, statusEl, btn, onSuccess) {
@@ -4930,6 +5043,59 @@ function submitCutout() {
     });
 }
 
+function escapeBatchProgressText(value) {
+    return String(value || '').replace(/[&<>"']/g, character => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    })[character]);
+}
+
+function renderBatchSubmissionProgress(status, state) {
+    const total = Math.max(1, Number(state.total) || 1);
+    const completed = Math.max(0, Number(state.completed) || 0);
+    const failed = Math.max(0, Number(state.failed) || 0);
+    const percent = Math.max(0, Math.min(100, Math.round(Number(state.percent) || 0)));
+    const current = Math.max(1, Math.min(total, Number(state.current) || 1));
+    const phase = state.phase || 'uploading';
+    const phaseText = phase === 'creating'
+        ? `第 ${current}/${total} 张 · 正在创建任务`
+        : phase === 'retrying'
+            ? `第 ${current}/${total} 张 · 正在自动重试`
+            : phase === 'success'
+                ? `提交完成 · ${completed}/${total} 张`
+                : phase === 'error'
+                    ? `提交结束 · 成功 ${completed} 张，失败 ${failed} 张`
+                    : `第 ${current}/${total} 张 · 正在上传`;
+    const detail = state.detail || state.fileName || '';
+    const stateClass = phase === 'retrying'
+        ? ' is-retrying'
+        : phase === 'success'
+            ? ' is-success'
+            : phase === 'error'
+                ? ' is-error'
+                : '';
+    const countText = failed
+        ? `已完成 ${completed} · 失败 ${failed}`
+        : `已完成 ${completed}/${total}`;
+
+    status.className = `studio-status batch-submit-progress${stateClass}`;
+    status.innerHTML = `
+        <div class="batch-submit-progress-head">
+            <strong>${escapeBatchProgressText(phaseText)}</strong>
+            <span>${percent}%</span>
+        </div>
+        <div class="batch-submit-progress-track" role="progressbar" aria-label="批量提交进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}">
+            <span class="batch-submit-progress-bar" style="width:${percent}%"></span>
+        </div>
+        <div class="batch-submit-progress-meta">
+            <span>${escapeBatchProgressText(detail)}</span>
+            <span>${escapeBatchProgressText(countText)}</span>
+        </div>`;
+}
+
 async function submitImageBatch({ mode, uploadKey, inputId, selectedId, hintId, status, btn, extraPayload = {} }) {
     if (!currentUser) { showLoginModal(); return; }
     if (!hasAgreed()) { openGuide(); guideShowPage(2); return; }
@@ -4952,29 +5118,81 @@ async function submitImageBatch({ mode, uploadKey, inputId, selectedId, hintId, 
         for (let index = 0; index < batch.length; index += 1) {
             const item = batch[index];
             btn.textContent = `提交中 ${index + 1}/${batch.length}`;
-            status.textContent = `正在上传第 ${index + 1}/${batch.length} 张：${item.name}`;
+            renderBatchSubmissionProgress(status, {
+                phase: 'uploading',
+                current: index + 1,
+                total: batch.length,
+                completed: submittedTasks.length,
+                failed: failures.length,
+                percent: (index / batch.length) * 100,
+                fileName: item.name
+            });
             try {
-                const refKeys = await uploadImages([item], prefix);
-                status.textContent = `正在创建第 ${index + 1}/${batch.length} 个任务...`;
-                const response = await fetch('/api/studio-submit', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        mode,
-                        submitter: currentUser,
-                        productKeys: [],
-                        refKeys,
-                        modelKeys: [],
-                        ...extraPayload
+                const refKeys = await uploadImages([item], prefix, {
+                    onProgress: ({ ratio }) => renderBatchSubmissionProgress(status, {
+                        phase: 'uploading',
+                        current: index + 1,
+                        total: batch.length,
+                        completed: submittedTasks.length,
+                        failed: failures.length,
+                        percent: ((index + ratio * 0.82) / batch.length) * 100,
+                        fileName: item.name
+                    }),
+                    onRetry: ({ attempt, maxAttempts, error }) => renderBatchSubmissionProgress(status, {
+                        phase: 'retrying',
+                        current: index + 1,
+                        total: batch.length,
+                        completed: submittedTasks.length,
+                        failed: failures.length,
+                        percent: ((index + 0.08) / batch.length) * 100,
+                        detail: `${error.message}，正在进行第 ${attempt}/${maxAttempts} 次上传`
                     })
                 });
-                const result = await response.json();
-                if (!response.ok || !result.ok) throw new Error(result.error || `提交失败 (${response.status})`);
+                renderBatchSubmissionProgress(status, {
+                    phase: 'creating',
+                    current: index + 1,
+                    total: batch.length,
+                    completed: submittedTasks.length,
+                    failed: failures.length,
+                    percent: ((index + 0.88) / batch.length) * 100,
+                    fileName: item.name
+                });
+                const result = await submitStudioTaskWithRetry({
+                    mode,
+                    submitter: currentUser,
+                    productKeys: [],
+                    refKeys,
+                    modelKeys: [],
+                    clientRequestId: item.batchId,
+                    ...extraPayload
+                }, ({ attempt, maxAttempts, error }) => {
+                    renderBatchSubmissionProgress(status, {
+                        phase: 'retrying',
+                        current: index + 1,
+                        total: batch.length,
+                        completed: submittedTasks.length,
+                        failed: failures.length,
+                        percent: ((index + 0.92) / batch.length) * 100,
+                        detail: `${error.message}，正在进行第 ${attempt}/${maxAttempts} 次任务确认`
+                    });
+                });
                 successfulIds.add(item.batchId);
                 submittedTasks.push(result);
             } catch (error) {
                 failures.push({ item, error: error.message || String(error) });
             }
+            const itemFailed = failures.some(failure => failure.item.batchId === item.batchId);
+            renderBatchSubmissionProgress(status, {
+                phase: itemFailed ? 'error' : 'uploading',
+                current: index + 1,
+                total: batch.length,
+                completed: submittedTasks.length,
+                failed: failures.length,
+                percent: ((index + 1) / batch.length) * 100,
+                detail: itemFailed
+                    ? `${item.name} 提交失败，已保留图片并继续下一张`
+                    : `${item.name} 已提交`
+            });
         }
     } finally {
         uploads[uploadKey] = uploads[uploadKey].filter(item => {
@@ -4992,10 +5210,25 @@ async function submitImageBatch({ mode, uploadKey, inputId, selectedId, hintId, 
 
     if (failures.length) {
         const firstFailure = failures[0];
-        status.textContent = `成功 ${submittedTasks.length} 张，失败 ${failures.length} 张；失败图片已保留，可重新提交。${firstFailure.item.name}：${firstFailure.error}`;
-        status.className = 'studio-status err';
+        renderBatchSubmissionProgress(status, {
+            phase: 'error',
+            current: batch.length,
+            total: batch.length,
+            completed: submittedTasks.length,
+            failed: failures.length,
+            percent: 100,
+            detail: `${firstFailure.item.name}：${firstFailure.error}。失败图片已保留，可重新提交`
+        });
     } else {
-        status.textContent = '';
+        renderBatchSubmissionProgress(status, {
+            phase: 'success',
+            current: batch.length,
+            total: batch.length,
+            completed: submittedTasks.length,
+            failed: 0,
+            percent: 100,
+            detail: '全部图片已上传并创建任务'
+        });
     }
 
     if (submittedTasks.length) {
