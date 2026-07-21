@@ -1390,13 +1390,16 @@ function resetAll() {
             queueCount.textContent = pendingTasks.length;
             if (queueEmpty) queueEmpty.hidden = true;
             queueList.hidden = false;
-            queueList.innerHTML = pendingTasks.slice(0, 10).map(function(task, index) {
+            var queueCounters = { A: 0, B: 0 };
+            queueList.innerHTML = pendingTasks.slice(0, 10).map(function(task) {
                 var dateSource = task.createdAt || task.timestamp;
                 var date = dateSource ? new Date(dateSource) : null;
                 var dateText = date && Number.isFinite(date.getTime())
                     ? new Intl.DateTimeFormat('zh-CN', { timeZone:'Asia/Shanghai', month:'2-digit', day:'2-digit' }).format(date).replace(/-/g, '/')
                     : '--/--';
-                var queueNumber = 'A' + String(index + 1).padStart(2, '0');
+                var queuePrefix = String(task.taskType || '').includes('视频') ? 'B' : 'A';
+                queueCounters[queuePrefix] += 1;
+                var queueNumber = queuePrefix + String(queueCounters[queuePrefix]).padStart(2, '0');
                 var submitter = task.submitter && task.submitter.name ? String(task.submitter.name).trim() : '匿名';
                 var avatar = task.submitter && task.submitter.avatar ? String(task.submitter.avatar).trim() : '';
                 var taskName = (task.data && task.data.basicInfo && task.data.basicInfo['\u578b\u53f7']) || task.taskType || '未命名任务';
