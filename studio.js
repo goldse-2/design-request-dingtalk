@@ -1980,6 +1980,13 @@ function renderSheetSelfSlot(slot, slotIndex) {
     const copyDisabled = !slot.referenceKey?.key || slot.copyAiBusy ? ' disabled' : '';
     const copyStatus = slot.copyAiStatus || (slot.referenceKey?.key ? '参考图已上传，可以生成' : '请先上传要模仿的图');
     const copyState = slot.copyAiState || (slot.referenceKey?.key ? 'success' : '');
+    const copyTools = `<div class="sheet-self-copy-tools">
+        <button type="button" class="program-ai-btn${slot.copyAiBusy ? ' loading' : ''}" data-sheet-generate-copy data-slot-index="${slotIndex}"${copyDisabled}>
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l1.3 4.2L17.5 8.5l-4.2 1.3L12 14l-1.3-4.2-4.2-1.3 4.2-1.3L12 3Z"/><path d="M18.5 14l.8 2.7 2.7.8-2.7.8-.8 2.7-.8-2.7-2.7-.8 2.7-.8.8-2.7Z"/></svg>
+            <span>${slot.copyAiBusy ? '正在生成...' : 'AI 自动标题和文案'}</span>
+        </button>
+        <div class="program-ai-status${copyState ? ' ' + copyState : ''}">${sheetSelfEsc(copyStatus)}</div>
+    </div>`;
     const slotStatus = `<div class="sheet-self-slot-status${slot.status?.startsWith('失败') ? ' err' : ''}">${sheetSelfEsc(slot.status || (slot.uploading ? '图片上传中，请稍候...' : ''))}</div>`;
     return `<section class="sheet-self-slot" data-sheet-slot="${slotIndex}">
         <div class="sheet-self-slot-head">
@@ -1991,13 +1998,8 @@ function renderSheetSelfSlot(slot, slotIndex) {
             </select></label>
         </div>
         <div class="sheet-self-fields">
-            <div class="sheet-self-copy-tools">
-                <button type="button" class="program-ai-btn${slot.copyAiBusy ? ' loading' : ''}" data-sheet-generate-copy data-slot-index="${slotIndex}"${copyDisabled}>
-                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l1.3 4.2L17.5 8.5l-4.2 1.3L12 14l-1.3-4.2-4.2-1.3 4.2-1.3L12 3Z"/><path d="M18.5 14l.8 2.7 2.7.8-2.7.8-.8 2.7-.8-2.7-2.7-.8 2.7-.8.8-2.7Z"/></svg>
-                    <span>${slot.copyAiBusy ? '正在生成...' : 'AI 自动标题和文案'}</span>
-                </button>
-                <div class="program-ai-status${copyState ? ' ' + copyState : ''}">${sheetSelfEsc(copyStatus)}</div>
-            </div>
+            <div class="sheet-self-reference-front">${reference}</div>
+            ${copyTools}
             <div class="sheet-self-field"><label>标题 <span class="sheet-self-field-note">可选，中文自动翻译成英语</span></label><input data-sheet-field="title" data-slot-index="${slotIndex}" maxlength="100" value="${sheetSelfEsc(slot.title)}" placeholder="可选"></div>
             <div class="sheet-self-field"><label>副标题 <span class="sheet-self-field-note">可选，中文自动翻译成英语</span></label><input data-sheet-field="subtitle" data-slot-index="${slotIndex}" maxlength="100" value="${sheetSelfEsc(slot.subtitle)}" placeholder="可选"></div>
         </div>
@@ -2006,7 +2008,6 @@ function renderSheetSelfSlot(slot, slotIndex) {
         </div>
         <div class="sheet-self-media">
             <div class="sheet-self-images${noProductImage ? ' is-no-product' : (slot.photographer ? ' is-photographer' : '')}">
-                ${reference}
                 ${products}
                 ${!noProductImage && slot.photographer ? renderSheetSelfPhotographyBrief(slot, slotIndex) : ''}
             </div>
