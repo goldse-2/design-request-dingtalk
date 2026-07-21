@@ -1907,6 +1907,7 @@ function initSheetSelfMode() {
         if (sourceButton) {
             const slotIndex = Number(sourceButton.dataset.slotIndex);
             if (sourceButton.dataset.uploadType === 'a_plus') openSheetAPlusDoubleModal(slotIndex);
+            else if (sourceButton.dataset.uploadType === 'reference') document.getElementById(`sheetRefInput-${slotIndex}`)?.click();
             else openSheetImageSource(slotIndex, sourceButton.dataset.uploadType);
             return;
         }
@@ -1929,6 +1930,25 @@ function initSheetSelfMode() {
         persistSheetSelfDraft(400);
         renderSheetSelfGrid();
         updateSheetSelfProductAiControls();
+    });
+    grid.addEventListener('dragover', event => {
+        const uploadButton = event.target.closest('[data-sheet-source][data-upload-type="reference"]');
+        if (!uploadButton) return;
+        event.preventDefault();
+        uploadButton.classList.add('dragover');
+        if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+    });
+    grid.addEventListener('dragleave', event => {
+        const uploadButton = event.target.closest('[data-sheet-source][data-upload-type="reference"]');
+        if (!uploadButton || (event.relatedTarget && uploadButton.contains(event.relatedTarget))) return;
+        uploadButton.classList.remove('dragover');
+    });
+    grid.addEventListener('drop', event => {
+        const uploadButton = event.target.closest('[data-sheet-source][data-upload-type="reference"]');
+        if (!uploadButton) return;
+        event.preventDefault();
+        uploadButton.classList.remove('dragover');
+        handleSheetSelfFiles(Number(uploadButton.dataset.slotIndex), 'reference', Array.from(event.dataTransfer?.files || []));
     });
     document.getElementById('sheetSelfSubmit').addEventListener('click', submitSheetSelf);
 
@@ -2068,10 +2088,13 @@ function renderSheetSelfImage(file, slotIndex, type, productIndex, label, source
             <button type="button" class="sheet-self-image-remove" ${removeAttrs} title="移除${sheetSelfEsc(label)}" aria-label="移除${sheetSelfEsc(label)}">×</button>
         </div>`;
     }
+    const uploadHint = sourceType === 'a_plus'
+        ? '上传上下两张 1464 × 600'
+        : sourceType === 'reference' ? '拖拽或点击上传 · 单张最大 8 MB' : '单张最大 8 MB';
     return `<div class="sheet-self-image-slot ${type === 'reference' ? 'is-reference' : 'is-product'}${sheetSelfState.slots[slotIndex].uploading ? ' is-loading' : ''}">
         <button type="button" class="sheet-self-image-choice" data-sheet-source data-slot-index="${slotIndex}" data-upload-type="${sourceType}">
             <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 16V4m0 0L7 9m5-5 5 5"/><path d="M5 14v5h14v-5"/></svg>
-            <span>${label}<br>${sourceType === 'a_plus' ? '上传上下两张 1464 × 600' : '单张最大 8 MB'}</span>
+            <span>${label}<br>${uploadHint}</span>
         </button>
     </div>`;
 }
@@ -2248,7 +2271,7 @@ function openSheetAPlusDoubleModal(slotIndex) {
 }
 
 function openSheetImageSource(slotIndex, type) {
-    if (!Number.isInteger(slotIndex) || !sheetSelfState.slots[slotIndex] || !['reference', 'product'].includes(type)) return;
+    if (!Number.isInteger(slotIndex) || !sheetSelfState.slots[slotIndex] || type !== 'product') return;
     document.getElementById('sheetImageSourceModal')?.remove();
     const overlay = document.createElement('div');
     overlay.id = 'sheetImageSourceModal';
