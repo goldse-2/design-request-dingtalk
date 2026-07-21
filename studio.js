@@ -302,7 +302,7 @@ function renderShootRequestLauncher(mode) {
     return `
                 <div class="studio-photographer-decision" data-studio-photographer="${mode}">
                     <div class="studio-photographer-decision-row">
-                        <div class="studio-photographer-decision-copy"><strong>由摄影师决定</strong><small>需要白底图或更多角度时可以开启</small></div>
+                        <div class="studio-photographer-decision-copy"><strong>由摄影师决定</strong><small>没有白底图或者是需要拍摄就可以打开，无需图片也可以打开</small></div>
                         <div class="sheet-self-switch-control">
                             <span class="sheet-self-switch-state is-off" id="${mode}PhotographerState">已关闭</span>
                             <label class="sheet-self-switch" title="开启摄影需求补充"><input type="checkbox" id="${mode}PhotographerToggle" data-studio-photographer-toggle="${mode}" aria-controls="${mode}PhotographerPanel" aria-expanded="false"><span></span></label>
