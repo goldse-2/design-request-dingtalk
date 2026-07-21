@@ -809,7 +809,7 @@ function createSheetSelfSlot(index) {
     return {
         index,
         noProductImage: false,
-        photographer: true,
+        photographer: false,
         photographyExampleKey: null,
         photographyNote: '',
         size: '1600x1600',
@@ -2522,7 +2522,7 @@ function normalizeSheetSelfDraft(value) {
         return {
             ...empty,
             noProductImage: slot.noProductImage === true,
-            photographer: sheetSelfDraftSlotHasContent(slot) ? slot.photographer === true : true,
+            photographer: sheetSelfDraftSlotHasContent(slot) ? slot.photographer === true : false,
             photographyExampleKey: normalizeSheetSelfFileKey(slot.photographyExampleKey),
             photographyNote: String(slot.photographyNote || '').slice(0, 300),
             size: aPlusDouble ? A_PLUS_DOUBLE_SIZE : requestedSize,
