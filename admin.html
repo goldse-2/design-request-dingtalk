@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>管理台 - 作图中心</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-    <link rel="stylesheet" href="style.css?v=20260721-full-details">
+    <link rel="stylesheet" href="style.css?v=20260721-rpa-queue">
 
 <style>
 .lib-admin-tab {
@@ -164,6 +164,7 @@
             <p style="color:#6b7280;font-size:0.85rem;margin-top:2px">待处理的图片制作需求</p>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button type="button" id="studioQueueBtn" style="font-size:0.84rem;color:#374151;background:#fff;border:1px solid #d1d5db;border-radius:7px;padding:8px 14px;cursor:pointer;font-weight:600">当前排队</button>
             <button type="button" id="studioBatchPauseBtn" style="font-size:0.84rem;color:#b45309;background:#fff;border:1px solid #f59e0b;border-radius:7px;padding:8px 14px;cursor:pointer;font-weight:600">一键挂起</button>
             <button type="button" id="studioBatchSendBtn" style="font-size:0.84rem;color:#fff;background:#4f46e5;border:1px solid #4f46e5;border-radius:7px;padding:8px 14px;cursor:pointer;font-weight:600">一键发送</button>
         </div>
@@ -391,7 +392,7 @@ function setLibAdminTab(btn, tabKey) {
     });
 }
 </script>
-<script src="admin.js?v=20260721-eta-countdown"></script>
+<script src="admin.js?v=20260721-rpa-queue"></script>
 </div>
 </body>
 </html>

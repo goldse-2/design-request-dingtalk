@@ -109,7 +109,8 @@ export async function onRequestGet(context) {
                 const requiresApprovalDelay = !['sheet_self', 'studio_photography'].includes(task.workflow?.type)
                     && task.mode !== 'cutout'
                     && !task.photographyCompletedAt;
-                if (!imageOnly && requiresApprovalDelay && (!createdAt || (now - createdAt) < autoSendThreshold)) {
+                const priorityRequested = Boolean(task.rpaQueuePriorityAt);
+                if (!imageOnly && requiresApprovalDelay && !priorityRequested && (!createdAt || (now - createdAt) < autoSendThreshold)) {
                     nextAutoQueue.push(task.id);
                     continue;
                 }
@@ -193,6 +194,7 @@ export async function onRequestGet(context) {
                     task.autoRpaLastAttemptAt = new Date().toISOString();
                     task.autoRpaLastResponse = text.slice(0, 300);
                     task.rpaSentPayload = payload;
+                    task.rpaQueuePriorityAt = '';
                     task.manualRpaResendQueued = false;
                     task.manualRpaResendQueuedAt = '';
                     if (!task.size && pickedSize) task.size = pickedSize;

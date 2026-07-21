@@ -3259,8 +3259,10 @@ async function optimizeStudioDesc(task, editWrap, editBtn, btn) {
 function bindStudioBatchActions() {
     const sendBtn = document.getElementById('studioBatchSendBtn');
     const pauseBtn = document.getElementById('studioBatchPauseBtn');
+    const queueBtn = document.getElementById('studioQueueBtn');
     if (sendBtn) sendBtn.onclick = () => batchSendStudioTasks(sendBtn);
     if (pauseBtn) pauseBtn.onclick = () => batchPauseStudioTasks(pauseBtn);
+    if (queueBtn) queueBtn.onclick = openStudioRpaQueue;
 }
 
 async function batchSendStudioTasks(btn) {
@@ -3363,6 +3365,209 @@ async function batchPauseStudioTasks(btn) {
     } finally {
         btn.disabled = false;
         btn.textContent = originalText;
+    }
+}
+
+let studioRpaQueueModal = null;
+let studioRpaQueueEscapeHandler = null;
+
+function openStudioRpaQueue() {
+    closeStudioRpaQueue();
+    const modal = document.createElement('div');
+    modal.className = 'studio-rpa-queue-modal';
+    modal.innerHTML = `
+        <section class="studio-rpa-queue-dialog" role="dialog" aria-modal="true" aria-labelledby="studioRpaQueueTitle">
+            <header class="studio-rpa-queue-head">
+                <div>
+                    <h3 id="studioRpaQueueTitle">当前排队</h3>
+                    <p>查看 RPA 电脑正在执行和等待中的任务。仅在打开或手动刷新时读取，不会持续轮询。</p>
+                </div>
+                <div class="studio-rpa-queue-head-actions">
+                    <button type="button" class="studio-rpa-queue-icon-btn" data-rpa-queue-refresh title="刷新队列" aria-label="刷新队列">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6v5h-5"/><path d="M4 18v-5h5"/><path d="M18.5 9A7 7 0 0 0 6 6.5L4 9"/><path d="M5.5 15A7 7 0 0 0 18 17.5l2-2.5"/></svg>
+                    </button>
+                    <button type="button" class="studio-rpa-queue-icon-btn" data-rpa-queue-close title="关闭" aria-label="关闭">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+                    </button>
+                </div>
+            </header>
+            <div class="studio-rpa-queue-body" data-rpa-queue-body>
+                <div class="studio-rpa-queue-loading">正在读取 RPA 队列...</div>
+            </div>
+        </section>`;
+    document.body.appendChild(modal);
+    studioRpaQueueModal = modal;
+    modal.querySelector('[data-rpa-queue-close]').onclick = closeStudioRpaQueue;
+    modal.querySelector('[data-rpa-queue-refresh]').onclick = () => loadStudioRpaQueue();
+    modal.addEventListener('click', event => {
+        if (event.target === modal) closeStudioRpaQueue();
+    });
+    studioRpaQueueEscapeHandler = event => {
+        if (event.key === 'Escape') closeStudioRpaQueue();
+    };
+    document.addEventListener('keydown', studioRpaQueueEscapeHandler);
+    loadStudioRpaQueue();
+}
+
+function closeStudioRpaQueue() {
+    if (studioRpaQueueModal) studioRpaQueueModal.remove();
+    studioRpaQueueModal = null;
+    if (studioRpaQueueEscapeHandler) document.removeEventListener('keydown', studioRpaQueueEscapeHandler);
+    studioRpaQueueEscapeHandler = null;
+}
+
+async function loadStudioRpaQueue(successMessage = '') {
+    const modal = studioRpaQueueModal;
+    if (!modal) return;
+    const body = modal.querySelector('[data-rpa-queue-body]');
+    const refresh = modal.querySelector('[data-rpa-queue-refresh]');
+    refresh.disabled = true;
+    body.innerHTML = '<div class="studio-rpa-queue-loading">正在读取 RPA 队列...</div>';
+    try {
+        const response = await fetch('/api/studio-rpa-queue', { cache: 'no-store' });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.ok) throw new Error(data.error || `加载失败 (${response.status})`);
+        if (modal !== studioRpaQueueModal) return;
+        renderStudioRpaQueue(data, successMessage);
+    } catch (error) {
+        body.innerHTML = `<div class="studio-rpa-queue-empty">队列加载失败：${esc(error.message)}</div>`;
+    } finally {
+        if (modal === studioRpaQueueModal) refresh.disabled = false;
+    }
+}
+
+function renderStudioRpaQueue(data, message = '') {
+    const modal = studioRpaQueueModal;
+    if (!modal) return;
+    const body = modal.querySelector('[data-rpa-queue-body]');
+    const waiting = Array.isArray(data.waiting) ? data.waiting : [];
+    const paused = mergeKnownPausedStudioTasks(data.paused || [], data.active, waiting);
+    const active = data.active || null;
+    const activeHtml = active
+        ? `<div class="studio-rpa-queue-current${active.possiblyStuck ? ' is-stuck' : ''}">
+                <div>
+                    <div class="studio-rpa-queue-status"><span class="studio-rpa-queue-pulse"></span>${active.possiblyStuck ? '可能卡住，系统重试监控中' : 'RPA 正在执行'}</div>
+                    <div class="studio-rpa-queue-task-title">${esc(active.title)}</div>
+                    <div class="studio-rpa-queue-meta"><span>${esc(active.modeText)}</span><span>提交人：${esc(active.submitterName)}</span>${studioQueueWorkflowMeta(active)}</div>
+                    <div class="studio-rpa-queue-task-id">${esc(active.id)}</div>
+                </div>
+                <div class="studio-rpa-queue-time">已运行 ${Number(active.elapsedMinutes || 0)} 分钟<br>预计 ${Number(active.expectedMinutes || 0)} 分钟完成</div>
+            </div>`
+        : '<div class="studio-rpa-queue-empty">RPA 当前空闲</div>';
+    body.innerHTML = `
+        <div class="studio-rpa-queue-summary">
+            <span class="studio-rpa-queue-stat">执行中 <strong>${active ? 1 : 0}</strong></span>
+            <span class="studio-rpa-queue-stat">等待 <strong>${waiting.length}</strong></span>
+            <span class="studio-rpa-queue-stat">已暂停 <strong>${paused.length}</strong></span>
+        </div>
+        <section class="studio-rpa-queue-section">
+            <div class="studio-rpa-queue-section-title"><span>当前执行</span><span>${active ? '任务开始后不能从网站强制中断' : ''}</span></div>
+            ${activeHtml}
+        </section>
+        <section class="studio-rpa-queue-section">
+            <div class="studio-rpa-queue-section-title"><span>等待队列</span><span>${waiting.length ? '优先任务会排到当前任务之后' : ''}</span></div>
+            ${renderStudioRpaQueueRows(waiting, false)}
+        </section>
+        ${paused.length ? `<section class="studio-rpa-queue-section">
+            <div class="studio-rpa-queue-section-title"><span>已暂停</span><span>恢复后重新进入等待队列</span></div>
+            ${renderStudioRpaQueueRows(paused, true)}
+        </section>` : ''}
+        ${data.truncated ? '<div class="studio-rpa-queue-message is-error">队列较长，当前只显示前 80 个任务。</div>' : `<div class="studio-rpa-queue-message${message ? '' : ' is-idle'}">${esc(message)}</div>`}`;
+    body.querySelectorAll('[data-rpa-queue-action]').forEach(button => {
+        button.onclick = () => updateStudioRpaQueueTask(
+            button.dataset.rpaQueueAction,
+            decodeURIComponent(button.dataset.taskId || ''),
+            button
+        );
+    });
+}
+
+function renderStudioRpaQueueRows(tasks, isPaused) {
+    if (!tasks.length) return '<div class="studio-rpa-queue-empty">暂无等待任务</div>';
+    return `<div class="studio-rpa-queue-list">${tasks.map((task, index) => {
+        const encodedId = encodeURIComponent(task.id || '');
+        const position = isPaused ? '暂停' : String(index + 1).padStart(2, '0');
+        const primaryAction = isPaused
+            ? `<button type="button" class="studio-rpa-queue-action" data-rpa-queue-action="resume" data-task-id="${encodedId}">恢复</button>`
+            : `<button type="button" class="studio-rpa-queue-action" data-rpa-queue-action="pause" data-task-id="${encodedId}">暂停</button>`;
+        const priorityAction = task.priority
+            ? '<button type="button" class="studio-rpa-queue-action is-priority" disabled>已优先</button>'
+            : `<button type="button" class="studio-rpa-queue-action is-priority" data-rpa-queue-action="prioritize" data-task-id="${encodedId}">优先执行</button>`;
+        return `<div class="studio-rpa-queue-row${isPaused ? ' is-paused' : ''}">
+            <div class="studio-rpa-queue-position">${position}</div>
+            <div>
+                <div class="studio-rpa-queue-task-title">${esc(task.title)}</div>
+                <div class="studio-rpa-queue-meta"><span>${esc(task.modeText)}</span><span>提交人：${esc(task.submitterName)}</span>${studioQueueWorkflowMeta(task)}</div>
+                <div class="studio-rpa-queue-task-id">${esc(task.id)}</div>
+            </div>
+            <div class="studio-rpa-queue-actions">${primaryAction}${priorityAction}</div>
+        </div>`;
+    }).join('')}</div>`;
+}
+
+function studioQueueWorkflowMeta(task) {
+    if (task.workflowType === 'sheet_self') {
+        const slot = Number.isInteger(task.slotIndex) ? `第 ${task.slotIndex + 1} 张` : '图片位';
+        return `<span>表格自助 · ${slot}</span>`;
+    }
+    if (task.workflowType === 'studio_photography') return '<span>图片拍摄流程</span>';
+    return '';
+}
+
+function mergeKnownPausedStudioTasks(serverPaused, active, waiting) {
+    const knownIds = new Set([active?.id, ...waiting.map(task => task.id), ...serverPaused.map(task => task.id)].filter(Boolean));
+    const localPaused = studioAdminTasks
+        .filter(task => task.kind === 'studio' && task.status === 'pending' && !task.sentToRpa && task.pausedAuto && !knownIds.has(task.id))
+        .map(task => ({
+            id: task.id,
+            mode: task.mode || '',
+            modeText: studioQueueModeText(task.mode),
+            title: task.imageName || task.productName || task.submitter?.name || '未命名任务',
+            submitterName: task.submitter?.name || '匿名用户',
+            pausedAuto: true,
+            workflowType: task.workflow?.type || '',
+            workflowStage: task.workflow?.stage || '',
+            parentId: task.workflow?.parentId || '',
+            slotIndex: Number.isInteger(task.workflow?.slotIndex) ? task.workflow.slotIndex : null
+        }));
+    return [...serverPaused, ...localPaused];
+}
+
+function studioQueueModeText(mode) {
+    if (mode === 'free') return '自由模式';
+    if (mode === 'program') return '图生图';
+    if (mode === 'retouch') return '精修图片';
+    if (mode === 'cutout') return '白底抠图';
+    return mode || '作图任务';
+}
+
+async function updateStudioRpaQueueTask(action, taskId, button) {
+    if (!taskId || !['pause', 'resume', 'prioritize'].includes(action)) return;
+    const labels = { pause: '暂停中...', resume: '恢复中...', prioritize: '调整中...' };
+    const messages = { pause: '任务已暂停，不会自动发送。', resume: '任务已恢复并重新加入队列。', prioritize: '任务已排到最前；RPA 空闲时会立即开始。' };
+    const original = button.textContent;
+    button.disabled = true;
+    button.textContent = labels[action];
+    try {
+        const response = await fetch('/api/studio-rpa-queue', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ taskId, action })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.ok) throw new Error(result.error || `操作失败 (${response.status})`);
+        await loadStudioRpaQueue(messages[action]);
+        await loadStudioAdmin();
+    } catch (error) {
+        button.disabled = false;
+        button.textContent = original;
+        const message = studioRpaQueueModal?.querySelector('.studio-rpa-queue-message');
+        if (message) {
+            message.textContent = error.message;
+            message.classList.add('is-error');
+        } else {
+            alert(error.message);
+        }
     }
 }
 

@@ -24,8 +24,24 @@ export async function onRequestPost(context) {
 
         const task = JSON.parse(raw);
         task.pausedAuto = !!pausedAuto;
+        task.rpaQueuePausedAt = task.pausedAuto ? new Date().toISOString() : '';
+        task.rpaQueuePriorityAt = '';
 
-        await env.SUBMISSIONS.put(taskId, JSON.stringify(task), studioTaskPutOptions(task));
+        const queueKey = 'studio:rpaQueue:v2';
+        const pausedQueueKey = 'studio:rpaPausedQueue:v1';
+        const [queue, pausedQueue] = await Promise.all([
+            readQueue(env.SUBMISSIONS, queueKey),
+            readQueue(env.SUBMISSIONS, pausedQueueKey)
+        ]);
+        const nextQueue = queue.filter(id => id !== taskId);
+        const nextPausedQueue = pausedQueue.filter(id => id !== taskId);
+        if (task.pausedAuto) nextPausedQueue.push(taskId);
+
+        await Promise.all([
+            env.SUBMISSIONS.put(taskId, JSON.stringify(task), studioTaskPutOptions(task)),
+            env.SUBMISSIONS.put(queueKey, JSON.stringify([...new Set(nextQueue)].slice(-500))),
+            env.SUBMISSIONS.put(pausedQueueKey, JSON.stringify([...new Set(nextPausedQueue)].slice(-500)))
+        ]);
         if (!task.pausedAuto
             && task.kind === 'studio'
             && ['free', 'program', 'retouch'].includes(task.mode)
@@ -49,4 +65,15 @@ async function appendQueue(kv, key, taskId) {
     if (!Array.isArray(ids)) ids = [];
     if (!ids.includes(taskId)) ids.push(taskId);
     await kv.put(key, JSON.stringify(ids.slice(-500)));
+}
+
+async function readQueue(kv, key) {
+    const raw = await kv.get(key).catch(() => null);
+    if (!raw) return [];
+    try {
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
+    } catch {
+        return [];
+    }
 }

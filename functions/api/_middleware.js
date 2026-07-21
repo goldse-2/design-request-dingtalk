@@ -10,6 +10,8 @@ const ADMIN_PATHS = new Set([
     '/api/send-feedback',
     '/api/notify-test',
     '/api/studio-webhook',
+    '/api/studio-rpa-queue',
+    '/api/studio-pause-auto',
     '/api/studio-complete',
     '/api/admin-optimize-prompt',
     '/api/admin-library-cutout',
