@@ -2496,7 +2496,7 @@ function renderSheetSelfAdminSlot(task, slot) {
         uploadButton.type = 'button';
         uploadButton.textContent = '上传原图';
         uploadButton.style.cssText = 'border:0;border-radius:6px;background:#111827;color:#fff;padding:7px 11px;font-size:.74rem;font-weight:700;cursor:pointer;white-space:nowrap';
-        uploadButton.onclick = () => uploadSheetSelfPhotos(task.id, slot.index, uploadButton, slot.skipRetouch === true, slot.cutoutEnabled !== false, slot.photographyOnly === true);
+        uploadButton.onclick = () => uploadSheetSelfPhotos(task.id, slot.index, uploadButton, true, slot.cutoutEnabled !== false, slot.photographyOnly === true);
         actions.appendChild(uploadButton);
     }
     const failed = slot.stage === 'error' || (slot.stage === 'done' && !slot.resultNotified);
