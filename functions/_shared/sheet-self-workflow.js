@@ -288,7 +288,7 @@ export async function retrySheetSelfSlot(env, parent, slot, origin) {
     }
     if (programTasks[0]) await resetChildTimeoutForManualRetry(env, programTasks[0]);
 
-    if (slot.photographer) {
+    if (slot.photographer && slot.noProductImage !== true) {
         const prepared = await collectPreparedSheetSelfKeys(env, slot);
         slot.cutoutKeys = prepared.keys;
         if (!prepared.ready) {
