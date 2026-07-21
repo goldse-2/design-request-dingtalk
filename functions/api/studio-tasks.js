@@ -182,8 +182,10 @@ export async function onRequestGet(context) {
         tasks.sort((a, b) => b.timestamp - a.timestamp);
 
         if (includeSheetSlots) {
+            const taskMetadata = new Map(list.keys.map(key => [key.name, key.metadata || {}]));
             await Promise.all(tasks.filter(task => task.mode === 'sheet_self').map(async task => {
-                task.workflowSlots = await getSheetSelfSlots(env, task.id, task.sheetSelfSlotCount);
+                const slots = await getSheetSelfSlots(env, task.id, task.sheetSelfSlotCount);
+                task.workflowSlots = slots.map(slot => attachSheetSelfExecutionState(slot, taskMetadata));
             }));
         }
 
@@ -191,6 +193,35 @@ export async function onRequestGet(context) {
     } catch (err) {
         return Response.json({ ok: false, error: err.message }, { status: 500 });
     }
+}
+
+function attachSheetSelfExecutionState(slot, taskMetadata) {
+    if (!slot) return slot;
+    const childIds = sheetSelfActiveChildIds(slot);
+    const states = childIds
+        .map(id => ({ id, ...(taskMetadata.get(id) || {}) }))
+        .filter(item => item.status);
+    const executing = states.filter(item => item.status === 'processing' && item.sentToRpa === true);
+    const queued = states.filter(item => item.status === 'pending' && item.sentToRpa !== true);
+    const completed = states.filter(item => item.status === 'done');
+    let executionState = '';
+    if (executing.length) executionState = 'executing';
+    else if (queued.length) executionState = 'queued';
+    else if (states.length && completed.length === states.length) executionState = 'advancing';
+
+    return {
+        ...slot,
+        executionState,
+        executionTaskCount: states.length,
+        executionStartedAt: executing[0]?.sentToRpaAt || ''
+    };
+}
+
+function sheetSelfActiveChildIds(slot) {
+    if (slot.stage === 'program') return [slot.children?.program].filter(Boolean);
+    if (slot.stage === 'retouch') return Array.isArray(slot.children?.retouch) ? slot.children.retouch.filter(Boolean) : [];
+    if (slot.stage === 'cutout') return Array.isArray(slot.children?.cutout) ? slot.children.cutout.filter(Boolean) : [];
+    return [];
 }
 
 async function publicStudioQueue(env, listedKeys, requestedLimit, queueMode) {

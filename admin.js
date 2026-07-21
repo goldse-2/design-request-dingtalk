@@ -2415,6 +2415,8 @@ function renderSheetSelfAdminTask(task) {
     const slots = Array.isArray(task.workflowSlots) ? task.workflowSlots.filter(Boolean) : [];
     const completedCount = slots.filter(slot => slot.stage === 'done' && slot.resultNotified).length;
     const failedCount = slots.filter(slot => slot.stage === 'error' || (slot.stage === 'done' && !slot.resultNotified)).length;
+    const executingCount = slots.filter(slot => slot.executionState === 'executing').length;
+    const queuedCount = slots.filter(slot => slot.executionState === 'queued').length;
     const time = new Date(task.timestamp).toLocaleString('zh-CN', { timeZone:'Asia/Shanghai', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
     const card = document.createElement('div');
     card.id = 'studio-card-' + task.id;
@@ -2425,6 +2427,8 @@ function renderSheetSelfAdminTask(task) {
                 <strong style="color:#111827;font-size:.96rem">${esc(task.submitter?.name || '匿名')}</strong>
                 <span style="font-size:.76rem;color:#fff;background:#111827;padding:3px 8px;border-radius:6px">${taskLabel}</span>
                 <span style="font-size:.74rem;color:#047857;background:#ecfdf5;padding:3px 8px;border-radius:6px">已发送 ${completedCount}/${slots.length || task.sheetSelfSlotCount || 0}</span>
+                ${executingCount ? `<span style="font-size:.74rem;color:#1d4ed8;background:#dbeafe;padding:3px 8px;border-radius:6px">正在执行 ${executingCount}</span>` : ''}
+                ${queuedCount ? `<span style="font-size:.74rem;color:#475569;background:#f1f5f9;padding:3px 8px;border-radius:6px">排队中 ${queuedCount}</span>` : ''}
                 ${failedCount ? `<span style="font-size:.74rem;color:#b91c1c;background:#fef2f2;padding:3px 8px;border-radius:6px">需处理 ${failedCount}</span>` : ''}
             </div>
             <div style="margin-top:5px;color:#6b7280;font-size:.74rem">任务ID：${esc(task.id)}</div>
@@ -2472,7 +2476,7 @@ function renderSheetSelfAdminSlot(task, slot) {
         </div>
         <div style="min-width:0"><strong style="display:block;color:#111827;font-size:.82rem">第 ${displayNumber} 张</strong><span style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#6b7280;font-size:.72rem">${esc(slot.productName || '未命名产品')}</span>${photographyBrief}</div>
     </div>
-    <div class="sheet-self-admin-progress-cell" style="min-width:0">${renderSheetSelfProgress(slot)}${slot.error || slot.notificationError ? `<div style="margin-top:7px;color:#b91c1c;font-size:.7rem;line-height:1.4;word-break:break-word">${esc(slot.error || slot.notificationError)}</div>` : ''}</div>`;
+    <div class="sheet-self-admin-progress-cell" style="min-width:0">${renderSheetSelfExecutionState(slot)}${renderSheetSelfProgress(slot)}${slot.error || slot.notificationError ? `<div style="margin-top:7px;color:#b91c1c;font-size:.7rem;line-height:1.4;word-break:break-word">${esc(slot.error || slot.notificationError)}</div>` : ''}</div>`;
 
     const previewButton = row.querySelector('[data-sheet-reference-preview]');
     if (previewButton) previewButton.onclick = () => openAdminImagePreview(referenceUrl, `第 ${displayNumber} 张参考图`);
@@ -2637,6 +2641,33 @@ function renderSheetSelfProgress(slot) {
             ${markers}
         </div>
     </div>`;
+}
+
+function renderSheetSelfExecutionState(slot) {
+    let label = '';
+    let color = '#475569';
+    let background = '#f1f5f9';
+    let dot = '#94a3b8';
+    if (slot.executionState === 'executing') {
+        label = `RPA 正在执行${slot.stage === 'program' ? '图生图' : slot.stage === 'retouch' ? '精修' : slot.stage === 'cutout' ? '白底抠图' : ''}`;
+        color = '#1d4ed8';
+        background = '#eff6ff';
+        dot = '#2563eb';
+    } else if (slot.executionState === 'queued') {
+        label = `排队中，等待执行${slot.stage === 'program' ? '图生图' : slot.stage === 'retouch' ? '精修' : slot.stage === 'cutout' ? '白底抠图' : ''}`;
+    } else if (slot.executionState === 'advancing') {
+        label = '当前环节已完成，正在进入下一步';
+        color = '#047857';
+        background = '#ecfdf5';
+        dot = '#10b981';
+    } else if (slot.stage === 'done' && !slot.resultNotified) {
+        label = '成品已完成，正在发送给用户';
+        color = '#b45309';
+        background = '#fff7ed';
+        dot = '#f59e0b';
+    }
+    if (!label) return '';
+    return `<div style="display:inline-flex;align-items:center;gap:6px;margin:0 3px 8px;padding:4px 8px;border-radius:5px;background:${background};color:${color};font-size:.69rem;font-weight:700"><i style="width:7px;height:7px;border-radius:50%;background:${dot};box-shadow:0 0 0 3px ${background}"></i>${label}</div>`;
 }
 
 function uploadSheetSelfPhotos(parentId, slotIndex, button, skipRetouch = false, cutoutEnabled = true, photographyOnly = false) {
