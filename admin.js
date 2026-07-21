@@ -2366,7 +2366,6 @@ function openStudioPhotographyUpload(task, cardButton) {
 }
 
 async function startWithoutProductImages(endpoint, payload, button) {
-    if (!confirm('确认这里不需要产品图吗？系统会跳过摄影、精修和白底抠图，直接按参考设计图开始作图。')) return;
     const originalText = button.textContent;
     button.disabled = true;
     button.textContent = '正在加入队列...';
