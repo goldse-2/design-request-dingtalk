@@ -2,7 +2,6 @@ import { getStudioRpaQueueInfo, queueStudioRpaTask } from '../_shared/studio-rpa
 import { wakeStudioRpaQueue } from '../_shared/studio-rpa-wakeup.js';
 import { studioTaskPutOptions } from '../_shared/studio-task-storage.js';
 import { startStudioPhotographyRetouchWorkflow } from '../_shared/studio-photography-workflow.js';
-import { NO_PRODUCT_ANALYZE_PROMPT } from '../_shared/studio-no-product.js';
 
 const MAX_PHOTO_SIZE = 15 * 1024 * 1024;
 
@@ -150,7 +149,7 @@ async function handleJsonRequest(context) {
 
     const now = new Date().toISOString();
     task.noProductImage = true;
-    task.analyzePrompt = NO_PRODUCT_ANALYZE_PROMPT;
+    task.analyzePrompt = '';
     task.productKeys = [];
     task.photographySourceKeys = [];
     task.photographyUploadedCount = 0;

@@ -2,7 +2,6 @@ import { dispatchStudioTaskToRpa } from '../api/studio-webhook.js';
 import { sendStudioResultImages } from './studio-dingtalk.js';
 import { acquireStudioRpaSlot, queueStudioRpaTask, releaseStudioRpaSlot } from './studio-rpa-slot.js';
 import { RECORD_RETENTION_SECONDS, studioTaskPutOptions } from './studio-task-storage.js';
-import { NO_PRODUCT_ANALYZE_PROMPT } from './studio-no-product.js';
 
 export const SHEET_SELF_SLOT_COUNT = 8;
 
@@ -437,7 +436,7 @@ function makeChildTask(parent, slot, options) {
         want: '',
         note: '',
         scene: '',
-        analyzePrompt: slot.noProductImage === true ? (slot.analyzePrompt || NO_PRODUCT_ANALYZE_PROMPT) : '',
+        analyzePrompt: '',
         size: options.mode === 'program' ? (slot.aPlusDouble ? '1464x1200' : slot.size || '1600x1600') : '',
         imageName: `${taskLabel}-第${Number(slot.displayIndex ?? slot.index) + 1}张`,
         productName: slot.productName || '-',

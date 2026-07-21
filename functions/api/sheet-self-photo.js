@@ -1,5 +1,4 @@
 import { SHEET_SELF_SLOT_COUNT, getSheetSelfSlot, retrySheetSelfSlot, startSheetSelfPhotographySlot, startSheetSelfProgramSlot } from '../_shared/sheet-self-workflow.js';
-import { NO_PRODUCT_ANALYZE_PROMPT } from '../_shared/studio-no-product.js';
 
 export async function onRequestPost(context) {
     const { request, env } = context;
@@ -108,7 +107,7 @@ async function startWithoutProductImages(context, body) {
     }
 
     loaded.slot.noProductImage = true;
-    loaded.slot.analyzePrompt = NO_PRODUCT_ANALYZE_PROMPT;
+    loaded.slot.analyzePrompt = '';
     loaded.slot.productKeys = [];
     loaded.slot.sourceKeys = [];
     loaded.slot.cutoutKeys = [];
