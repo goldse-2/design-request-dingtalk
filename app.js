@@ -1347,29 +1347,47 @@ function resetAll() {
             });
             const processingTasks = allTasks.filter(t => t.status === 'processing');
             const pendingTasks = allTasks.filter(t => !t.status || t.status === 'pending');
+            const currentTask = processingTasks[0] || pendingTasks[0] || null;
+            const waitingTasks = processingTasks.length > 0
+                ? processingTasks.slice(1).concat(pendingTasks)
+                : pendingTasks.slice(1);
+            const taskTickets = new Map();
+            const ticketCounters = { A: 0, B: 0 };
 
-            // Show processing task
-            if (processingTasks.length > 0 && processingTask) {
-                const task = processingTasks[0];
+            (currentTask ? [currentTask].concat(waitingTasks) : waitingTasks).forEach(function(task) {
+                const prefix = String(task.taskType || '').includes('视频') ? 'B' : 'A';
+                ticketCounters[prefix] += 1;
+                taskTickets.set(task, prefix + String(ticketCounters[prefix]).padStart(2, '0'));
+            });
+
+            // The first pending task becomes current when no task is explicitly processing.
+            if (currentTask && processingTask) {
+                const task = currentTask;
                 const taskName = (task.data && task.data.basicInfo && task.data.basicInfo['\u578b\u53f7']) || task.taskType || 'Task';
                 const nameEl = processingTask.querySelector('.processing-task-name');
                 if (nameEl) {
                     var submitter = task.submitter || {};
                     var avatar = submitter.avatar || '';
                     var sname = submitter.name || '';
-                    var submitterHtml = sname ? '<span style="font-size:0.85rem;color:#6b7280;font-weight:500;display:inline-flex;align-items:center;gap:5px;margin-left:10px">' + (avatar ? '<img src="' + avatar + '" style="width:18px;height:18px;border-radius:50%;vertical-align:middle">' : '') + '<span>' + sname + '</span></span>' : '';
-                    nameEl.innerHTML = '<span>' + taskName + '</span>' + submitterHtml;
+                    var submitterHtml = sname ? '<span class="processing-task-submitter">' + (avatar ? '<img src="' + queueEscape(avatar) + '" alt="" loading="lazy">' : '') + '<span>' + queueEscape(sname) + '</span></span>' : '';
+                    nameEl.innerHTML = '<span class="processing-task-ticket">' + queueEscape(taskTickets.get(task) || '') + '</span><span class="processing-task-title">' + queueEscape(taskName) + '</span>' + submitterHtml;
                 }
-                processingStartTime = task.processingStartTime || (task.createdAt ? new Date(task.createdAt).getTime() : null);
-                if (processingStartTime) {
-                    updateProcessingDuration();
-                    startDurationTicker();
+                if (task.status === 'processing') {
+                    processingStartTime = task.processingStartTime || (task.createdAt ? new Date(task.createdAt).getTime() : null);
+                    if (processingStartTime) {
+                        updateProcessingDuration();
+                        startDurationTicker();
+                    } else {
+                        stopDurationTicker();
+                        if (processingDuration) processingDuration.textContent = '-';
+                    }
                 } else {
+                    processingStartTime = null;
                     stopDurationTicker();
-                    if (processingDuration) processingDuration.textContent = '-';
+                    if (processingDuration) processingDuration.textContent = '等待处理';
                 }
                 if (task.eta && processingEta) processingEta.textContent = task.eta;
-                else if (processingEta) processingEta.textContent = '-';
+                else if (processingEta) processingEta.textContent = task.status === 'processing' ? '-' : '排队中';
                 processingTask.hidden = false;
                 if (processingEmpty) processingEmpty.hidden = true;
             } else {
@@ -1379,27 +1397,24 @@ function resetAll() {
                 stopDurationTicker();
             }
 
-            // Show pending queue
-            if (pendingTasks.length === 0) {
+            // The current task is excluded from the waiting queue.
+            if (waitingTasks.length === 0) {
                 if (queueEmpty) queueEmpty.hidden = false;
                 queueList.hidden = true;
                 queueCount.textContent = '0';
                 return;
             }
 
-            queueCount.textContent = pendingTasks.length;
+            queueCount.textContent = waitingTasks.length;
             if (queueEmpty) queueEmpty.hidden = true;
             queueList.hidden = false;
-            var queueCounters = { A: 0, B: 0 };
-            queueList.innerHTML = pendingTasks.slice(0, 10).map(function(task) {
+            queueList.innerHTML = waitingTasks.slice(0, 10).map(function(task) {
                 var dateSource = task.createdAt || task.timestamp;
                 var date = dateSource ? new Date(dateSource) : null;
                 var dateText = date && Number.isFinite(date.getTime())
                     ? new Intl.DateTimeFormat('zh-CN', { timeZone:'Asia/Shanghai', month:'2-digit', day:'2-digit' }).format(date).replace(/-/g, '/')
                     : '--/--';
-                var queuePrefix = String(task.taskType || '').includes('视频') ? 'B' : 'A';
-                queueCounters[queuePrefix] += 1;
-                var queueNumber = queuePrefix + String(queueCounters[queuePrefix]).padStart(2, '0');
+                var queueNumber = taskTickets.get(task) || '';
                 var submitter = task.submitter && task.submitter.name ? String(task.submitter.name).trim() : '匿名';
                 var avatar = task.submitter && task.submitter.avatar ? String(task.submitter.avatar).trim() : '';
                 var taskName = (task.data && task.data.basicInfo && task.data.basicInfo['\u578b\u53f7']) || task.taskType || '未命名任务';
