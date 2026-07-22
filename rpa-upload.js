@@ -57,6 +57,7 @@ async function getUploadTaskMode(taskId, password) {
         if (!res.ok || !json.ok) throw requestError(json.error || res.status, res.status);
         return {
             mode: json.mode,
+            cutoutMode: json.cutoutMode === 'vector' ? 'vector' : 'normal',
             outputFormat: json.outputFormat || (json.mode === 'cutout' ? 'png' : ''),
             aPlusDouble: json.aPlusDouble === true
         };
@@ -215,6 +216,8 @@ uploadBtn.addEventListener('click', async () => {
         if (taskInfo.aPlusDouble) {
             if (pendingFiles.length !== 1) throw new Error('A+ 连续双图任务请只上传一张完整成品图');
             setStatus('正在自动拆分为上下两张 1464 × 600 JPG...', null);
+        } else if (taskInfo.mode === 'cutout' && taskInfo.cutoutMode === 'vector') {
+            setStatus('矢量图白底任务正在处理...', null);
         } else if (taskInfo.mode === 'cutout') {
             setStatus(`白底抠图任务将导出 ${taskInfo.outputFormat.toUpperCase()}，正在处理...`, null);
         } else {

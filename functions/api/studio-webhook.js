@@ -90,6 +90,7 @@ export async function dispatchStudioTaskToRpa({ env, task, origin, webhookUrl, p
         const sourceImageUrl = refUrls[0]?.url;
         if (!sourceImageUrl) throw new Error(task.mode === 'cutout' ? 'Cutout image not found' : 'Retouch image not found');
         payload = { params: { "待处理图片链接": sourceImageUrl, "任务ID": task.id } };
+        if (task.mode === 'cutout' && task.cutoutMode === 'vector') payload.params["处理类型"] = '矢量图白底';
     } else if (task.mode === 'program') {
         pickedSize = normalizeStudioSize(task.size, task.desc || '');
         const translatedFields = await translateProgramFieldsForRpa(env, {

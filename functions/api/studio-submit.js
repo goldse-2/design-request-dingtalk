@@ -9,7 +9,7 @@ export async function onRequestPost(context) {
     try { body = await request.json(); }
     catch { return Response.json({ ok: false, error: 'Invalid JSON' }, { status: 400 }); }
 
-    const { mode, submitter, desc, want, note, scene, analyzePrompt, size, imageName, productName, title, subtitle, otherText, productKeys, refKeys, modelKeys, category, variantScope, colorName, colorHex, resizeTarget, resizeReflow, cutoutOutputFormat, aPlusDouble, photographerDecision, photographyExampleKey, photographyNote } = body;
+    const { mode, submitter, desc, want, note, scene, analyzePrompt, size, imageName, productName, title, subtitle, otherText, productKeys, refKeys, modelKeys, category, variantScope, colorName, colorHex, resizeTarget, resizeReflow, cutoutMode, cutoutOutputFormat, aPlusDouble, photographerDecision, photographyExampleKey, photographyNote } = body;
     if (!mode || !submitter) {
         return Response.json({ ok: false, error: 'Missing required fields' }, { status: 400 });
     }
@@ -107,6 +107,7 @@ export async function onRequestPost(context) {
         colorHex: colorHex || '',
         resizeTarget: resizeTarget || '',
         resizeReflow: resizeReflow === true,
+        cutoutMode: mode === 'cutout' && cutoutMode === 'vector' ? 'vector' : (mode === 'cutout' ? 'normal' : ''),
         cutoutOutputFormat: mode === 'cutout' && cutoutOutputFormat === 'jpg' ? 'jpg' : (mode === 'cutout' ? 'png' : ''),
         aPlusDouble: aPlusDouble === true,
         photographerDecision: waitingPhotography,
@@ -262,6 +263,7 @@ async function dispatchCutoutTask(request, env, task) {
             "任务ID": task.id
         }
     };
+    if (task.cutoutMode === 'vector') payload.params["处理类型"] = '矢量图白底';
     const webhookUrl = env.RPA_WEBHOOK_URL_CUTOUT || 'https://api-rpa.bazhuayu.com/api/v1/bots/webhooks/6a573bbfc272480ce63d81d4/invoke';
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 12000);

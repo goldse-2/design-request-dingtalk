@@ -795,7 +795,8 @@ function buildRpaPayload(task, origin) {
             payload: {
                 params: {
                     "待处理图片链接": sourceImageUrl,
-                    "任务ID": task.id
+                    "任务ID": task.id,
+                    ...(task.mode === 'cutout' && task.cutoutMode === 'vector' ? { "处理类型": '矢量图白底' } : {})
                 }
             }
         };

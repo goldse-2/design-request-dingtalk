@@ -30,6 +30,7 @@ export async function onRequestPut(context) {
     return Response.json({
         ok: true,
         mode: taskResult.task.mode || '',
+        cutoutMode: taskResult.task.cutoutMode === 'vector' ? 'vector' : 'normal',
         outputFormat: cutoutOutputFormat(taskResult.task),
         aPlusDouble: taskResult.task.aPlusDouble === true
     }, {

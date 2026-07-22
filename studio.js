@@ -710,6 +710,13 @@ const RETOUCH_FORM = `
                     <div class="retouch-selected-grid" id="cutoutSelected"></div>
                 </div>
                 <div class="sf-section">
+                    <label class="sf-label" for="cutoutMode">白底类型</label>
+                    <select id="cutoutMode" style="width:100%;height:42px;padding:0 12px;border:1px solid #d1d5db;border-radius:7px;background:#fff;color:#111827;font:inherit;cursor:pointer">
+                        <option value="normal" selected>普通白底</option>
+                        <option value="vector">矢量图白底</option>
+                    </select>
+                </div>
+                <div class="sf-section" id="cutoutOutputFormatSection">
                     <label class="sf-label" for="cutoutOutputFormat">导出格式</label>
                     <select id="cutoutOutputFormat" style="width:100%;height:42px;padding:0 12px;border:1px solid #d1d5db;border-radius:7px;background:#fff;color:#111827;font:inherit;cursor:pointer">
                         <option value="png" selected>PNG</option>
@@ -2987,9 +2994,18 @@ function initRetouchMode() {
         statusId: 'cutoutStatus',
         uploadKey: 'cutoutImages'
     });
+    const cutoutMode = document.getElementById('cutoutMode');
+    cutoutMode?.addEventListener('change', syncCutoutModeUi);
+    syncCutoutModeUi();
     document.getElementById('retouchSubmit').addEventListener('click', submitRetouch);
     document.getElementById('cutoutSubmit').addEventListener('click', submitCutout);
     loadRetouchQueue();
+}
+
+function syncCutoutModeUi() {
+    const vectorMode = document.getElementById('cutoutMode')?.value === 'vector';
+    const outputSection = document.getElementById('cutoutOutputFormatSection');
+    if (outputSection) outputSection.hidden = vectorMode;
 }
 
 function wireBatchImageUpload({ inputId, dropZoneId, selectedId, hintId, statusId, uploadKey }) {
@@ -4609,6 +4625,7 @@ async function submitTask(mode, payload, statusEl, btn, onSuccess) {
         if (payload.resizeTarget) submitPayload.resizeTarget = payload.resizeTarget;
         if (payload.resizeReflow !== undefined) submitPayload.resizeReflow = payload.resizeReflow === true;
         if (payload.cutoutOutputFormat) submitPayload.cutoutOutputFormat = payload.cutoutOutputFormat;
+        if (payload.cutoutMode) submitPayload.cutoutMode = payload.cutoutMode;
         if (payload.aPlusDouble !== undefined) submitPayload.aPlusDouble = payload.aPlusDouble === true;
         if (payload.photographerDecision !== undefined) submitPayload.photographerDecision = payload.photographerDecision === true;
         if (payload.photographyNote !== undefined) submitPayload.photographyNote = payload.photographyNote;
@@ -5133,7 +5150,10 @@ function submitRetouch() {
 
 function submitCutout() {
     const status = document.getElementById('cutoutStatus');
-    const cutoutOutputFormat = document.getElementById('cutoutOutputFormat')?.value === 'jpg' ? 'jpg' : 'png';
+    const cutoutMode = document.getElementById('cutoutMode')?.value === 'vector' ? 'vector' : 'normal';
+    const cutoutOutputFormat = cutoutMode === 'vector'
+        ? 'png'
+        : (document.getElementById('cutoutOutputFormat')?.value === 'jpg' ? 'jpg' : 'png');
     if (!uploads.cutoutImages.length) {
         showStudioFieldError(status, '请上传待处理图片', document.getElementById('cutoutDropZone'));
         return;
@@ -5146,7 +5166,7 @@ function submitCutout() {
         hintId: 'cutoutUploadHint',
         status,
         btn: document.getElementById('cutoutSubmit'),
-        extraPayload: { cutoutOutputFormat }
+        extraPayload: { cutoutMode, cutoutOutputFormat }
     });
 }
 
@@ -5339,6 +5359,7 @@ async function submitImageBatch({ mode, uploadKey, inputId, selectedId, hintId, 
     }
 
     if (submittedTasks.length) {
+        const vectorCutout = mode === 'cutout' && extraPayload.cutoutMode === 'vector';
         const formatLabel = mode === 'cutout' ? String(extraPayload.cutoutOutputFormat || 'png').toUpperCase() : '';
         const firstQueueInfo = submittedTasks[0]?.queueInfo;
         const lastQueueInfo = submittedTasks[submittedTasks.length - 1]?.queueInfo;
@@ -5348,7 +5369,9 @@ async function submitImageBatch({ mode, uploadKey, inputId, selectedId, hintId, 
         const batchMinutes = Math.max(1, Number(lastQueueInfo?.completionMinutes) || 1);
         const message = mode === 'retouch'
             ? `已提交 ${submittedTasks.length} 个精修任务，${aheadText}；每张通常需要 20 分钟，预计这一批约 ${batchMinutes} 分钟完成`
-            : `已提交 ${submittedTasks.length} 个白底抠图任务，${aheadText}；将逐张处理并导出 ${formatLabel}，预计这一批约 ${batchMinutes} 分钟完成`;
+            : vectorCutout
+                ? `已提交 ${submittedTasks.length} 个矢量图白底任务，${aheadText}；将逐张处理，预计这一批约 ${batchMinutes} 分钟完成`
+                : `已提交 ${submittedTasks.length} 个白底抠图任务，${aheadText}；将逐张处理并导出 ${formatLabel}，预计这一批约 ${batchMinutes} 分钟完成`;
         showSuccessModal(null, failures.length ? `${message}；另有 ${failures.length} 张提交失败，可关闭弹窗后重试` : message);
         if (mode === 'retouch') loadRetouchQueue();
     }
