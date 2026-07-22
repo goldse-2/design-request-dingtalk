@@ -51,9 +51,10 @@
         .studio-tabs { flex-wrap: wrap; }
         .free-prompt-label-row { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px; }
         .free-prompt-label-row .sf-label { min-width:0; margin:0; }
-        .prompt-optimize-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 32px; padding: 6px 11px; border: 1px solid #c7d2fe; border-radius: 7px; background: #eef2ff; color: #3730a3; font-size: .78rem; font-weight: 700; cursor: pointer; white-space: nowrap; }
-        .prompt-optimize-btn:hover { border-color: #818cf8; background: #e0e7ff; }
-        .prompt-optimize-btn:disabled { cursor: wait; opacity: .7; }
+        .prompt-optimize-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 30px; padding: 5px 10px; border: 1px solid #86efac; border-radius: 7px; background: #fff; color: #047857; font-size: .76rem; font-weight: 800; cursor: pointer; white-space: nowrap; box-shadow: 0 1px 2px rgba(16,185,129,.08); }
+        .prompt-optimize-btn:hover:not(:disabled) { border-color: #22c55e; background: #ecfdf5; color: #166534; }
+        .prompt-optimize-btn:disabled { cursor: wait; opacity: .62; }
+        .prompt-optimize-btn.loading { border-color: #86efac; background: #ecfdf5; color: #166534; }
         .prompt-optimize-btn.loading svg { animation: promptOptimizeSpin 1.2s linear infinite; }
         .prompt-optimize-status { display:block; min-width:0; margin:-2px 0 7px; color:#6b7280; font-size:.75rem; line-height:1.4; text-align:right; }
         .prompt-optimize-status.success { color: #047857; }

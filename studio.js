@@ -389,7 +389,7 @@ ${renderShootRequestLauncher('free')}
                     <div class="sf-label">提示词 <span class="sf-req">*</span></div>
                     <button type="button" class="prompt-optimize-btn" id="optimizePromptBtn">
                         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.5 3.5L7 8l3.5 1.5L12 13l1.5-3.5L17 8l-3.5-1.5L12 3Z"/><path d="m5 14-.8 1.8L2.5 16.5l1.7.7L5 19l.8-1.8 1.7-.7-1.7-.7L5 14Z"/><path d="m18 14-1.2 2.8L14 18l2.8 1.2L18 22l1.2-2.8L22 18l-2.8-1.2L18 14Z"/></svg>
-                        <span>AI 美化提示词</span>
+                        <span>AI 优化</span>
                     </button>
                 </div>
                 <span class="prompt-optimize-status" id="optimizePromptStatus"></span>
