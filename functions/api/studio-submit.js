@@ -263,7 +263,7 @@ async function dispatchCutoutTask(request, env, task) {
             "任务ID": task.id
         }
     };
-    if (task.cutoutMode === 'vector') payload.params["处理类型"] = '矢量图白底';
+    payload.params["处理类型"] = task.cutoutMode === 'vector' ? '矢量图白底' : '普通白底';
     const webhookUrl = env.RPA_WEBHOOK_URL_CUTOUT || 'https://api-rpa.bazhuayu.com/api/v1/bots/webhooks/6a573bbfc272480ce63d81d4/invoke';
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 12000);
