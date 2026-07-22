@@ -585,6 +585,7 @@ const SHEET_SELF_WORKFLOW = `
 
 const SHEET_SELF_FORM = `
     <div class="sheet-self-layout">
+${SHEET_SELF_WORKFLOW}
         <div class="studio-panel sheet-self-panel">
             <div class="sheet-self-head">
                 <div>
@@ -593,7 +594,6 @@ const SHEET_SELF_FORM = `
                 </div>
                 <div class="sheet-self-save" id="sheetSelfSaveStatus">等待编辑</div>
             </div>
-${SHEET_SELF_WORKFLOW}
             <div class="sheet-self-global-product">
                 <label for="sheetSelfProductName">统一产品名称 <span>*</span></label>
                 <div class="sheet-self-global-input">
