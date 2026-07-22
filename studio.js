@@ -445,6 +445,22 @@ const PROGRAM_FORM = `
                 </div>
 ${renderAPlusDoubleLauncher('program')}
             </div>
+            <div class="sf-section" id="progProductSection">
+                <div class="sf-label">白底产品图 <span class="sf-req">*</span> <span class="sf-sub">(2张)</span></div>
+                <div class="program-product-hint">有不同角度时，请上传两个不同角度；没有其他角度时，请将同一张图片上传两次。</div>
+                <div class="sf-upload-row">
+                    <div class="sf-upload-box" id="progProductDrop" tabindex="-1">
+                        <input type="file" id="progProductInput" accept="image/*" multiple hidden>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="24" height="24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        <span>上传</span>
+                        <small>你的白底图 · 单张最大 8 MB</small>
+                    </div>
+                    <div class="sf-preview-list" id="progProductThumbs"></div>
+                </div>
+            </div>
+            <div class="sf-section" id="programPhotographerDecisionSection">
+${renderShootRequestLauncher('program')}
+            </div>
             <div class="sf-section">
                 <div class="program-ai-label-row">
                     <div class="sf-label">产品名称 <span class="sf-req">*</span></div>
@@ -476,22 +492,6 @@ ${renderAPlusDoubleLauncher('program')}
             <div class="sf-section">
                 <div class="sf-label">其他文案 <span class="sf-sub">（可选，输入中文会自动翻译成英语，英语默认）</span></div>
                 <textarea class="sf-textarea" id="progOtherText" rows="3" maxlength="300" placeholder="例如：降噪技术；续航持久；蓝牙5.0"></textarea>
-            </div>
-            <div class="sf-section" id="programPhotographerDecisionSection">
-${renderShootRequestLauncher('program')}
-            </div>
-            <div class="sf-section" id="progProductSection">
-                <div class="sf-label">白底产品图 <span class="sf-req">*</span> <span class="sf-sub">(2张)</span></div>
-                <div class="program-product-hint">有不同角度时，请上传两个不同角度；没有其他角度时，请将同一张图片上传两次。</div>
-                <div class="sf-upload-row">
-                    <div class="sf-upload-box" id="progProductDrop" tabindex="-1">
-                        <input type="file" id="progProductInput" accept="image/*" multiple hidden>
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="24" height="24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                        <span>上传</span>
-                        <small>你的白底图 · 单张最大 8 MB</small>
-                    </div>
-                    <div class="sf-preview-list" id="progProductThumbs"></div>
-                </div>
             </div>
             <div class="sf-section" id="progSizeSection">
                 <div class="sf-label">尺寸 <span class="sf-req">*</span></div>
