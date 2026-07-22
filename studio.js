@@ -269,7 +269,11 @@ function renderAPlusDoubleLauncher(mode) {
                 <div class="a-plus-double-launcher" id="${mode}APlusDoubleLauncher">
                     <div class="a-plus-double-action-row">
                         <button type="button" class="a-plus-double-btn" id="${mode}APlusDoubleBtn" onclick="openAPlusDoubleModal('${mode}')" aria-pressed="false">
-                            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="8" rx="2"/><rect x="3" y="13" width="18" height="8" rx="2"/><path d="M8 7h8M8 17h8"/></svg>
+                            <svg class="a-plus-amazon-logo" viewBox="0 0 42 22" aria-hidden="true">
+                                <text x="1" y="12.5" fill="#111827" font-family="Arial, sans-serif" font-size="10.5" font-weight="700">amazon</text>
+                                <path d="M7 15.2c7.7 4.1 18.7 4.4 27.2.2" fill="none" stroke="#ff9900" stroke-width="2" stroke-linecap="round"/>
+                                <path d="m31.2 14.2 4 .5-1.7 3.5" fill="none" stroke="#ff9900" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
                             <span>A+ 连续双图（亚马逊A+首图）</span>
                         </button>
                         <button type="button" class="a-plus-double-info" onclick="toggleAPlusDoubleHelp(event, '${mode}')" aria-label="查看 A+ 连续双图说明" aria-describedby="${mode}APlusDoubleHelp">
@@ -443,7 +447,6 @@ const PROGRAM_FORM = `
                     </div>
                     <div class="sf-preview-list" id="progRefThumbs"></div>
                 </div>
-${renderAPlusDoubleLauncher('program')}
             </div>
             <div class="sf-section" id="progProductSection">
                 <div class="sf-label">白底产品图 <span class="sf-req">*</span> <span class="sf-sub">(2张)</span></div>
@@ -457,6 +460,7 @@ ${renderAPlusDoubleLauncher('program')}
                     </div>
                     <div class="sf-preview-list" id="progProductThumbs"></div>
                 </div>
+${renderAPlusDoubleLauncher('program')}
             </div>
             <div class="sf-section" id="programPhotographerDecisionSection">
 ${renderShootRequestLauncher('program')}
