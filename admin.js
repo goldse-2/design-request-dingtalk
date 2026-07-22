@@ -3872,23 +3872,79 @@ function renderStudioHistoryCard(task) {
         const previewSize = studioResultPreviewSize(task);
         const label = document.createElement('div');
         label.style.cssText = 'font-size:0.82rem;color:#16a34a;font-weight:600;margin:14px 0 6px';
-        label.textContent = '✓ 成品图（点击下载）';
+        label.textContent = '✓ 成品图（点击预览）';
         card.appendChild(label);
         const row = document.createElement('div');
         row.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px';
         task.resultKeys.forEach(k => {
-            const a = document.createElement('a');
-            a.href = '/api/library-file/' + encodeURIComponent(k.key) + '?dl=1';
-            a.download = k.name;
-            a.title = '下载 ' + k.name;
-            a.style.cssText = 'width:' + previewSize.width + 'px;height:' + previewSize.height + 'px;display:block';
-            a.innerHTML = '<img src="/api/library-file/' + encodeURIComponent(k.key) + '" style="width:100%;height:100%;object-fit:' + previewSize.fit + ';background:#f8fafc;border-radius:8px;border:1px solid #e5e7eb" loading="lazy">';
-            row.appendChild(a);
+            const imageUrl = '/api/library-file/' + encodeURIComponent(k.key);
+            const previewButton = document.createElement('button');
+            previewButton.type = 'button';
+            previewButton.className = 'studio-result-preview-trigger';
+            previewButton.setAttribute('aria-label', '预览 ' + (k.name || '成品图片'));
+            previewButton.title = '点击预览';
+            previewButton.style.cssText = 'width:' + previewSize.width + 'px;height:' + previewSize.height + 'px';
+            previewButton.innerHTML = '<img src="' + imageUrl + '" style="width:100%;height:100%;object-fit:' + previewSize.fit + ';background:#f8fafc;border-radius:8px;border:1px solid #e5e7eb" loading="lazy">';
+            previewButton.onclick = () => openStudioResultPreview(imageUrl, imageUrl + '?dl=1', k.name || '成品图片');
+            row.appendChild(previewButton);
         });
         card.appendChild(row);
     }
     
     return card;
+}
+
+function openStudioResultPreview(imageUrl, downloadUrl, fileName) {
+    document.getElementById('studioResultPreviewModal')?.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'studioResultPreviewModal';
+    overlay.className = 'studio-result-preview-modal';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+
+    const dialog = document.createElement('div');
+    dialog.className = 'studio-result-preview-dialog';
+    const head = document.createElement('div');
+    head.className = 'studio-result-preview-head';
+    const name = document.createElement('div');
+    name.className = 'studio-result-preview-name';
+    name.textContent = fileName;
+    const closeButton = document.createElement('button');
+    closeButton.type = 'button';
+    closeButton.className = 'studio-result-preview-close';
+    closeButton.setAttribute('aria-label', '关闭预览');
+    closeButton.textContent = '×';
+    head.append(name, closeButton);
+
+    const imageWrap = document.createElement('div');
+    imageWrap.className = 'studio-result-preview-image-wrap';
+    const image = document.createElement('img');
+    image.className = 'studio-result-preview-image';
+    image.src = imageUrl;
+    image.alt = fileName;
+    imageWrap.appendChild(image);
+
+    const foot = document.createElement('div');
+    foot.className = 'studio-result-preview-foot';
+    const download = document.createElement('a');
+    download.className = 'studio-result-preview-download';
+    download.href = downloadUrl;
+    download.download = fileName;
+    download.textContent = '下载图片';
+    foot.appendChild(download);
+    dialog.append(head, imageWrap, foot);
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    const close = () => {
+        document.removeEventListener('keydown', onKeyDown);
+        overlay.remove();
+    };
+    const onKeyDown = event => { if (event.key === 'Escape') close(); };
+    closeButton.addEventListener('click', close);
+    overlay.addEventListener('click', event => { if (event.target === overlay) close(); });
+    document.addEventListener('keydown', onKeyDown);
+    closeButton.focus();
 }
 
 function studioResultPreviewSize(task) {

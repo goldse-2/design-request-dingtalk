@@ -122,10 +122,25 @@
 .retouch-review-field small { display: block; margin-top: 4px; color: #94a3b8; font-size: .68rem; }
 .retouch-review-dialog-status { min-height: 18px; color: #dc2626; font-size: .74rem; }
 .retouch-review-dialog-foot { display: flex; justify-content: flex-end; gap: 8px; }
+.studio-result-preview-trigger { display: block; padding: 0; border: 0; background: transparent; cursor: zoom-in; }
+.studio-result-preview-trigger:focus-visible { outline: 2px solid #6366f1; outline-offset: 3px; border-radius: 8px; }
+.studio-result-preview-modal { position: fixed; inset: 0; z-index: 16000; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(15, 23, 42, .72); }
+.studio-result-preview-dialog { display: flex; flex-direction: column; width: min(1120px, 100%); max-height: calc(100vh - 40px); overflow: hidden; border-radius: 10px; background: #fff; box-shadow: 0 24px 70px rgba(0, 0, 0, .32); }
+.studio-result-preview-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; border-bottom: 1px solid #e5e7eb; }
+.studio-result-preview-name { min-width: 0; overflow: hidden; color: #111827; font-size: .82rem; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.studio-result-preview-close { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 6px; background: #f1f5f9; color: #475569; font-size: 20px; cursor: pointer; }
+.studio-result-preview-image-wrap { display: flex; min-height: 0; align-items: center; justify-content: center; overflow: auto; padding: 20px; background: #f8fafc; }
+.studio-result-preview-image { display: block; max-width: 100%; max-height: calc(100vh - 150px); object-fit: contain; }
+.studio-result-preview-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 18px; border-top: 1px solid #e5e7eb; }
+.studio-result-preview-download { min-height: 34px; padding: 7px 12px; border: 1px solid #4f46e5; border-radius: 7px; background: #4f46e5; color: #fff; font-size: .76rem; font-weight: 700; text-decoration: none; cursor: pointer; }
+.studio-result-preview-download:hover { border-color: #4338ca; background: #4338ca; }
 @media (max-width: 620px) {
     .retouch-library-review-grid { grid-template-columns: 1fr; }
     .retouch-review-dialog-body { grid-template-columns: minmax(0, 1fr); }
     .retouch-review-dialog-image { width: 100%; aspect-ratio: 16 / 9; }
+    .studio-result-preview-modal { padding: 10px; }
+    .studio-result-preview-dialog { max-height: calc(100vh - 20px); }
+    .studio-result-preview-image-wrap { padding: 10px; }
 }
 </style>
 </head>
