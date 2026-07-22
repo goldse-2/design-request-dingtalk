@@ -49,16 +49,17 @@
         .size-custom-row input { width: 100%; min-height: 36px; padding: 7px 9px; border: 1px solid #d1d5db; border-radius: 8px; font-size: .82rem; }
         .size-custom-row span { color: #9ca3af; font-weight: 700; }
         .studio-tabs { flex-wrap: wrap; }
-        .prompt-optimize-row { display: flex; align-items: center; gap: 10px; min-height: 34px; margin: 6px 0 8px; }
+        .free-prompt-label-row { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px; }
+        .free-prompt-label-row .sf-label { min-width:0; margin:0; }
         .prompt-optimize-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 32px; padding: 6px 11px; border: 1px solid #c7d2fe; border-radius: 7px; background: #eef2ff; color: #3730a3; font-size: .78rem; font-weight: 700; cursor: pointer; white-space: nowrap; }
         .prompt-optimize-btn:hover { border-color: #818cf8; background: #e0e7ff; }
         .prompt-optimize-btn:disabled { cursor: wait; opacity: .7; }
         .prompt-optimize-btn.loading svg { animation: promptOptimizeSpin 1.2s linear infinite; }
-        .prompt-optimize-status { min-width: 0; font-size: .75rem; color: #6b7280; line-height: 1.4; }
+        .prompt-optimize-status { display:block; min-width:0; margin:-2px 0 7px; color:#6b7280; font-size:.75rem; line-height:1.4; text-align:right; }
         .prompt-optimize-status.success { color: #047857; }
         .prompt-optimize-status.error { color: #b91c1c; }
         @keyframes promptOptimizeSpin { to { transform: rotate(360deg); } }
-        @media (max-width: 640px) { .prompt-optimize-row { align-items: flex-start; flex-wrap: wrap; } .program-title-ai-row { align-items:flex-start; flex-wrap:wrap; } }
+        @media (max-width: 640px) { .free-prompt-label-row { align-items:flex-start; } .program-title-ai-row { align-items:flex-start; flex-wrap:wrap; } }
         .a-plus-double-launcher { margin-top: 10px; }
         .a-plus-double-action-row { position: relative; display: flex; align-items: stretch; gap: 7px; }
         .a-plus-double-btn { min-width: 0; min-height: 40px; flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 7px; background: #fff; color: #334155; font-size: .78rem; font-weight: 800; line-height: 1.35; cursor: pointer; }

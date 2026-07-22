@@ -367,21 +367,6 @@ const FREE_FORM = `
                 </div>
             </div>
             <div class="sf-section">
-                <div class="sf-label">提示词 <span class="sf-req">*</span></div>
-                <textarea class="sf-textarea" id="freeDesc" rows="5" maxlength="8000" placeholder="你想创作什么？描述风格、场景、文案排版等" oninput="updateCharCount(this,'freeDescCount',8000)"></textarea>
-                <div style="text-align:right;font-size:0.78rem;color:#9ca3af;margin-top:4px"><span id="freeDescCount">0</span> / 8000</div>
-                <div class="prompt-optimize-row">
-                    <button type="button" class="prompt-optimize-btn" id="optimizePromptBtn">
-                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.5 3.5L7 8l3.5 1.5L12 13l1.5-3.5L17 8l-3.5-1.5L12 3Z"/><path d="m5 14-.8 1.8L2.5 16.5l1.7.7L5 19l.8-1.8 1.7-.7-1.7-.7L5 14Z"/><path d="m18 14-1.2 2.8L14 18l2.8 1.2L18 22l1.2-2.8L22 18l-2.8-1.2L18 14Z"/></svg>
-                        <span>AI 美化提示词</span>
-                    </button>
-                    <span class="prompt-optimize-status" id="optimizePromptStatus"></span>
-                </div>
-                <div class="prompt-mention-hint">提示：上传图片后，可在提示词中输入 <strong>@</strong> 引用图片，例如 <strong>@参考图1</strong></div>
-${renderAPlusDoubleLauncher('free')}
-${renderShootRequestLauncher('free')}
-            </div>
-            <div class="sf-section">
                 <div class="sf-label">图片 <span class="sf-sub">（可选）</span> <span class="sf-sub" id="freeImgCount">(0/4)</span></div>
                 <div class="sf-upload-row">
                     <div class="sf-upload-box" id="freeProductDrop">
@@ -392,11 +377,26 @@ ${renderShootRequestLauncher('free')}
                     </div>
                     <div class="sf-preview-list" id="freePreviewList"></div>
                 </div>
+${renderShootRequestLauncher('free')}
                 <button type="button" class="sf-lib-btn" style="margin-top:10px" onclick="openLibPicker()">📦 从白底素材库选</button>
                 <button type="button" class="sf-lib-btn" style="margin-top:10px" onclick="openModelPicker()">🧍 选择模特</button>
                 <button type="button" class="sf-lib-btn" style="margin-top:10px" onclick="openScenePicker()">🏞 选择场景</button>
                 <div id="freeModelPreview" style="margin-top:10px"></div>
                 <div id="freeScenePreview" style="margin-top:10px"></div>
+            </div>
+            <div class="sf-section">
+                <div class="free-prompt-label-row">
+                    <div class="sf-label">提示词 <span class="sf-req">*</span></div>
+                    <button type="button" class="prompt-optimize-btn" id="optimizePromptBtn">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.5 3.5L7 8l3.5 1.5L12 13l1.5-3.5L17 8l-3.5-1.5L12 3Z"/><path d="m5 14-.8 1.8L2.5 16.5l1.7.7L5 19l.8-1.8 1.7-.7-1.7-.7L5 14Z"/><path d="m18 14-1.2 2.8L14 18l2.8 1.2L18 22l1.2-2.8L22 18l-2.8-1.2L18 14Z"/></svg>
+                        <span>AI 美化提示词</span>
+                    </button>
+                </div>
+                <span class="prompt-optimize-status" id="optimizePromptStatus"></span>
+                <textarea class="sf-textarea" id="freeDesc" rows="5" maxlength="8000" placeholder="你想创作什么？描述风格、场景、文案排版等" oninput="updateCharCount(this,'freeDescCount',8000)"></textarea>
+                <div style="text-align:right;font-size:0.78rem;color:#9ca3af;margin-top:4px"><span id="freeDescCount">0</span> / 8000</div>
+                <div class="prompt-mention-hint">提示：上传图片后，可在提示词中输入 <strong>@</strong> 引用图片，例如 <strong>@参考图1</strong></div>
+${renderAPlusDoubleLauncher('free')}
             </div>
             <div class="sf-section" id="freeFileNameSection">
                 <div class="sf-label">图片文件命名 <span class="sf-sub">（可选）</span></div>
