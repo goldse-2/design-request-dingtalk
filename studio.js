@@ -1555,7 +1555,7 @@ function initStudioHelp() {
         <div class="studio-help-launcher">
             <button type="button" class="studio-help-trigger" id="studioHelpTrigger" aria-expanded="false" aria-controls="studioHelpOptions">
                 <span class="studio-help-trigger-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="8.5"/><path d="M9.7 9.3a2.5 2.5 0 1 1 3.95 2.02c-.95.7-1.65 1.16-1.65 2.48"/><path d="M12 16.8h.01"/></svg>
+                    <img src="assets/studio-help/phone-assist.png" alt="">
                 </span>
                 <span class="studio-help-trigger-copy"><strong id="studioHelpTriggerTitle">问题反馈 / 协助</strong><small id="studioHelpTriggerHint">图片、描述词或使用问题都可以告诉我们</small></span>
                 <svg class="studio-help-trigger-caret" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
