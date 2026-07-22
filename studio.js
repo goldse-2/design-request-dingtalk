@@ -432,6 +432,19 @@ const PROGRAM_FORM = `
     <div class="studio-layout">
         <div class="studio-panel studio-generation-panel">
             <div class="studio-generation-scroll">
+            <div class="sf-section" id="progRefSection">
+                <div class="sf-label">竞品图片 <span class="sf-req">*</span> <span class="sf-sub">(1张)</span></div>
+                <div class="sf-upload-row">
+                    <div class="sf-upload-box" id="progRefDrop" tabindex="-1">
+                        <input type="file" id="progRefInput" accept="image/*" hidden>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="24" height="24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        <span>上传</span>
+                        <small>竞品图片 · 最大 8 MB</small>
+                    </div>
+                    <div class="sf-preview-list" id="progRefThumbs"></div>
+                </div>
+${renderAPlusDoubleLauncher('program')}
+            </div>
             <div class="sf-section">
                 <div class="program-ai-label-row">
                     <div class="sf-label">产品名称 <span class="sf-req">*</span></div>
@@ -463,19 +476,6 @@ const PROGRAM_FORM = `
             <div class="sf-section">
                 <div class="sf-label">其他文案 <span class="sf-sub">（可选，输入中文会自动翻译成英语，英语默认）</span></div>
                 <textarea class="sf-textarea" id="progOtherText" rows="3" maxlength="300" placeholder="例如：降噪技术；续航持久；蓝牙5.0"></textarea>
-            </div>
-            <div class="sf-section" id="progRefSection">
-                <div class="sf-label">要模仿的图 <span class="sf-req">*</span> <span class="sf-sub">(1张)</span></div>
-                <div class="sf-upload-row">
-                    <div class="sf-upload-box" id="progRefDrop" tabindex="-1">
-                        <input type="file" id="progRefInput" accept="image/*" hidden>
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="24" height="24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                        <span>上传</span>
-                        <small>要模仿的图 · 最大 8 MB</small>
-                    </div>
-                    <div class="sf-preview-list" id="progRefThumbs"></div>
-                </div>
-${renderAPlusDoubleLauncher('program')}
             </div>
             <div class="sf-section" id="programPhotographerDecisionSection">
 ${renderShootRequestLauncher('program')}
@@ -535,8 +535,8 @@ const SHEET_SELF_WORKFLOW = `
                 </div>
                 <div class="sheet-self-workflow-copy">
                     <span>步骤 01</span>
-                    <h4>选择尺寸与参考图</h4>
-                    <p>设置输出尺寸，上传需要模仿的图片。</p>
+                    <h4>选择尺寸与竞品图片</h4>
+                    <p>设置输出尺寸，上传竞品图片。</p>
                 </div>
             </li>
             <li class="sheet-self-workflow-step">
@@ -2050,13 +2050,13 @@ function renderSheetSelfSlot(slot, slotIndex) {
     const size = normalizeSheetSelfSize(slot.size);
     const isAPlus = size === A_PLUS_DOUBLE_SIZE;
     const noProductImage = slot.noProductImage === true;
-    const reference = renderSheetSelfImage(slot.referenceKey, slotIndex, 'reference', 0, isAPlus ? 'A+ 上下双图参考' : '要模仿的图', isAPlus ? 'a_plus' : 'reference');
+    const reference = renderSheetSelfImage(slot.referenceKey, slotIndex, 'reference', 0, isAPlus ? 'A+ 上下双图参考' : '竞品图片', isAPlus ? 'a_plus' : 'reference');
     const products = slot.photographer || noProductImage
         ? ''
         : [0, 1].map(index => renderSheetSelfImage(slot.productKeys[index], slotIndex, 'product', index, `白底产品图 ${index + 1}`)).join('');
     const uploadDisabled = slot.uploading ? ' disabled' : '';
     const copyDisabled = !slot.referenceKey?.key || slot.copyAiBusy ? ' disabled' : '';
-    const copyStatus = slot.copyAiStatus || (slot.referenceKey?.key ? '参考图已上传，可以生成' : '请先上传要模仿的图');
+    const copyStatus = slot.copyAiStatus || (slot.referenceKey?.key ? '竞品图片已上传，可以生成' : '请先上传竞品图片');
     const copyState = slot.copyAiState || (slot.referenceKey?.key ? 'success' : '');
     const copyTools = `<div class="sheet-self-copy-tools">
         <button type="button" class="program-ai-btn${slot.copyAiBusy ? ' loading' : ''}" data-sheet-generate-copy data-slot-index="${slotIndex}"${copyDisabled}>
@@ -2334,7 +2334,7 @@ function openSheetImageSource(slotIndex, type) {
     const overlay = document.createElement('div');
     overlay.id = 'sheetImageSourceModal';
     overlay.className = 'sheet-source-overlay';
-    const label = type === 'reference' ? '要模仿的图' : '白底产品图';
+    const label = type === 'reference' ? '竞品图片' : '白底产品图';
     overlay.innerHTML = `<div class="sheet-source-dialog" role="dialog" aria-modal="true" aria-label="选择图片来源">
         <div class="sheet-source-head"><strong>选择${label}来源</strong><button type="button" class="sheet-source-close" aria-label="关闭">×</button></div>
         <div class="sheet-source-options">
@@ -2669,7 +2669,7 @@ async function submitSheetSelf() {
         const invalidIndex = invalidSlot.index;
         const slot = invalidSlot;
         const message = !slot.referenceKey?.key
-                ? (slot.aPlusDouble ? `第 ${invalidIndex + 1} 张请上传 A+ 上下两张 1464 × 600 图片` : `第 ${invalidIndex + 1} 张请上传要模仿的图`)
+                ? (slot.aPlusDouble ? `第 ${invalidIndex + 1} 张请上传 A+ 上下两张 1464 × 600 图片` : `第 ${invalidIndex + 1} 张请上传竞品图片`)
                 : `第 ${invalidIndex + 1} 张请上传两张白底产品图，或开启“无需上传产品”/“由摄影师决定”`;
         showStudioFieldError(status, message, document.querySelector(`[data-sheet-slot="${invalidIndex}"]`));
         return;
@@ -4381,7 +4381,7 @@ async function runProgramCopyGeneration() {
     if (!button || !status || programCopyAiBusy) return;
     clearTimeout(programCopyAiStatusTimer);
     if (!image) {
-        setProgramAiStatus(status, '请先上传要模仿的图', 'error');
+        setProgramAiStatus(status, '请先上传竞品图片', 'error');
         programCopyAiStatusTimer = setTimeout(() => { status.hidden = true; }, 2600);
         return;
     }
@@ -5109,7 +5109,7 @@ function submitProgram() {
     const photographyNote = document.getElementById('programPhotographerNote')?.value.trim() || '';
     if (!productName) { showStudioFieldError(status, '请填写产品名称', document.getElementById('progProductName')); return; }
     if (!size) { showStudioFieldError(status, '请选择或填写尺寸', document.getElementById('progSizeSelectPicker')); return; }
-    if (uploads.progRef.length !== 1) { showStudioFieldError(status, '请上传1张要模仿的图', document.getElementById('progRefDrop')); return; }
+    if (uploads.progRef.length !== 1) { showStudioFieldError(status, '请上传1张竞品图片', document.getElementById('progRefDrop')); return; }
     if (!photographerDecision && uploads.progProduct.length !== 2) { showStudioFieldError(status, '请上传2张白底产品图（当前' + uploads.progProduct.length + '张）', document.getElementById('progProductDrop')); return; }
     submitTask('program', { productName, title, subtitle, otherText, size, aPlusDouble, analyzePrompt: ANALYZE_PROMPT, photographerDecision, photographyNote, photographyExampleImage: inlineShootRequestState.program.image, refImages: uploads.progRef, productImages: photographerDecision ? [] : uploads.progProduct }, status, document.getElementById('progSubmit'), showSuccessModal);
 }
@@ -5430,8 +5430,8 @@ function showProgramGuide() {
             <div style="display:flex;align-items:flex-start;gap:16px;margin-bottom:32px">
                 <div style="flex-shrink:0;width:48px;height:48px;background:#111827;color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:1.3rem">1</div>
                 <div style="flex:1;padding-top:8px">
-                    <h3 style="font-size:1.2rem;font-weight:600;color:#111827;margin-bottom:8px">上传要模仿的竞品图</h3>
-                    <p style="color:#6b7280;font-size:0.95rem;line-height:1.6;margin:0">上传1张你想模仿的亚马逊产品图，AI会分析其风格、构图、光影效果</p>
+                    <h3 style="font-size:1.2rem;font-weight:600;color:#111827;margin-bottom:8px">上传竞品图片</h3>
+                    <p style="color:#6b7280;font-size:0.95rem;line-height:1.6;margin:0">上传1张作为参考的亚马逊产品图片，AI会分析其风格、构图和光影效果</p>
                 </div>
             </div>
             <div style="text-align:center;color:#d1d5db;font-size:0.85rem;margin-bottom:24px">第 1 步 / 共 3 步</div>
