@@ -517,6 +517,86 @@ ${renderSizePicker('progSizeSelect')}
         </div>
     </div>`;
 
+const SHEET_SELF_WORKFLOW = `
+    <section class="sheet-self-workflow" aria-labelledby="sheetSelfWorkflowTitle">
+        <div class="sheet-self-workflow-intro">
+            <div class="sheet-self-workflow-kicker">使用流程</div>
+            <h3 id="sheetSelfWorkflowTitle">四步完成表格自助</h3>
+            <p>按顺序完善每个图片位，系统会自动保存当前内容。</p>
+        </div>
+        <ol class="sheet-self-workflow-list">
+            <li class="sheet-self-workflow-step" data-tone="blue">
+                <div class="sheet-self-workflow-icon" aria-hidden="true">
+                    <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="8" y="11" width="39" height="34" rx="3"/>
+                        <path d="m12 39 10-10 7 7 6-6 8 9"/>
+                        <circle cx="36" cy="20" r="3"/>
+                        <path d="M15 51h26M53 23v24M49 27l4-4 4 4M49 43l4 4 4-4"/>
+                    </svg>
+                </div>
+                <div class="sheet-self-workflow-copy">
+                    <span>步骤 01</span>
+                    <h4>选择尺寸与参考图</h4>
+                    <p>设置输出尺寸，上传需要模仿的图片。</p>
+                </div>
+            </li>
+            <li class="sheet-self-workflow-arrow" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m9 5 7 7-7 7"/></svg>
+            </li>
+            <li class="sheet-self-workflow-step" data-tone="green">
+                <div class="sheet-self-workflow-icon" aria-hidden="true">
+                    <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M16 8h26l8 8v39H16z"/>
+                        <path d="M42 8v10h8M23 26h20M23 34h20M23 42h12"/>
+                        <path d="m39 48 12-12 5 5-12 12-7 2zM48 39l5 5"/>
+                    </svg>
+                </div>
+                <div class="sheet-self-workflow-copy">
+                    <span>步骤 02</span>
+                    <h4>修改标题与文案</h4>
+                    <p>手动填写，或使用 AI 生成标题和卖点。</p>
+                </div>
+            </li>
+            <li class="sheet-self-workflow-arrow" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m9 5 7 7-7 7"/></svg>
+            </li>
+            <li class="sheet-self-workflow-step" data-tone="amber">
+                <div class="sheet-self-workflow-icon" aria-hidden="true">
+                    <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M13 22h38a5 5 0 0 1 5 5v22a5 5 0 0 1-5 5H13a5 5 0 0 1-5-5V27a5 5 0 0 1 5-5Z"/>
+                        <path d="m21 22 4-8h14l4 8"/>
+                        <circle cx="32" cy="38" r="9"/>
+                        <circle cx="49" cy="29" r="2"/>
+                        <path d="m27.5 38 3 3 6-7"/>
+                    </svg>
+                </div>
+                <div class="sheet-self-workflow-copy">
+                    <span>步骤 03</span>
+                    <h4>确认素材与拍摄</h4>
+                    <p>检查白底素材，缺少图片时开启摄影师协助。</p>
+                </div>
+            </li>
+            <li class="sheet-self-workflow-arrow" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m9 5 7 7-7 7"/></svg>
+            </li>
+            <li class="sheet-self-workflow-step" data-tone="ink">
+                <div class="sheet-self-workflow-icon" aria-hidden="true">
+                    <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="m8 30 46-19-14 43-10-17z"/>
+                        <path d="m30 37 24-26M30 37l-2 13 12 4"/>
+                        <circle cx="49" cy="48" r="9" fill="currentColor" stroke="none"/>
+                        <path d="m45 48 3 3 5-6" stroke="#fff"/>
+                    </svg>
+                </div>
+                <div class="sheet-self-workflow-copy">
+                    <span>步骤 04</span>
+                    <h4>发布并提交</h4>
+                    <p>确认已填写的图片位，提交后等待完成通知。</p>
+                </div>
+            </li>
+        </ol>
+    </section>`;
+
 const SHEET_SELF_FORM = `
     <div class="sheet-self-layout">
         <div class="studio-panel sheet-self-panel">
@@ -527,6 +607,7 @@ const SHEET_SELF_FORM = `
                 </div>
                 <div class="sheet-self-save" id="sheetSelfSaveStatus">等待编辑</div>
             </div>
+${SHEET_SELF_WORKFLOW}
             <div class="sheet-self-global-product">
                 <label for="sheetSelfProductName">统一产品名称 <span>*</span></label>
                 <div class="sheet-self-global-input">

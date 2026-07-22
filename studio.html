@@ -293,6 +293,26 @@
         .sheet-self-save { flex-shrink:0; min-width:110px; padding-top:3px; color:#6b7280; font-size:.74rem; text-align:right; }
         .sheet-self-save.is-saving { color:#b45309; }
         .sheet-self-save.is-saved { color:#047857; }
+        .sheet-self-workflow { display:grid; grid-template-columns:minmax(180px,230px) minmax(0,1fr); gap:28px; align-items:center; padding:20px 24px 22px; border-bottom:1px solid #e5e7eb; background:#fff; }
+        .sheet-self-workflow-intro { min-width:0; }
+        .sheet-self-workflow-kicker { display:flex; align-items:center; gap:7px; margin-bottom:7px; color:#2563eb; font-size:.67rem; font-weight:800; }
+        .sheet-self-workflow-kicker::before { content:''; width:18px; height:2px; background:#2563eb; }
+        .sheet-self-workflow-intro h3 { margin:0; color:#111827; font-size:1rem; letter-spacing:0; }
+        .sheet-self-workflow-intro p { max-width:220px; margin:7px 0 0; color:#6b7280; font-size:.7rem; line-height:1.55; }
+        .sheet-self-workflow-list { display:grid; grid-template-columns:minmax(0,1fr) 24px minmax(0,1fr) 24px minmax(0,1fr) 24px minmax(0,1fr); align-items:start; gap:8px; min-width:0; margin:0; padding:0; list-style:none; }
+        .sheet-self-workflow-step { display:grid; grid-template-rows:62px auto; gap:9px; min-width:0; }
+        .sheet-self-workflow-icon { display:grid; place-items:center; width:62px; height:62px; border:1px solid currentColor; border-radius:7px; }
+        .sheet-self-workflow-icon svg { width:42px; height:42px; }
+        .sheet-self-workflow-step[data-tone="blue"] .sheet-self-workflow-icon { background:#eff6ff; color:#2563eb; }
+        .sheet-self-workflow-step[data-tone="green"] .sheet-self-workflow-icon { background:#ecfdf5; color:#059669; }
+        .sheet-self-workflow-step[data-tone="amber"] .sheet-self-workflow-icon { background:#fffbeb; color:#d97706; }
+        .sheet-self-workflow-step[data-tone="ink"] .sheet-self-workflow-icon { background:#f1f5f9; color:#334155; }
+        .sheet-self-workflow-copy { min-width:0; }
+        .sheet-self-workflow-copy > span { display:block; margin-bottom:3px; color:#9ca3af; font-size:.6rem; font-weight:800; }
+        .sheet-self-workflow-copy h4 { margin:0; color:#111827; font-size:.76rem; line-height:1.35; letter-spacing:0; }
+        .sheet-self-workflow-copy p { margin:4px 0 0; color:#6b7280; font-size:.64rem; line-height:1.5; }
+        .sheet-self-workflow-arrow { display:grid; place-items:center; height:62px; color:#cbd5e1; }
+        .sheet-self-workflow-arrow svg { width:20px; height:20px; }
         .sheet-self-global-product { display:grid; grid-template-columns:minmax(140px,190px) minmax(320px,620px) 1fr; align-items:start; gap:16px; padding:14px 24px; border-bottom:1px solid #e5e7eb; background:#fbfcfe; }
         .sheet-self-global-product label { color:#374151; font-size:.78rem; font-weight:800; }
         .sheet-self-global-product label span { color:#dc2626; }
@@ -406,6 +426,10 @@
             .sheet-self-photo-row { flex-direction:row; align-items:center; justify-content:space-between; }
         }
         @media (max-width: 1080px) {
+            .sheet-self-workflow { grid-template-columns:minmax(0,1fr); gap:15px; }
+            .sheet-self-workflow-intro { display:flex; align-items:flex-end; justify-content:space-between; gap:20px; }
+            .sheet-self-workflow-kicker { margin-bottom:5px; }
+            .sheet-self-workflow-intro p { margin:0; text-align:right; }
             .sheet-self-table-head { display:none; }
             .sheet-self-field-note { display:inline; }
             .sheet-self-slot { grid-template-columns:120px minmax(0,1fr) minmax(280px,.9fr); }
@@ -429,6 +453,11 @@
             .retouch-selected-grid { grid-template-columns:minmax(0,1fr); }
             .variant-palette { grid-template-columns: repeat(4, minmax(0, 1fr)); }
             .resize-file-list { grid-template-columns:minmax(0,1fr); }
+            .sheet-self-workflow-list { grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px 22px; }
+            .sheet-self-workflow-step { grid-template-columns:52px minmax(0,1fr); grid-template-rows:auto; align-items:center; }
+            .sheet-self-workflow-icon { width:52px; height:52px; }
+            .sheet-self-workflow-icon svg { width:35px; height:35px; }
+            .sheet-self-workflow-arrow { display:none; }
             .sheet-self-slot { grid-template-columns:minmax(0,1fr); gap:14px; padding:16px; }
             .sheet-self-slot-head, .sheet-self-product, .sheet-self-fields, .sheet-self-media, .sheet-self-setting { grid-column:auto; grid-row:auto; }
             .sheet-self-slot-head { flex-direction:row; align-items:center; justify-content:space-between; padding-bottom:10px; border-bottom:1px solid #edf0f4; }
@@ -441,6 +470,10 @@
         @media (max-width: 640px) {
             .studio-photographer-grid { grid-template-columns:minmax(0,1fr); }
             .sheet-self-head, .sheet-self-actions { align-items:stretch; flex-direction:column; padding-left:16px; padding-right:16px; }
+            .sheet-self-workflow { padding:17px 16px 19px; }
+            .sheet-self-workflow-intro { display:block; }
+            .sheet-self-workflow-intro p { max-width:none; margin-top:6px; text-align:left; }
+            .sheet-self-workflow-list { grid-template-columns:minmax(0,1fr); gap:14px; }
             .sheet-self-global-product { grid-template-columns:minmax(0,1fr); gap:7px; padding:14px 16px; }
             .sheet-self-slot { padding:14px 16px; }
             .sheet-self-add-row { padding:12px 16px; }
