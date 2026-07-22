@@ -444,7 +444,16 @@ const PROGRAM_FORM = `
                 <div class="program-ai-status" id="progProductAiStatus">上传白底产品图后自动识别</div>
             </div>
             <div class="sf-section">
-                <div class="sf-label">标题 <span class="sf-sub">（可选，输入中文会自动翻译成英语，英语默认）</span></div>
+                <div class="program-ai-label-row program-title-ai-row">
+                    <div class="sf-label">标题 <span class="sf-sub">（可选，输入中文会自动翻译成英语，英语默认）</span></div>
+                    <div class="program-copy-ai-action">
+                        <button type="button" class="program-ai-btn program-copy-ai-btn" id="progGenerateCopyBtn" aria-describedby="progCopyAiStatus">
+                            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l1.3 4.2L17.5 8.5l-4.2 1.3L12 14l-1.3-4.2-4.2-1.3 4.2-1.3L12 3Z"/><path d="M5 15l.8 2.7 2.7.8-2.7.8L5 22l-.8-2.7-2.7-.8 2.7-.8L5 15Z"/></svg>
+                            <span>AI 优化</span>
+                        </button>
+                        <span class="program-ai-status program-ai-popover" id="progCopyAiStatus" role="status" aria-live="polite" hidden></span>
+                    </div>
+                </div>
                 <input class="sf-input" id="progTitle" type="text" maxlength="100" placeholder="例如：高品质蓝牙耳机">
             </div>
             <div class="sf-section">
@@ -456,13 +465,6 @@ const PROGRAM_FORM = `
                 <textarea class="sf-textarea" id="progOtherText" rows="3" maxlength="300" placeholder="例如：降噪技术；续航持久；蓝牙5.0"></textarea>
             </div>
             <div class="sf-section" id="progRefSection">
-                <div class="program-ai-copy-bar">
-                    <button type="button" class="program-ai-btn" id="progGenerateCopyBtn" disabled>
-                        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l1.3 4.2L17.5 8.5l-4.2 1.3L12 14l-1.3-4.2-4.2-1.3 4.2-1.3L12 3Z"/><path d="M5 15l.8 2.7 2.7.8-2.7.8L5 22l-.8-2.7-2.7-.8 2.7-.8L5 15Z"/></svg>
-                        <span>AI 自动标题和文案</span>
-                    </button>
-                    <span class="program-ai-status" id="progCopyAiStatus">请先上传要模仿的图</span>
-                </div>
                 <div class="sf-label">要模仿的图 <span class="sf-req">*</span> <span class="sf-sub">(1张)</span></div>
                 <div class="sf-upload-row">
                     <div class="sf-upload-box" id="progRefDrop" tabindex="-1">
@@ -814,6 +816,7 @@ let sheetSelfProductAiRequestId = 0;
 let programProductAiTimer = null;
 let programProductAiBusy = false;
 let programCopyAiBusy = false;
+let programCopyAiStatusTimer = null;
 let programProductAiRequestId = 0;
 let resizeToolCleanup = null;
 let resizeAPlusApplyHandler = null;
@@ -1798,6 +1801,7 @@ function renderForm() {
     if (attachedGallery) cachedStudioGalleryPreview = attachedGallery;
     clearRetouchUploads();
     clearTimeout(programProductAiTimer);
+    clearTimeout(programCopyAiStatusTimer);
     programProductAiRequestId += 1;
     programProductAiBusy = false;
     programCopyAiBusy = false;
@@ -4310,14 +4314,17 @@ function updateProgramAiControls() {
     const productStatus = document.getElementById('progProductAiStatus');
     const copyStatus = document.getElementById('progCopyAiStatus');
     if (identifyButton) identifyButton.disabled = programProductAiBusy || uploads.progProduct.length === 0;
-    if (copyButton) copyButton.disabled = programCopyAiBusy || uploads.progRef.length !== 1;
+    if (copyButton) copyButton.disabled = programCopyAiBusy;
 
     if (productStatus && !programProductAiBusy && uploads.progProduct.length === 0) {
         setProgramAiStatus(productStatus, '上传白底产品图后自动识别', '');
     }
     if (copyStatus && !programCopyAiBusy) {
-        if (uploads.progRef.length !== 1) setProgramAiStatus(copyStatus, '请先上传要模仿的图', '');
-        else if (copyStatus.dataset.state === 'prerequisite' || !copyStatus.dataset.state) setProgramAiStatus(copyStatus, '参考图已上传，可以生成', 'success');
+        if (copyStatus.dataset.state === 'prerequisite' || uploads.progRef.length !== 1) {
+            copyStatus.hidden = true;
+            copyStatus.textContent = '';
+            copyStatus.dataset.state = '';
+        }
     }
 }
 
@@ -4371,11 +4378,17 @@ async function runProgramCopyGeneration() {
     const image = uploads.progRef[0];
     const button = document.getElementById('progGenerateCopyBtn');
     const status = document.getElementById('progCopyAiStatus');
-    if (!image || !button || !status || programCopyAiBusy) return;
+    if (!button || !status || programCopyAiBusy) return;
+    clearTimeout(programCopyAiStatusTimer);
+    if (!image) {
+        setProgramAiStatus(status, '请先上传要模仿的图', 'error');
+        programCopyAiStatusTimer = setTimeout(() => { status.hidden = true; }, 2600);
+        return;
+    }
 
     programCopyAiBusy = true;
     button.classList.add('loading');
-    button.querySelector('span').textContent = '正在生成...';
+    button.querySelector('span').textContent = '正在优化...';
     setProgramAiStatus(status, '正在分析参考图...', '');
     updateProgramAiControls();
     try {
@@ -4393,7 +4406,7 @@ async function runProgramCopyGeneration() {
     } finally {
         programCopyAiBusy = false;
         button.classList.remove('loading');
-        button.querySelector('span').textContent = 'AI 自动标题和文案';
+        button.querySelector('span').textContent = 'AI 优化';
         updateProgramAiControls();
     }
 }
@@ -4415,9 +4428,11 @@ async function callProgramAi(payload) {
 
 function setProgramAiStatus(element, text, state) {
     if (!element) return;
+    const isPopover = element.classList.contains('program-ai-popover');
     element.textContent = text;
-    element.className = 'program-ai-status' + (state ? ' ' + state : '');
+    element.className = 'program-ai-status' + (isPopover ? ' program-ai-popover' : '') + (state ? ' ' + state : '');
     element.dataset.state = state || (text.startsWith('请先') ? 'prerequisite' : 'info');
+    if (isPopover) element.hidden = !text;
 }
 
 function updateCharCount(el, countId, max) {
