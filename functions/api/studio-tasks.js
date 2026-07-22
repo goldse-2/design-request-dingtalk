@@ -179,7 +179,9 @@ export async function onRequestGet(context) {
                 && studioTaskRetentionAnchor(t, 0) >= cutoff);
         }
 
-        tasks.sort((a, b) => b.timestamp - a.timestamp);
+        tasks.sort(history
+            ? (a, b) => studioTaskRetentionAnchor(b, 0) - studioTaskRetentionAnchor(a, 0)
+            : (a, b) => b.timestamp - a.timestamp);
 
         if (includeSheetSlots) {
             const taskMetadata = new Map(list.keys.map(key => [key.name, key.metadata || {}]));
