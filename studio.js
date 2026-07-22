@@ -529,10 +529,7 @@ const SHEET_SELF_WORKFLOW = `
         <ol class="sheet-self-workflow-list">
             <li class="sheet-self-workflow-step">
                 <div class="sheet-self-workflow-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                        <rect x="3" y="4" width="13" height="12" rx="2"/>
-                        <path d="m5.5 13 3-3 2.2 2.2 1.8-1.8 2 2.1M6 20h12M20 5v13M18 7l2-2 2 2M18 16l2 2 2-2"/>
-                    </svg>
+                    <img src="assets/studio-workflow/step-reference.png" alt="">
                 </div>
                 <div class="sheet-self-workflow-copy">
                     <span>步骤 01</span>
@@ -542,10 +539,7 @@ const SHEET_SELF_WORKFLOW = `
             </li>
             <li class="sheet-self-workflow-step">
                 <div class="sheet-self-workflow-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M5 3h10l4 4v14H5zM15 3v5h4M8 11h7M8 15h4"/>
-                        <path d="m14 18 5-5 2 2-5 5-3 1z"/>
-                    </svg>
+                    <img src="assets/studio-workflow/step-copy.png" alt="">
                 </div>
                 <div class="sheet-self-workflow-copy">
                     <span>步骤 02</span>
@@ -555,11 +549,7 @@ const SHEET_SELF_WORKFLOW = `
             </li>
             <li class="sheet-self-workflow-step">
                 <div class="sheet-self-workflow-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M4 8h16a2 2 0 0 1 2 2v9H2v-9a2 2 0 0 1 2-2ZM8 8l1.5-3h5L16 8"/>
-                        <circle cx="12" cy="13.5" r="3.5"/>
-                        <path d="m10.5 13.5 1 1 2-2"/>
-                    </svg>
+                    <img src="assets/studio-workflow/step-photo.png" alt="">
                 </div>
                 <div class="sheet-self-workflow-copy">
                     <span>步骤 03</span>
@@ -569,10 +559,7 @@ const SHEET_SELF_WORKFLOW = `
             </li>
             <li class="sheet-self-workflow-step">
                 <div class="sheet-self-workflow-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M12 15V3M8 7l4-4 4 4M4 13v7h16v-7"/>
-                        <path d="m8.5 17 2 2 4-4"/>
-                    </svg>
+                    <img src="assets/studio-workflow/step-submit.png" alt="">
                 </div>
                 <div class="sheet-self-workflow-copy">
                     <span>步骤 04</span>
