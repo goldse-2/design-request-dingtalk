@@ -826,7 +826,7 @@ export async function transformToExactJpeg(env, image, target, gravity = '') {
     const transformed = await env.IMAGES
         .input(new Blob([image.bytes], { type: image.mimeType }).stream())
         .transform({ width: target.width, height: target.height, fit: 'cover', ...(gravity ? { gravity } : {}) })
-        .output({ format: 'image/jpeg', quality: 95 });
+        .output({ format: 'image/jpeg', quality: 100 });
     const response = transformed.response();
     if (!response.ok) throw new Error(`Exact image resize failed: HTTP ${response.status}`);
 

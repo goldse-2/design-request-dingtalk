@@ -22,7 +22,7 @@ export default {
         const transformed = await env.IMAGES
             .input(request.body)
             .transform({ width, height, fit: 'cover', ...(gravity ? { gravity } : {}) })
-            .output({ format: 'image/jpeg', quality: 95 });
+            .output({ format: 'image/jpeg', quality: 100 });
         const response = transformed.response();
         if (!response.ok) return new Response('Image resize failed', { status: 502 });
 

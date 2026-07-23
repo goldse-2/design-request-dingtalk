@@ -24,7 +24,7 @@ export async function editImageWithPrompt({ env, prompt, mimeType, base64, maxBy
             mimeType: safeMimeType,
             base64: safeBase64,
             signal: controller.signal,
-            withTool: true
+            toolMode: 'high'
         });
         if (!response.ok && response.status === 400) {
             ({ response, data } = await callResponsesApi({
@@ -35,7 +35,19 @@ export async function editImageWithPrompt({ env, prompt, mimeType, base64, maxBy
                 mimeType: safeMimeType,
                 base64: safeBase64,
                 signal: controller.signal,
-                withTool: false
+                toolMode: 'basic'
+            }));
+        }
+        if (!response.ok && response.status === 400) {
+            ({ response, data } = await callResponsesApi({
+                apiBase,
+                apiKey,
+                model,
+                prompt,
+                mimeType: safeMimeType,
+                base64: safeBase64,
+                signal: controller.signal,
+                toolMode: 'none'
             }));
         }
         if (!response.ok) {
@@ -53,7 +65,7 @@ export async function editImageWithPrompt({ env, prompt, mimeType, base64, maxBy
     }
 }
 
-async function callResponsesApi({ apiBase, apiKey, model, prompt, mimeType, base64, signal, withTool }) {
+async function callResponsesApi({ apiBase, apiKey, model, prompt, mimeType, base64, signal, toolMode }) {
     const body = {
         model,
         input: [{
@@ -65,12 +77,19 @@ async function callResponsesApi({ apiBase, apiKey, model, prompt, mimeType, base
         }],
         store: false
     };
-    if (withTool) {
-        body.tools = [{
+    if (toolMode !== 'none') {
+        const imageTool = {
             type: 'image_generation',
             output_format: 'jpeg',
             background: 'opaque'
-        }];
+        };
+        if (toolMode === 'high') {
+            imageTool.quality = 'high';
+            imageTool.input_fidelity = 'high';
+            imageTool.output_compression = 100;
+            imageTool.size = 'auto';
+        }
+        body.tools = [imageTool];
     }
 
     const response = await fetch(buildEndpoint(apiBase, 'responses'), {

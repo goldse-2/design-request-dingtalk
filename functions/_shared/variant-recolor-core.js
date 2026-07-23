@@ -24,9 +24,12 @@ export async function recolorImage({ env, scope, colorName, colorHex, mimeType, 
     const timeout = setTimeout(() => controller.abort(), 120000);
 
     try {
-        let { response, data } = await callResponsesApi({ apiBase, apiKey, model, prompt, mimeType: safeMimeType, base64: safeBase64, signal: controller.signal, withTool: true });
+        let { response, data } = await callResponsesApi({ apiBase, apiKey, model, prompt, mimeType: safeMimeType, base64: safeBase64, signal: controller.signal, toolMode: 'high' });
         if (!response.ok && response.status === 400) {
-            ({ response, data } = await callResponsesApi({ apiBase, apiKey, model, prompt, mimeType: safeMimeType, base64: safeBase64, signal: controller.signal, withTool: false }));
+            ({ response, data } = await callResponsesApi({ apiBase, apiKey, model, prompt, mimeType: safeMimeType, base64: safeBase64, signal: controller.signal, toolMode: 'basic' }));
+        }
+        if (!response.ok && response.status === 400) {
+            ({ response, data } = await callResponsesApi({ apiBase, apiKey, model, prompt, mimeType: safeMimeType, base64: safeBase64, signal: controller.signal, toolMode: 'none' }));
         }
         if (!response.ok) {
             const error = data?.error?.message || data?.message || `AI HTTP ${response.status}`;
@@ -44,7 +47,7 @@ export async function recolorImage({ env, scope, colorName, colorHex, mimeType, 
     }
 }
 
-async function callResponsesApi({ apiBase, apiKey, model, prompt, mimeType, base64, signal, withTool }) {
+async function callResponsesApi({ apiBase, apiKey, model, prompt, mimeType, base64, signal, toolMode }) {
     const body = {
         model,
         input: [{
@@ -56,12 +59,19 @@ async function callResponsesApi({ apiBase, apiKey, model, prompt, mimeType, base
         }],
         store: false
     };
-    if (withTool) {
-        body.tools = [{
+    if (toolMode !== 'none') {
+        const imageTool = {
             type: 'image_generation',
             output_format: 'jpeg',
             background: 'opaque'
-        }];
+        };
+        if (toolMode === 'high') {
+            imageTool.quality = 'high';
+            imageTool.input_fidelity = 'high';
+            imageTool.output_compression = 100;
+            imageTool.size = 'auto';
+        }
+        body.tools = [imageTool];
     }
     const response = await fetch(buildEndpoint(apiBase, 'responses'), {
         method: 'POST',
