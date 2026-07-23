@@ -4055,14 +4055,23 @@ function openStudioGuideEditor(article = null) {
                 <label class="guide-editor-published"><input id="guideDraftPublished" type="checkbox"> 发布到自助处理台</label>
             </aside>
             <main class="guide-editor-main">
-                <div class="guide-editor-toolbar">
-                    <strong>文章正文</strong>
-                    <button type="button" data-guide-add="heading">+ 大标题</button>
-                    <button type="button" data-guide-add="subheading">+ 小标题</button>
-                    <button type="button" data-guide-add="paragraph">+ 正文</button>
-                    <button type="button" data-guide-add="image">+ 图片</button>
+                <div class="guide-document-toolbar" aria-label="文章编辑工具栏">
+                    <select id="guideDocumentFormat" aria-label="文字类型">
+                        <option value="p">正文</option>
+                        <option value="h2">大标题</option>
+                        <option value="h3">小标题</option>
+                    </select>
+                    <select class="guide-document-size" id="guideDocumentSize" aria-label="字号">${studioGuideFontOptions(16)}</select>
+                    <span class="guide-document-divider" aria-hidden="true"></span>
+                    <button type="button" data-guide-document-command="undo" aria-label="撤销" title="撤销">↶</button>
+                    <button type="button" data-guide-document-command="redo" aria-label="重做" title="重做">↷</button>
+                    <span class="guide-document-divider" aria-hidden="true"></span>
+                    <button type="button" class="guide-document-insert" id="guideDocumentInsertImage">＋ 插入图片</button>
                 </div>
-                <div class="guide-editor-blocks" id="guideDraftBlocks"></div>
+                <div class="guide-document-workspace">
+                    <article class="guide-document-page" id="guideDraftDocument" contenteditable="true" spellcheck="false" data-placeholder="在这里开始输入文章内容"></article>
+                </div>
+                <input id="guideDocumentImageInput" type="file" accept="image/jpeg,image/png,image/webp" hidden>
             </main>
         </div>
         <footer class="guide-editor-foot">
@@ -4080,7 +4089,7 @@ function openStudioGuideEditor(article = null) {
     overlay.querySelector('#guideDraftSubtitle').value = studioGuideDraft.subtitle || '';
     overlay.querySelector('#guideDraftPublished').checked = studioGuideDraft.published !== false;
     renderStudioGuideCover(overlay);
-    renderStudioGuideBlocks(overlay);
+    renderStudioGuideDocument(overlay);
 
     overlay.querySelector('#guideDraftCover').addEventListener('click', () => overlay.querySelector('#guideDraftCoverInput').click());
     overlay.querySelector('#guideDraftCoverInput').addEventListener('change', async event => {
@@ -4090,9 +4099,7 @@ function openStudioGuideEditor(article = null) {
         const image = await uploadStudioGuideImage(file, overlay);
         if (image) { studioGuideDraft.cover = image; renderStudioGuideCover(overlay); }
     });
-    overlay.querySelectorAll('[data-guide-add]').forEach(button => button.addEventListener('click', () => {
-        addStudioGuideBlock(button.dataset.guideAdd, overlay);
-    }));
+    wireStudioGuideDocumentEditor(overlay);
     overlay.querySelector('#guideDraftSave').addEventListener('click', () => saveStudioGuide(overlay));
 }
 
@@ -4104,83 +4111,211 @@ function renderStudioGuideCover(overlay) {
         : '<span>点击上传封面<br>JPG / PNG / WebP，最大 8MB</span>';
 }
 
-function addStudioGuideBlock(type, overlay) {
-    const defaults = {
-        heading: { type: 'heading', text: '', fontSize: 30 },
-        subheading: { type: 'subheading', text: '', fontSize: 22 },
-        paragraph: { type: 'paragraph', text: '', fontSize: 16 },
-        image: { type: 'image', key: '', url: '', name: '', alt: '' }
-    };
-    studioGuideDraft.blocks.push(defaults[type]);
-    renderStudioGuideBlocks(overlay);
-    overlay.querySelector('.guide-editor-block:last-child textarea')?.focus();
-}
-
-function renderStudioGuideBlocks(overlay) {
-    const container = overlay.querySelector('#guideDraftBlocks');
-    if (!container) return;
-    const names = { heading: '大标题', subheading: '小标题', paragraph: '正文', image: '图片' };
-    container.innerHTML = studioGuideDraft.blocks.map((block, index) => {
-        const actions = `<div class="guide-editor-block-actions">
-            <button type="button" data-guide-move="up" data-index="${index}" aria-label="上移">↑</button>
-            <button type="button" data-guide-move="down" data-index="${index}" aria-label="下移">↓</button>
-            <button type="button" data-guide-remove data-index="${index}">删除</button>
-        </div>`;
-        if (block.type === 'image') {
-            return `<section class="guide-editor-block" data-block-index="${index}">
-                <div class="guide-editor-block-head"><strong>${names[block.type]}</strong>${actions}</div>
-                <button type="button" class="guide-editor-image-picker" data-guide-image="${index}">${block.url ? `<img src="${escapeHtml(block.url)}" alt="">` : '<span>点击上传正文图片</span>'}</button>
-                <input class="guide-editor-image-alt" data-guide-alt="${index}" value="${escapeHtml(block.alt || '')}" maxlength="120" placeholder="图片说明（可选）">
-            </section>`;
-        }
-        return `<section class="guide-editor-block" data-block-index="${index}">
-            <div class="guide-editor-block-head"><strong>${names[block.type]}</strong>${actions}</div>
-            <div class="guide-editor-text-row">
-                <textarea data-guide-text="${index}" maxlength="${block.type === 'paragraph' ? 8000 : 500}" placeholder="输入${names[block.type]}">${escapeHtml(block.text || '')}</textarea>
-                <select data-guide-size="${index}" aria-label="字号">${studioGuideFontOptions(block.fontSize)}</select>
-            </div>
-        </section>`;
-    }).join('');
-
-    container.querySelectorAll('[data-guide-text]').forEach(input => input.addEventListener('input', () => {
-        studioGuideDraft.blocks[Number(input.dataset.guideText)].text = input.value;
-    }));
-    container.querySelectorAll('[data-guide-size]').forEach(select => select.addEventListener('change', () => {
-        studioGuideDraft.blocks[Number(select.dataset.guideSize)].fontSize = Number(select.value);
-    }));
-    container.querySelectorAll('[data-guide-alt]').forEach(input => input.addEventListener('input', () => {
-        studioGuideDraft.blocks[Number(input.dataset.guideAlt)].alt = input.value;
-    }));
-    container.querySelectorAll('[data-guide-move]').forEach(button => button.addEventListener('click', () => {
-        const index = Number(button.dataset.index);
-        const target = button.dataset.guideMove === 'up' ? index - 1 : index + 1;
-        if (target < 0 || target >= studioGuideDraft.blocks.length) return;
-        [studioGuideDraft.blocks[index], studioGuideDraft.blocks[target]] = [studioGuideDraft.blocks[target], studioGuideDraft.blocks[index]];
-        renderStudioGuideBlocks(overlay);
-    }));
-    container.querySelectorAll('[data-guide-remove]').forEach(button => button.addEventListener('click', () => {
-        studioGuideDraft.blocks.splice(Number(button.dataset.index), 1);
-        renderStudioGuideBlocks(overlay);
-    }));
-    container.querySelectorAll('[data-guide-image]').forEach(button => button.addEventListener('click', () => selectStudioGuideBlockImage(Number(button.dataset.guideImage), overlay)));
-}
-
 function studioGuideFontOptions(current) {
     return [12, 14, 16, 18, 20, 22, 24, 28, 30, 36, 42, 48]
         .map(size => `<option value="${size}"${Number(current) === size ? ' selected' : ''}>${size}px</option>`).join('');
 }
 
-function selectStudioGuideBlockImage(index, overlay) {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/jpeg,image/png,image/webp';
-    input.addEventListener('change', async () => {
-        const image = await uploadStudioGuideImage(input.files?.[0], overlay);
-        if (!image || !studioGuideDraft.blocks[index]) return;
-        studioGuideDraft.blocks[index] = { type: 'image', ...image, alt: studioGuideDraft.blocks[index].alt || '' };
-        renderStudioGuideBlocks(overlay);
+function renderStudioGuideDocument(overlay) {
+    const editor = overlay.querySelector('#guideDraftDocument');
+    if (!editor) return;
+    const defaults = { heading: 30, subheading: 22, paragraph: 16 };
+    const tags = { heading: 'h2', subheading: 'h3', paragraph: 'p' };
+    editor.innerHTML = (studioGuideDraft.blocks || []).map(block => {
+        if (block.type === 'image' && block.url) {
+            return studioGuideDocumentImageMarkup(block);
+        }
+        const tag = tags[block.type];
+        if (!tag) return '';
+        const size = Math.min(48, Math.max(12, Number(block.fontSize) || defaults[block.type]));
+        const text = escapeHtml(block.text || '').replace(/\n/g, '<br>');
+        return `<${tag} style="font-size:${size}px" data-guide-font-size="${size}">${text || '<br>'}</${tag}>`;
+    }).join('');
+    if (!editor.children.length) editor.innerHTML = '<p style="font-size:16px" data-guide-font-size="16"><br></p>';
+}
+
+function studioGuideDocumentImageMarkup(image) {
+    return `<figure class="guide-document-image" contenteditable="false" data-key="${escapeHtml(image.key || '')}" data-url="${escapeHtml(image.url || '')}" data-name="${escapeHtml(image.name || '')}" data-alt="${escapeHtml(image.alt || '')}">
+        <img src="${escapeHtml(image.url || '')}" alt="${escapeHtml(image.alt || '')}">
+        <button type="button" class="guide-document-image-remove" aria-label="删除图片" title="删除图片">×</button>
+    </figure>`;
+}
+
+function wireStudioGuideDocumentEditor(overlay) {
+    const editor = overlay.querySelector('#guideDraftDocument');
+    const format = overlay.querySelector('#guideDocumentFormat');
+    const size = overlay.querySelector('#guideDocumentSize');
+    const imageButton = overlay.querySelector('#guideDocumentInsertImage');
+    const imageInput = overlay.querySelector('#guideDocumentImageInput');
+    if (!editor || !format || !size || !imageButton || !imageInput) return;
+
+    const rememberSelection = () => {
+        const selection = window.getSelection();
+        if (!selection?.rangeCount) return;
+        const range = selection.getRangeAt(0);
+        if (editor.contains(range.commonAncestorContainer)) editor._guideRange = range.cloneRange();
+        updateStudioGuideDocumentToolbar(editor, format, size);
+    };
+    const restoreSelection = () => {
+        if (!editor._guideRange) return;
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(editor._guideRange);
+    };
+
+    ['keyup', 'mouseup', 'focus', 'input'].forEach(name => editor.addEventListener(name, rememberSelection));
+    overlay.querySelectorAll('[data-guide-document-command], #guideDocumentInsertImage').forEach(button => {
+        button.addEventListener('mousedown', event => event.preventDefault());
     });
-    input.click();
+    overlay.querySelectorAll('[data-guide-document-command]').forEach(button => button.addEventListener('click', () => {
+        restoreSelection();
+        editor.focus();
+        document.execCommand(button.dataset.guideDocumentCommand, false);
+        rememberSelection();
+    }));
+    format.addEventListener('change', () => {
+        restoreSelection();
+        editor.focus();
+        document.execCommand('formatBlock', false, format.value);
+        const block = activeStudioGuideDocumentBlock(editor);
+        if (block) {
+            const defaultSize = format.value === 'h2' ? 30 : format.value === 'h3' ? 22 : 16;
+            block.style.fontSize = `${defaultSize}px`;
+            block.dataset.guideFontSize = String(defaultSize);
+            size.value = String(defaultSize);
+        }
+        rememberSelection();
+    });
+    size.addEventListener('change', () => {
+        restoreSelection();
+        editor.focus();
+        let block = activeStudioGuideDocumentBlock(editor);
+        if (!block || block.matches('figure')) {
+            block = document.createElement('p');
+            block.innerHTML = '<br>';
+            editor.appendChild(block);
+            placeStudioGuideCaret(block);
+        }
+        block.style.fontSize = `${Number(size.value) || 16}px`;
+        block.dataset.guideFontSize = size.value;
+        rememberSelection();
+    });
+    imageButton.addEventListener('click', () => {
+        rememberSelection();
+        imageInput.click();
+    });
+    imageInput.addEventListener('change', async () => {
+        const file = imageInput.files?.[0];
+        imageInput.value = '';
+        if (!file) return;
+        const image = await uploadStudioGuideImage(file, overlay);
+        if (!image) return;
+        restoreSelection();
+        insertStudioGuideDocumentImage(editor, image);
+        overlay.querySelector('#guideEditorStatus').textContent = '图片已插入文章';
+        rememberSelection();
+    });
+    editor.addEventListener('click', event => {
+        const remove = event.target.closest('.guide-document-image-remove');
+        if (!remove) return;
+        event.preventDefault();
+        const figure = remove.closest('.guide-document-image');
+        const next = figure?.nextElementSibling;
+        figure?.remove();
+        if (!editor.children.length) editor.innerHTML = '<p style="font-size:16px" data-guide-font-size="16"><br></p>';
+        placeStudioGuideCaret(next || editor.lastElementChild);
+        rememberSelection();
+    });
+    editor.addEventListener('keydown', event => {
+        if (event.key !== 'Backspace' && event.key !== 'Delete') return;
+        const block = activeStudioGuideDocumentBlock(editor);
+        if (block?.matches('.guide-document-image')) event.preventDefault();
+    });
+    editor.focus();
+    placeStudioGuideCaret(editor.firstElementChild);
+    rememberSelection();
+}
+
+function activeStudioGuideDocumentBlock(editor) {
+    const selection = window.getSelection();
+    if (!selection?.rangeCount) return null;
+    let node = selection.getRangeAt(0).startContainer;
+    if (node.nodeType === Node.TEXT_NODE) node = node.parentElement;
+    while (node && node.parentElement !== editor) node = node.parentElement;
+    return node?.parentElement === editor ? node : null;
+}
+
+function updateStudioGuideDocumentToolbar(editor, format, size) {
+    const block = activeStudioGuideDocumentBlock(editor);
+    if (!block || block.matches('figure')) return;
+    const tag = block.tagName.toLowerCase();
+    format.value = tag === 'h2' || tag === 'h3' ? tag : 'p';
+    const fallback = tag === 'h2' ? 30 : tag === 'h3' ? 22 : 16;
+    const fontSize = Math.round(parseFloat(block.dataset.guideFontSize || block.style.fontSize) || fallback);
+    if ([...size.options].some(option => Number(option.value) === fontSize)) size.value = String(fontSize);
+}
+
+function insertStudioGuideDocumentImage(editor, image) {
+    const holder = document.createElement('div');
+    holder.innerHTML = studioGuideDocumentImageMarkup(image);
+    const figure = holder.firstElementChild;
+    const active = activeStudioGuideDocumentBlock(editor);
+    if (active?.parentElement === editor) active.insertAdjacentElement('afterend', figure);
+    else editor.appendChild(figure);
+    let paragraph = figure.nextElementSibling;
+    if (!paragraph || paragraph.matches('figure')) {
+        paragraph = document.createElement('p');
+        paragraph.style.fontSize = '16px';
+        paragraph.dataset.guideFontSize = '16';
+        paragraph.innerHTML = '<br>';
+        figure.insertAdjacentElement('afterend', paragraph);
+    }
+    placeStudioGuideCaret(paragraph);
+}
+
+function placeStudioGuideCaret(element) {
+    if (!element) return;
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    range.collapse(false);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+    element.closest('[contenteditable="true"]')?.focus();
+}
+
+function syncStudioGuideBlocksFromDocument(overlay) {
+    const editor = overlay.querySelector('#guideDraftDocument');
+    const blocks = [];
+    if (!editor) return blocks;
+    for (const node of editor.childNodes) {
+        if (node.nodeType === Node.TEXT_NODE) {
+            const text = String(node.textContent || '').trim();
+            if (text) blocks.push({ type: 'paragraph', text, fontSize: 16 });
+            continue;
+        }
+        if (node.nodeType !== Node.ELEMENT_NODE) continue;
+        if (node.matches('.guide-document-image')) {
+            if (node.dataset.key && node.dataset.url) {
+                blocks.push({
+                    type: 'image',
+                    key: node.dataset.key,
+                    url: node.dataset.url,
+                    name: node.dataset.name || '文章图片',
+                    alt: node.dataset.alt || ''
+                });
+            }
+            continue;
+        }
+        const tag = node.tagName.toLowerCase();
+        const type = tag === 'h2' ? 'heading' : tag === 'h3' ? 'subheading' : 'paragraph';
+        const fallback = type === 'heading' ? 30 : type === 'subheading' ? 22 : 16;
+        const fontSize = Math.min(48, Math.max(12, Math.round(parseFloat(node.dataset.guideFontSize || node.style.fontSize) || fallback)));
+        const text = String(node.innerText || node.textContent || '').replace(/\u00a0/g, ' ').trim();
+        if (text) blocks.push({ type, text, fontSize });
+    }
+    studioGuideDraft.blocks = blocks;
+    return blocks;
 }
 
 async function uploadStudioGuideImage(file, overlay) {
@@ -4207,8 +4342,13 @@ async function saveStudioGuide(overlay) {
     studioGuideDraft.title = overlay.querySelector('#guideDraftTitle').value.trim();
     studioGuideDraft.subtitle = overlay.querySelector('#guideDraftSubtitle').value.trim();
     studioGuideDraft.published = overlay.querySelector('#guideDraftPublished').checked;
+    syncStudioGuideBlocksFromDocument(overlay);
     const button = overlay.querySelector('#guideDraftSave');
     const status = overlay.querySelector('#guideEditorStatus');
+    if (!studioGuideDraft.blocks.length) {
+        status.textContent = '请先在稿纸中填写正文或插入图片';
+        return;
+    }
     button.disabled = true;
     status.textContent = '正在保存...';
     try {
