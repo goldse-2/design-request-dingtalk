@@ -309,7 +309,7 @@ function renderShootRequestLauncher(mode) {
                 <div class="studio-photographer-decision" data-studio-photographer="${mode}">
                     <div class="studio-photographer-decision-row">
                         <div class="studio-photographer-decision-main">
-                            ${mode === 'program' ? '<img class="studio-photographer-program-mascot" src="/assets/studio-help/program-waiting-processing.png" alt="">' : ''}
+                            ${mode === 'program' ? '<img class="studio-photographer-program-mascot" src="/assets/studio-help/program-photographer-penguin.png" alt="">' : ''}
                             <div class="studio-photographer-decision-copy"><strong>由摄影师决定</strong><small>没有白底图或者是需要拍摄就可以打开，无需图片也可以打开</small></div>
                         </div>
                         <div class="sheet-self-switch-control">
