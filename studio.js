@@ -276,16 +276,13 @@ function renderAPlusDoubleLauncher(mode) {
     return `
                 <div class="a-plus-double-launcher" id="${mode}APlusDoubleLauncher">
                     <div class="a-plus-double-action-row">
-                        <button type="button" class="a-plus-double-btn" id="${mode}APlusDoubleBtn" onclick="openAPlusDoubleModal('${mode}')" aria-pressed="false">
+                        <button type="button" class="a-plus-double-btn" id="${mode}APlusDoubleBtn" onclick="openAPlusDoubleModal('${mode}')" aria-pressed="false" aria-describedby="${mode}APlusDoubleHelp">
                             <svg class="a-plus-amazon-logo" viewBox="0 0 42 22" aria-hidden="true">
                                 <text x="1" y="12.5" fill="#111827" font-family="Arial, sans-serif" font-size="10.5" font-weight="700">amazon</text>
                                 <path d="M7 15.2c7.7 4.1 18.7 4.4 27.2.2" fill="none" stroke="#ff9900" stroke-width="2" stroke-linecap="round"/>
                                 <path d="m31.2 14.2 4 .5-1.7 3.5" fill="none" stroke="#ff9900" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
                             </svg>
                             <span>A+ 连续双图（亚马逊A+首图）</span>
-                        </button>
-                        <button type="button" class="a-plus-double-info" onclick="toggleAPlusDoubleHelp(event, '${mode}')" aria-label="查看 A+ 连续双图说明" aria-describedby="${mode}APlusDoubleHelp">
-                            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
                         </button>
                         <div class="a-plus-double-help" id="${mode}APlusDoubleHelp" role="tooltip">${A_PLUS_DOUBLE_HELP}</div>
                     </div>
@@ -297,12 +294,9 @@ function renderResizeAPlusDoubleLauncher() {
     return `
                 <div class="a-plus-double-launcher resize-a-plus-double-launcher" id="resizeAPlusDoubleLauncher">
                     <div class="a-plus-double-action-row">
-                        <button type="button" class="a-plus-double-btn" id="resizeAPlusDoubleBtn" onclick="openAPlusDoubleModal('resize')" aria-pressed="false">
+                        <button type="button" class="a-plus-double-btn" id="resizeAPlusDoubleBtn" onclick="openAPlusDoubleModal('resize')" aria-pressed="false" aria-describedby="resizeAPlusDoubleHelp">
                             <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="8" rx="2"/><rect x="3" y="13" width="18" height="8" rx="2"/><path d="M8 7h8M8 17h8"/></svg>
                             <span>A+ 连续双图</span>
-                        </button>
-                        <button type="button" class="a-plus-double-info" onclick="toggleAPlusDoubleHelp(event, 'resize')" aria-label="查看 A+ 连续双图说明" aria-describedby="resizeAPlusDoubleHelp">
-                            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
                         </button>
                         <div class="a-plus-double-help" id="resizeAPlusDoubleHelp" role="tooltip">${RESIZE_A_PLUS_DOUBLE_HELP}</div>
                     </div>
@@ -961,21 +955,6 @@ function resetAPlusDoubleState() {
 function isAPlusDoubleActive(mode = currentMode) {
     return aPlusDoubleState.enabled && aPlusDoubleState.mode === mode;
 }
-
-function toggleAPlusDoubleHelp(event, mode) {
-    event.preventDefault();
-    event.stopPropagation();
-    const help = document.getElementById(mode + 'APlusDoubleHelp');
-    if (!help) return;
-    const shouldOpen = !help.classList.contains('is-open');
-    document.querySelectorAll('.a-plus-double-help.is-open').forEach(item => item.classList.remove('is-open'));
-    help.classList.toggle('is-open', shouldOpen);
-}
-
-document.addEventListener('click', event => {
-    if (event.target.closest('.a-plus-double-info')) return;
-    document.querySelectorAll('.a-plus-double-help.is-open').forEach(item => item.classList.remove('is-open'));
-});
 
 function loadAPlusImage(src) {
     return new Promise((resolve, reject) => {

@@ -71,10 +71,8 @@
         .a-plus-amazon-logo { width: 35px; height: 20px; flex: 0 0 auto; overflow: visible; }
         .a-plus-double-btn:hover { border-color: #64748b; background: #f8fafc; }
         .a-plus-double-btn.active { border-color: #047857; background: #ecfdf5; color: #047857; box-shadow: inset 0 0 0 1px #047857; }
-        .a-plus-double-info { width: 40px; min-width: 40px; min-height: 40px; display: grid; place-items: center; border: 1px solid #cbd5e1; border-radius: 7px; background: #f8fafc; color: #475569; cursor: help; }
-        .a-plus-double-info:hover, .a-plus-double-info:focus-visible { border-color: #64748b; color: #0f172a; outline: none; }
         .a-plus-double-help { position: absolute; z-index: 30; top: calc(100% + 7px); right: 0; width: min(330px, calc(100vw - 48px)); padding: 10px 12px; border: 1px solid #dbe2ea; border-radius: 7px; background: #111827; color: #fff; box-shadow: 0 10px 24px rgba(15,23,42,.18); font-size: .75rem; line-height: 1.65; visibility: hidden; opacity: 0; transform: translateY(-3px); transition: opacity .12s, transform .12s, visibility .12s; }
-        .a-plus-double-info:hover + .a-plus-double-help, .a-plus-double-info:focus-visible + .a-plus-double-help, .a-plus-double-help.is-open { visibility: visible; opacity: 1; transform: translateY(0); }
+        .a-plus-double-action-row:hover .a-plus-double-help, .a-plus-double-btn:focus-visible + .a-plus-double-help { visibility: visible; opacity: 1; transform: translateY(0); }
         .a-plus-double-ready { margin-top: 7px; padding: 7px 9px; border-left: 3px solid #10b981; border-radius: 0 6px 6px 0; background: #ecfdf5; color: #047857; font-size: .73rem; font-weight: 700; line-height: 1.5; }
         #progRefSection.a-plus-source-hidden > .sf-label,
         #progRefSection.a-plus-source-hidden > .sf-upload-row { display: none; }
