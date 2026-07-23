@@ -841,7 +841,7 @@ const TRANSLATION_FORM = `
                     </div>
                     <div class="sf-preview-list" id="translationPreviewList"></div>
                 </div>
-                <div class="translation-note">只转换图片中的文案，产品、背景、构图和排版保持不变；其他尺寸保持原图宽高，1472 × 608 会自动输出为 1464 × 600。</div>
+                <div class="translation-estimate" id="translationEstimate" hidden></div>
             </div>
             <button class="sf-submit" id="translationSubmit">开始转换</button>
             <div id="translationStatus" class="studio-status" style="margin-top:10px" aria-live="polite"></div>
@@ -2082,6 +2082,9 @@ function renderForm() {
         wireDrop('progRefDrop', 'progRefInput', 'progRefThumbs', 'progRef');
         wireDrop('progProductDrop', 'progProductInput', 'progProductThumbs', 'progProduct');
         wireProgramAiTools();
+        const progOtherText = document.getElementById('progOtherText');
+        progOtherText?.addEventListener('input', () => autoResizeTextarea(progOtherText));
+        autoResizeTextarea(progOtherText);
         initSizePicker('progSizeSelect', 'progSizeHint');
         initInlineShootRequest('program');
         document.getElementById('progSubmit').addEventListener('click', submitProgram);
@@ -3860,10 +3863,17 @@ function renderTranslationPreview() {
     const list = document.getElementById('translationPreviewList');
     const count = document.getElementById('translationImgCount');
     const drop = document.getElementById('translationDrop');
+    const estimate = document.getElementById('translationEstimate');
     if (!list) return;
     const images = uploads.translationImages;
     if (count) count.textContent = `(${images.length}/${MAX_TRANSLATION_IMAGES})`;
     if (drop) drop.style.display = images.length >= MAX_TRANSLATION_IMAGES ? 'none' : '';
+    if (estimate) {
+        estimate.hidden = images.length === 0;
+        estimate.textContent = images.length
+            ? `预计完成时间：约 ${formatTranslationEstimateRange(images.length)}`
+            : '';
+    }
     list.innerHTML = '';
     images.forEach((image, index) => {
         const item = document.createElement('div');
@@ -3888,6 +3898,26 @@ function renderTranslationPreview() {
         item.append(thumbnail, dimension, remove);
         list.appendChild(item);
     });
+}
+
+function formatTranslationEstimateRange(imageCount) {
+    const minimumMinutes = imageCount * 3;
+    const maximumMinutes = imageCount * 5;
+    if (maximumMinutes < 60) return `${minimumMinutes}–${maximumMinutes} 分钟`;
+    return `${formatTranslationEstimate(minimumMinutes)}–${formatTranslationEstimate(maximumMinutes)}`;
+}
+
+function formatTranslationEstimate(minutes) {
+    if (minutes < 60) return `${minutes} 分钟`;
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+    return remainingMinutes ? `${hours} 小时 ${remainingMinutes} 分钟` : `${hours} 小时`;
+}
+
+function autoResizeTextarea(textarea) {
+    if (!textarea) return;
+    textarea.style.height = 'auto';
+    textarea.style.height = `${textarea.scrollHeight}px`;
 }
 
 function translationOutputDimensions(image) {
@@ -5214,7 +5244,9 @@ async function runProgramCopyAction(options) {
         });
         document.getElementById('progTitle').value = data.title || '';
         document.getElementById('progSubtitle').value = data.subtitle || '';
-        document.getElementById('progOtherText').value = data.otherText || '';
+        const otherText = document.getElementById('progOtherText');
+        otherText.value = data.otherText || '';
+        autoResizeTextarea(otherText);
         setProgramAiStatus(status, options.successText, 'success');
     } catch (error) {
         setProgramAiStatus(status, error.message || 'AI 文案生成失败，请重试', 'error');
