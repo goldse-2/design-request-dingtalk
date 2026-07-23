@@ -24,7 +24,7 @@ const DEFAULT_ARTICLES = [
             { type: 'heading', text: '先上传竞品图片', fontSize: 30 },
             { type: 'paragraph', text: '竞品图片决定构图、场景和排版方向。上传后可以使用“修改原图文案”，系统会识别图片中的标题、副标题和其他文案，识别结果会用中文显示，提交时再自动翻译为英语。', fontSize: 16 },
             { type: 'subheading', text: '再准备产品素材', fontSize: 22 },
-            { type: 'paragraph', text: '正常任务需要产品白底图。没有白底图、需要补拍角度或无需产品时，可以开启对应选项；开启摄影师决定后，提交任务即可，不需要在页面等待拍摄完成。', fontSize: 16 },
+            { type: 'paragraph', text: '正常任务需要产品白底图。没有白底图、需要补拍角度或无需产品时，可以开启对应选项；开启由设计师添加图片后，提交任务即可，不需要在页面等待拍摄完成。', fontSize: 16 },
             { type: 'subheading', text: '尺寸选择', fontSize: 22 },
             { type: 'paragraph', text: '自动识别会根据竞品图片匹配常用尺寸；自定义模式可以选择 2K、4K 或填写宽高。A+ 连续双图会按上下两部分处理，并在完成后分别导出。', fontSize: 16 }
         ]
@@ -37,7 +37,7 @@ const DEFAULT_ARTICLES = [
             { type: 'heading', text: '按照图片位逐项填写', fontSize: 30 },
             { type: 'paragraph', text: '先填写统一的产品名称，再为每个图片位选择尺寸、上传竞品图片并确认标题和文案。默认显示 3 个图片位，可以继续添加，未使用的图片位不需要上传。', fontSize: 16 },
             { type: 'subheading', text: '需要摄影师补图时', fontSize: 22 },
-            { type: 'paragraph', text: '打开“由摄影师决定”后，该图片位可以先不上传白底图。提交后摄影师会在管理台补传原图，并根据开关继续进行精修、白底抠图和作图。整个流程通常需要 1 至 3 小时。', fontSize: 16 },
+            { type: 'paragraph', text: '打开“由设计师添加图片”后，该图片位可以先不上传白底图。提交后设计师会在管理台补传原图，并根据开关继续进行精修、白底抠图和作图。整个流程通常需要 1 至 3 小时。', fontSize: 16 },
             { type: 'subheading', text: '每张完成后都会通知', fontSize: 22 },
             { type: 'paragraph', text: '系统会逐张处理，不需要等全部图片完成才收图。某一张失败时会从失败环节继续，不会让已经完成的图片重新开始。', fontSize: 16 }
         ]
@@ -205,10 +205,28 @@ async function readArticles(storage) {
     if (!raw) return JSON.parse(JSON.stringify(DEFAULT_ARTICLES));
     try {
         const parsed = JSON.parse(raw);
-        return Array.isArray(parsed) ? parsed : [];
+        return Array.isArray(parsed) ? replaceLegacyDesignerLabel(parsed) : [];
     } catch {
         return [];
     }
+}
+
+function replaceLegacyDesignerLabel(articles) {
+    const replace = value => typeof value === 'string'
+        ? value.replace(/由摄影师决定|摄影师决定/g, '由设计师添加图片')
+        : value;
+    return articles.map(article => ({
+        ...article,
+        title: replace(article.title),
+        subtitle: replace(article.subtitle),
+        blocks: Array.isArray(article.blocks)
+            ? article.blocks.map(block => ({
+                ...block,
+                text: replace(block.text),
+                alt: replace(block.alt)
+            }))
+            : []
+    }));
 }
 
 async function deleteUnusedImages(storage, previous, next) {

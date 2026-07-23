@@ -55,7 +55,7 @@ export async function onRequestPost(context) {
         return Response.json({ ok: false, error: 'A+ 连续双图尺寸修改必须固定输出 600x900' }, { status: 400 });
     }
     if (photographerDecision === true && !['free', 'program'].includes(mode)) {
-        return Response.json({ ok: false, error: '由摄影师决定仅支持自由模式和图生图模式' }, { status: 400 });
+        return Response.json({ ok: false, error: '由设计师添加图片仅支持自由模式和图生图模式' }, { status: 400 });
     }
     if (!env.SUBMISSIONS) {
         return Response.json({ ok: false, error: 'Storage not configured' }, { status: 500 });

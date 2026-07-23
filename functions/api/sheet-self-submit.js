@@ -133,7 +133,7 @@ function normalizeSlot(value, index, standalonePhotography = false) {
     else if (!standalonePhotography && !referenceKey) normalized.error = aPlusDouble
         ? `第 ${displayNumber} 张请上传 A+ 上下两张 1464 × 600 图片`
         : `第 ${displayNumber} 张请上传竞品图片`;
-    else if (!noProductImage && !photographer && productKeys.length !== 2) normalized.error = `第 ${displayNumber} 张请上传两张白底产品图，或开启“无需上传产品”/“由摄影师决定”`;
+    else if (!noProductImage && !photographer && productKeys.length !== 2) normalized.error = `第 ${displayNumber} 张请上传两张白底产品图，或开启“无需上传产品”/“由设计师添加图片”`;
     return normalized;
 }
 

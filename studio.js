@@ -310,11 +310,11 @@ function renderShootRequestLauncher(mode) {
                     <div class="studio-photographer-decision-row">
                         <div class="studio-photographer-decision-main">
                             ${mode === 'program' ? '<img class="studio-photographer-program-mascot" src="/assets/studio-help/program-waiting-processing.png" alt="">' : ''}
-                            <div class="studio-photographer-decision-copy"><strong>由摄影师决定</strong><small>没有白底图或者是需要拍摄就可以打开，无需图片也可以打开</small></div>
+                            <div class="studio-photographer-decision-copy"><strong>由设计师添加图片</strong><small>没有白底图或者是需要拍摄就可以打开，无需图片也可以打开</small></div>
                         </div>
                         <div class="sheet-self-switch-control">
                             <span class="sheet-self-switch-state is-off" id="${mode}PhotographerState">已关闭</span>
-                            <label class="sheet-self-switch" title="开启摄影需求补充"><input type="checkbox" id="${mode}PhotographerToggle" data-studio-photographer-toggle="${mode}" aria-controls="${mode}PhotographerPanel" aria-expanded="false"><span></span></label>
+                            <label class="sheet-self-switch" title="开启由设计师添加图片"><input type="checkbox" id="${mode}PhotographerToggle" data-studio-photographer-toggle="${mode}" aria-controls="${mode}PhotographerPanel" aria-expanded="false"><span></span></label>
                         </div>
                     </div>
                     <div class="studio-photographer-panel" id="${mode}PhotographerPanel" hidden>
@@ -405,10 +405,6 @@ const FREE_FORM = `
                     </div>
                     <div class="sf-preview-list" id="freePreviewList"></div>
                 </div>
-${renderShootRequestLauncher('free')}
-                <button type="button" class="sf-lib-btn" style="margin-top:10px" onclick="openLibPicker()">📦 从白底素材库选</button>
-                <button type="button" class="sf-lib-btn" style="margin-top:10px" onclick="openModelPicker()">🧍 选择模特</button>
-                <div id="freeModelPreview" style="margin-top:10px"></div>
             </div>
             <div class="sf-section">
                 <div class="free-prompt-label-row">
@@ -423,6 +419,12 @@ ${renderShootRequestLauncher('free')}
                 <div style="text-align:right;font-size:0.78rem;color:#9ca3af;margin-top:4px"><span id="freeDescCount">0</span> / 8000</div>
                 <div class="prompt-mention-hint">提示：上传图片后，可在提示词中输入 <strong>@</strong> 引用图片，例如 <strong>@参考图1</strong></div>
 ${renderAPlusDoubleLauncher('free')}
+            </div>
+            <div class="sf-section">
+${renderShootRequestLauncher('free')}
+                <button type="button" class="sf-lib-btn" style="margin-top:10px" onclick="openLibPicker()">📦 从白底素材库选</button>
+                <button type="button" class="sf-lib-btn" style="margin-top:10px" onclick="openModelPicker()">🧍 选择模特</button>
+                <div id="freeModelPreview" style="margin-top:10px"></div>
             </div>
             <div class="sf-section" id="freeFileNameSection">
                 <div class="sf-label">图片文件命名 <span class="sf-sub">（可选）</span></div>
@@ -2364,7 +2366,7 @@ function renderSheetSelfSlot(slot, slotIndex) {
         </div>
         <div class="sheet-self-setting">
             <div class="sheet-self-photo-row">
-                <div class="sheet-self-photo-copy"><strong>由摄影师决定</strong><small>开启后，此图片位暂时不需要用户上传两张白底图</small></div>
+                <div class="sheet-self-photo-copy"><strong>由设计师添加图片</strong><small>开启后，此图片位暂时不需要用户上传两张白底图</small></div>
                 <label class="sheet-self-switch" title="由摄影师提供两张拍摄原图"><input type="checkbox" data-sheet-photographer data-slot-index="${slotIndex}"${slot.photographer ? ' checked' : ''}><span></span></label>
             </div>
             <div class="sheet-self-photo-row">
@@ -3008,7 +3010,7 @@ async function submitSheetSelf() {
         const slot = invalidSlot;
         const message = !slot.referenceKey?.key
                 ? (slot.aPlusDouble ? `第 ${invalidIndex + 1} 张请上传 A+ 上下两张 1464 × 600 图片` : `第 ${invalidIndex + 1} 张请上传竞品图片`)
-                : `第 ${invalidIndex + 1} 张请上传两张白底产品图，或开启“无需上传产品”/“由摄影师决定”`;
+                : `第 ${invalidIndex + 1} 张请上传两张白底产品图，或开启“无需上传产品”/“由设计师添加图片”`;
         showStudioFieldError(status, message, document.querySelector(`[data-sheet-slot="${invalidIndex}"]`));
         return;
     }
