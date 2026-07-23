@@ -24,6 +24,19 @@
     color: #6366f1;
     border-bottom-color: #6366f1;
 }
+.library-submit-progress { margin-top:10px; padding:11px 12px; border:1px solid #dbe2ea; border-radius:8px; background:#f8fafc; color:#334155; }
+.library-submit-progress-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px; }
+.library-submit-progress-head strong { min-width:0; overflow:hidden; color:#111827; font-size:.78rem; text-overflow:ellipsis; white-space:nowrap; }
+.library-submit-progress-head span { flex:none; color:#475569; font-size:.74rem; font-weight:800; }
+.library-submit-progress-track { width:100%; height:8px; overflow:hidden; border-radius:4px; background:#e5e7eb; }
+.library-submit-progress-bar { display:block; height:100%; border-radius:4px; background:#111827; transition:width .18s ease; }
+.library-submit-progress-meta { display:flex; justify-content:space-between; gap:12px; margin-top:8px; color:#64748b; font-size:.68rem; }
+.library-submit-progress.is-success { border-color:#a7f3d0; background:#ecfdf5; }
+.library-submit-progress.is-success .library-submit-progress-bar { background:#059669; }
+.library-submit-progress.is-retrying { border-color:#fde68a; background:#fffbeb; }
+.library-submit-progress.is-retrying .library-submit-progress-bar { background:#d97706; }
+.library-submit-progress.is-error { border-color:#fecaca; background:#fef2f2; }
+.library-submit-progress.is-error .library-submit-progress-bar { background:#dc2626; }
 </style>
 </head>
 <body class="has-sidebar">
@@ -278,7 +291,6 @@ function closeShootModal() {
     const m = document.getElementById('shootModal');
     m.classList.remove('modal--visible'); m.hidden = true;
 }
-
 function openShootModalFromUrl() {
     const url = new URL(window.location.href);
     if (url.searchParams.get('shoot') !== '1') return;
@@ -340,22 +352,27 @@ async function submitShoot() {
 
     btn.disabled = true;
     status.style.color = '#6b7280';
+    let lastPercent = shootImages.length ? 3 : 72;
+    renderLibrarySubmitProgress(status, shootImages.length ? `准备上传 ${shootImages.length} 张参考图片` : '正在准备拍摄需求', lastPercent, shootImages.length ? '图片上传完成后自动创建需求' : '拍摄资料已经准备', shootImages.length ? `已上传 0/${shootImages.length}` : '资料已准备');
     try {
         const photoKeys = [];
         if (shootImages.length) {
-            status.textContent = '上传图片中...';
-            for (const img of shootImages) {
-                const fd = new FormData();
+            for (let index = 0; index < shootImages.length; index += 1) {
+                const img = shootImages[index];
                 const blob = await fetch(img.dataUrl).then(r => r.blob());
-                fd.append('file', blob, img.name);
-                fd.append('prefix', 'shoot/ref');
-                const upRes = await fetch('/api/studio-upload', { method: 'POST', body: fd });
-                const upJson = await upRes.json();
-                if (!upRes.ok || !upJson.ok) throw new Error('图片上传失败');
-                photoKeys.push({ key: upJson.key, name: upJson.name });
+                const uploaded = await uploadLibraryShootImage(
+                    blob,
+                    img.name,
+                    ratio => {
+                        lastPercent = 4 + ((index + ratio) / shootImages.length) * 78;
+                        renderLibrarySubmitProgress(status, `正在上传参考图片 ${index + 1}/${shootImages.length}`, lastPercent, img.name, `已上传 ${Math.floor(index + ratio)}/${shootImages.length}`);
+                    },
+                    ({ attempt, maxAttempts, error }) => renderLibrarySubmitProgress(status, `上传中断，正在自动重试 ${attempt}/${maxAttempts}`, lastPercent, error.message, `图片 ${index + 1}/${shootImages.length}`, 'retrying')
+                );
+                photoKeys.push(uploaded);
             }
         }
-        status.textContent = '提交中...';
+        renderLibrarySubmitProgress(status, '图片上传完成，正在创建拍摄需求', 90, '正在确认需求已进入拍摄队列', shootImages.length ? `已上传 ${shootImages.length}/${shootImages.length}` : '资料已提交');
         const data = {
             fileName: '白底拍摄需求',
             submitTime: new Date().toLocaleString('zh-CN'),
@@ -370,14 +387,60 @@ async function submitShoot() {
         });
         const json = await res.json();
         if (!res.ok || !json.ok) throw new Error(json.error || res.status);
-        status.textContent = '提交成功！';
-        status.style.color = '#10b981';
+        renderLibrarySubmitProgress(status, '拍摄需求提交完成', 100, '需求已进入拍摄队列', '已完成', 'success');
         setTimeout(closeShootModal, 1200);
     } catch (e) {
-        status.textContent = '提交失败：' + e.message;
-        status.style.color = '#ef4444';
+        renderLibrarySubmitProgress(status, '拍摄需求提交失败', lastPercent, e.message, '图片和内容已保留', 'error');
         btn.disabled = false;
     }
+}
+
+function libraryProgressEsc(value) {
+    return String(value || '').replace(/[&<>"']/g, character => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[character]);
+}
+
+function renderLibrarySubmitProgress(status, title, percent, detail, countText, state = '') {
+    const value = Math.max(0, Math.min(100, Math.round(Number(percent) || 0)));
+    status.className = `library-submit-progress${state ? ` is-${state}` : ''}`;
+    status.style.color = '';
+    status.innerHTML = `<div class="library-submit-progress-head"><strong>${libraryProgressEsc(title)}</strong><span>${value}%</span></div><div class="library-submit-progress-track" role="progressbar" aria-label="提交进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${value}"><span class="library-submit-progress-bar" style="width:${value}%"></span></div><div class="library-submit-progress-meta"><span>${libraryProgressEsc(detail)}</span><span>${libraryProgressEsc(countText)}</span></div>`;
+}
+
+async function uploadLibraryShootImage(blob, name, onProgress, onRetry) {
+    const uploadId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    let lastError;
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+        try {
+            return await new Promise((resolve, reject) => {
+                const form = new FormData();
+                form.append('file', blob, name);
+                form.append('prefix', 'shoot/ref');
+                form.append('uploadId', uploadId);
+                const request = new XMLHttpRequest();
+                request.open('POST', '/api/studio-upload');
+                request.timeout = 120000;
+                request.upload.onprogress = event => { if (event.lengthComputable) onProgress(event.loaded / event.total); };
+                request.onload = () => {
+                    let result = {};
+                    try { result = JSON.parse(request.responseText || '{}'); } catch {}
+                    if (request.status >= 200 && request.status < 300 && result.ok) { onProgress(1); resolve({ key: result.key, name: result.name }); return; }
+                    const error = new Error(result.error || '图片上传失败');
+                    error.status = request.status;
+                    reject(error);
+                };
+                request.onerror = () => { const error = new Error('网络连接中断'); error.status = 0; reject(error); };
+                request.ontimeout = () => { const error = new Error('图片上传超时'); error.status = 408; reject(error); };
+                request.send(form);
+            });
+        } catch (error) {
+            lastError = error;
+            const retryable = !error.status || error.status === 408 || error.status === 429 || error.status >= 500;
+            if (!retryable || attempt === 3) throw error;
+            onRetry?.({ attempt: attempt + 1, maxAttempts: 3, error });
+            await new Promise(resolve => setTimeout(resolve, attempt * 700));
+        }
+    }
+    throw lastError;
 }
 
 loadLibrary();

@@ -6,6 +6,23 @@
     <title>成品图上传</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <link rel="stylesheet" href="style.css">
+    <style>
+        .rpa-submit-progress { margin-top:12px; padding:11px 12px; border:1px solid #dbe2ea; border-radius:8px; background:#f8fafc; color:#334155; }
+        .rpa-submit-progress-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px; }
+        .rpa-submit-progress-head strong { min-width:0; overflow:hidden; color:#111827; font-size:.78rem; line-height:1.4; text-overflow:ellipsis; white-space:nowrap; }
+        .rpa-submit-progress-head span { flex:none; color:#475569; font-size:.74rem; font-weight:800; font-variant-numeric:tabular-nums; }
+        .rpa-submit-progress-track { width:100%; height:8px; overflow:hidden; border-radius:4px; background:#e5e7eb; }
+        .rpa-submit-progress-bar { display:block; width:0; height:100%; border-radius:4px; background:#111827; transition:width .18s ease; }
+        .rpa-submit-progress-meta { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-top:8px; color:#64748b; font-size:.68rem; line-height:1.45; }
+        .rpa-submit-progress-meta span:first-child { min-width:0; overflow-wrap:anywhere; }
+        .rpa-submit-progress-meta span:last-child { flex:none; white-space:nowrap; }
+        .rpa-submit-progress.is-retrying { border-color:#fde68a; background:#fffbeb; }
+        .rpa-submit-progress.is-retrying .rpa-submit-progress-bar { background:#d97706; }
+        .rpa-submit-progress.is-success { border-color:#a7f3d0; background:#ecfdf5; }
+        .rpa-submit-progress.is-success .rpa-submit-progress-bar { background:#059669; }
+        .rpa-submit-progress.is-error { border-color:#fecaca; background:#fef2f2; }
+        .rpa-submit-progress.is-error .rpa-submit-progress-bar { background:#dc2626; }
+    </style>
 </head>
 <body class="rpa-upload-page">
     <main class="rpa-upload-shell">
@@ -36,6 +53,6 @@
             <div id="uploadStatus" class="rpa-upload-status"></div>
         </section>
     </main>
-    <script src="rpa-upload.js?v=20260723-adobe-ai"></script>
+    <script src="rpa-upload.js?v=20260723-unified-progress"></script>
 </body>
 </html>

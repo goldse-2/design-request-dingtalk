@@ -13,6 +13,83 @@ let pendingRejectId = null;
 let pendingEtaId = null;
 let adminInitialized = false;
 
+function adminProgressEscape(value) {
+    return String(value ?? '').replace(/[&<>"']/g, character => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[character]));
+}
+
+function renderAdminProgress(status, { title, percent = 0, detail = '', countText = '', state = '' }) {
+    if (!status) return;
+    if (!status.dataset.adminProgressBaseClass) {
+        status.dataset.adminProgressBaseClass = String(status.className || '')
+            .split(/\s+/)
+            .filter(name => name && !['admin-submit-progress', 'is-retrying', 'is-success', 'is-error'].includes(name))
+            .join(' ');
+    }
+    const shownPercent = Math.max(0, Math.min(100, Math.round(Number(percent) || 0)));
+    const stateClass = state ? ` is-${state}` : '';
+    status.className = `${status.dataset.adminProgressBaseClass} admin-submit-progress${stateClass}`.trim();
+    status.style.color = '';
+    status.innerHTML = `<div class="admin-submit-progress-head"><strong>${adminProgressEscape(title || '处理中')}</strong><span>${shownPercent}%</span></div>
+        <div class="admin-submit-progress-track" role="progressbar" aria-label="上传和提交进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${shownPercent}"><span class="admin-submit-progress-bar" style="width:${shownPercent}%"></span></div>
+        <div class="admin-submit-progress-meta"><span>${adminProgressEscape(detail)}</span><span>${adminProgressEscape(countText)}</span></div>`;
+}
+
+function resetAdminProgress(status, text = '', color = '#64748b') {
+    if (!status) return;
+    status.className = status.dataset.adminProgressBaseClass || status.className
+        .split(/\s+/).filter(name => name && !['admin-submit-progress', 'is-retrying', 'is-success', 'is-error'].includes(name)).join(' ');
+    status.style.color = color;
+    status.textContent = text;
+}
+
+function ensureAdminProgressNear(element, key) {
+    const parent = element?.parentElement;
+    if (!parent) return null;
+    let status = parent.querySelector(`[data-admin-progress="${key}"]`);
+    if (!status) {
+        status = document.createElement('div');
+        status.className = 'admin-inline-progress';
+        status.dataset.adminProgress = key;
+        parent.appendChild(status);
+    }
+    return status;
+}
+
+function adminXhrJson(url, { method = 'POST', headers = {}, body, onProgress, onRetry, retryIncompleteUpload = true } = {}) {
+    let attempt = 0;
+    const run = () => new Promise((resolve, reject) => {
+        const request = new XMLHttpRequest();
+        let uploadComplete = false;
+        request.open(method, url, true);
+        Object.entries(headers).forEach(([name, value]) => request.setRequestHeader(name, value));
+        request.upload.onprogress = event => {
+            if (event.lengthComputable) {
+                uploadComplete = event.loaded >= event.total;
+                onProgress?.(event.loaded / event.total);
+            }
+        };
+        request.onload = () => {
+            let result = {};
+            try { result = JSON.parse(request.responseText || '{}'); } catch {}
+            resolve({ ok: request.status >= 200 && request.status < 300, status: request.status, result });
+        };
+        request.onerror = () => {
+            if (retryIncompleteUpload && !uploadComplete && attempt < 1) {
+                attempt += 1;
+                onRetry?.(attempt);
+                setTimeout(() => run().then(resolve, reject), 700);
+                return;
+            }
+            reject(new Error('网络连接中断，请重新提交'));
+        };
+        request.onabort = () => reject(new Error('上传已取消'));
+        request.send(body);
+    });
+    return run();
+}
+
 async function checkAuth() {
     try {
         const res = await fetch('/api/admin-auth', { cache: 'no-store' });
@@ -286,8 +363,7 @@ function openShootCompletion(id) {
             files = [];
             input.value = '';
             preview.innerHTML = '';
-            progress.textContent = invalid.size > 15 * 1024 * 1024 ? `${invalid.name} 超过 15MB` : `${invalid.name} 不是图片文件`;
-            progress.style.color = '#b91c1c';
+            resetAdminProgress(progress, invalid.size > 15 * 1024 * 1024 ? `${invalid.name} 超过 15MB` : `${invalid.name} 不是图片文件`, '#b91c1c');
             submit.disabled = true;
             return;
         }
@@ -299,8 +375,7 @@ function openShootCompletion(id) {
             image.alt = file.name;
             preview.appendChild(image);
         });
-        progress.style.color = '#64748b';
-        progress.textContent = files.length ? `已选择 ${files.length} 张图片` : '尚未选择图片';
+        resetAdminProgress(progress, files.length ? `已选择 ${files.length} 张图片` : '尚未选择图片');
         submit.disabled = files.length === 0;
     });
     submit.addEventListener('click', () => completeShootRequest(id, files, overlay));
@@ -313,36 +388,50 @@ async function completeShootRequest(id, files, overlay) {
     const message = overlay.querySelector('.shoot-complete-message').value.trim();
     submit.disabled = true;
     submit.textContent = '正在提交...';
+    renderAdminProgress(progress, { title: '准备上传拍摄成品', percent: 2, detail: '正在处理图片', countText: `已完成 0/${files.length}` });
     try {
         const completionKeys = [];
         for (let index = 0; index < files.length; index += 1) {
-            progress.textContent = `正在上传图片 ${index + 1}/${files.length}...`;
+            const basePercent = (index / files.length) * 88;
+            renderAdminProgress(progress, { title: `正在上传第 ${index + 1} 张`, percent: basePercent, detail: files[index].name, countText: `已完成 ${index}/${files.length}` });
             const jpegBlob = await shootFileToJpegBlob(files[index]);
             const form = new FormData();
             const baseName = files[index].name.replace(/\.[^.]+$/, '').slice(0, 120) || `拍摄成品-${index + 1}`;
             form.append('file', jpegBlob, `${baseName}.jpg`);
             form.append('prefix', 'shoot/complete');
-            const uploadResponse = await fetch('/api/studio-upload', { method: 'POST', body: form });
-            const uploadResult = await uploadResponse.json().catch(() => ({}));
+            const uploadResponse = await adminXhrJson('/api/studio-upload', {
+                body: form,
+                onProgress: fraction => renderAdminProgress(progress, {
+                    title: `正在上传第 ${index + 1} 张`,
+                    percent: basePercent + fraction * (88 / files.length),
+                    detail: files[index].name,
+                    countText: `已完成 ${index}/${files.length}`
+                }),
+                onRetry: () => renderAdminProgress(progress, {
+                    title: `正在重试第 ${index + 1} 张`, percent: basePercent,
+                    detail: '网络中断，正在自动重试一次', countText: `已完成 ${index}/${files.length}`, state: 'retrying'
+                })
+            });
+            const uploadResult = uploadResponse.result;
             if (!uploadResponse.ok || !uploadResult.ok) throw new Error(uploadResult.error || `第 ${index + 1} 张上传失败`);
             completionKeys.push({ key: uploadResult.key, name: `${baseName}.jpg` });
+            renderAdminProgress(progress, { title: `第 ${index + 1} 张已上传`, percent: ((index + 1) / files.length) * 88, detail: '继续处理下一步', countText: `已完成 ${index + 1}/${files.length}` });
         }
-        progress.textContent = '正在发送给用户钉钉...';
-        const response = await fetch('/api/update-status', {
-            method: 'POST',
+        renderAdminProgress(progress, { title: '正在提交并通知用户', percent: 94, detail: '图片已上传，正在发送钉钉通知', countText: `已完成 ${files.length}/${files.length}` });
+        const response = await adminXhrJson('/api/update-status', {
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ submissionId: id, action: 'complete', message, completionKeys })
+            body: JSON.stringify({ submissionId: id, action: 'complete', message, completionKeys }),
+            retryIncompleteUpload: false
         });
-        const result = await response.json().catch(() => ({}));
+        const result = response.result;
         if (!response.ok || !result.ok) throw new Error(result.error || `提交失败 (${response.status})`);
         shootRequests = shootRequests.filter(request => request.id !== id);
         renderShootRequests(shootRequests);
         historyLoaded = false;
-        progress.textContent = '提交成功';
-        setTimeout(() => overlay.remove(), 500);
+        renderAdminProgress(progress, { title: '提交成功', percent: 100, detail: '用户钉钉通知已发送', countText: `已完成 ${files.length}/${files.length}`, state: 'success' });
+        setTimeout(() => overlay.remove(), 1100);
     } catch (error) {
-        progress.style.color = '#b91c1c';
-        progress.textContent = '提交失败：' + error.message;
+        renderAdminProgress(progress, { title: '提交失败', percent: 0, detail: error.message, countText: '可点击重新提交', state: 'error' });
         submit.disabled = false;
         submit.textContent = '重新提交';
     }
@@ -998,7 +1087,7 @@ function initLibrary() {
         libFileInput.onchange = e => {
             const files = Array.from(e.target.files);
             if (!files.length) return;
-            document.getElementById('libUploadStatus').textContent = '已选择 ' + files.length + ' 个文件，等待预览加载';
+            resetAdminProgress(document.getElementById('libUploadStatus'), '已选择 ' + files.length + ' 个文件，等待预览加载');
             files.forEach(addLibFile);
             e.target.value = '';
         };
@@ -1011,7 +1100,7 @@ function initLibrary() {
             if (!files.length) return;
             const folderName = files[0].webkitRelativePath.split('/')[0];
             document.getElementById('libProduct').value = folderName;
-            document.getElementById('libUploadStatus').textContent = '已选择文件夹“' + folderName + '”，共 ' + files.length + ' 个文件';
+            resetAdminProgress(document.getElementById('libUploadStatus'), '已选择文件夹“' + folderName + '”，共 ' + files.length + ' 个文件');
             files.forEach(addLibFile);
             e.target.value = '';
         };
@@ -1091,25 +1180,33 @@ async function doLibUpload() {
     if (!files.length) { alert('请先选择文件'); return; }
 
     const status = document.getElementById('libUploadStatus');
-    status.textContent = '上传中...';
+    renderAdminProgress(status, { title: '准备上传资料', percent: 2, detail: '正在读取文件', countText: `已完成 0/${files.length}` });
 
     try {
         const uploaded = [];
         for (let i = 0; i < files.length; i++) {
-            status.textContent = '上传中...（' + (i + 1) + '/' + files.length + '）';
-            const res = await fetch('/api/library-upload', {
-                method: 'POST',
+            const basePercent = (i / files.length) * 96;
+            const res = await adminXhrJson('/api/library-upload', {
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ product, category, files: [files[i]] })
+                body: JSON.stringify({ product, category, files: [files[i]] }),
+                onProgress: fraction => renderAdminProgress(status, {
+                    title: `正在上传第 ${i + 1} 个文件`, percent: basePercent + fraction * (96 / files.length),
+                    detail: files[i].name, countText: `已完成 ${i}/${files.length}`
+                }),
+                onRetry: () => renderAdminProgress(status, {
+                    title: `正在重试第 ${i + 1} 个文件`, percent: basePercent,
+                    detail: '网络中断，正在自动重试一次', countText: `已完成 ${i}/${files.length}`, state: 'retrying'
+                })
             });
-            const json = await res.json();
+            const json = res.result;
             if (!res.ok || !json.ok) {
                 throw new Error(json.error || ('第 ' + (i + 1) + ' 个文件上传失败'));
             }
             uploaded.push(...(json.uploaded || []));
+            renderAdminProgress(status, { title: `第 ${i + 1} 个文件已上传`, percent: ((i + 1) / files.length) * 96, detail: files[i].name, countText: `已完成 ${i + 1}/${files.length}` });
         }
 
-        status.textContent = `✓ 已上传 ${uploaded.length} 个文件`;
+        renderAdminProgress(status, { title: '资料上传成功', percent: 100, detail: `已保存到“${product}”`, countText: `已完成 ${uploaded.length}/${files.length}`, state: 'success' });
         libPendingFiles = [];
         document.getElementById('libUploadPreview').innerHTML = '';
         document.getElementById('libUploadPreview').style.display = 'none';
@@ -1117,7 +1214,7 @@ async function doLibUpload() {
         document.getElementById('libConfirmBtn').hidden = true;
         loadLibraryAdmin();
     } catch (e) {
-        status.textContent = '上传失败：' + e.message;
+        renderAdminProgress(status, { title: '上传失败', percent: 0, detail: e.message, countText: '可点击确认上传重试', state: 'error' });
     }
 }
 
@@ -1144,6 +1241,7 @@ async function replaceSubmissionImages(id, input) {
 
     const trigger = input.parentElement;
     const previousText = trigger?.textContent || '';
+    const progress = ensureAdminProgressNear(trigger, `replace-${id}`);
     if (trigger) {
         trigger.style.pointerEvents = 'none';
         trigger.style.opacity = '.65';
@@ -1152,33 +1250,49 @@ async function replaceSubmissionImages(id, input) {
 
     try {
         const images = [];
-        for (const file of files) {
+        for (let index = 0; index < files.length; index += 1) {
+            const file = files[index];
+            const basePercent = (index / files.length) * 90;
             const formData = new FormData();
             formData.append('file', file, file.name);
             formData.append('prefix', 'design/product');
-            const uploadResponse = await fetch('/api/studio-upload', { method: 'POST', body: formData });
-            const uploadResult = await uploadResponse.json().catch(() => ({}));
+            const uploadResponse = await adminXhrJson('/api/studio-upload', {
+                body: formData,
+                onProgress: fraction => renderAdminProgress(progress, {
+                    title: `正在上传第 ${index + 1} 张`, percent: basePercent + fraction * (90 / files.length),
+                    detail: file.name, countText: `已完成 ${index}/${files.length}`
+                }),
+                onRetry: () => renderAdminProgress(progress, {
+                    title: `正在重试第 ${index + 1} 张`, percent: basePercent,
+                    detail: '网络中断，正在自动重试一次', countText: `已完成 ${index}/${files.length}`, state: 'retrying'
+                })
+            });
+            const uploadResult = uploadResponse.result;
             if (!uploadResponse.ok || !uploadResult.ok) {
                 throw new Error(uploadResult.error || `图片上传失败：${file.name}`);
             }
             images.push({ key: uploadResult.key, name: uploadResult.name || file.name });
         }
 
-        const response = await fetch('/api/submissions', {
+        renderAdminProgress(progress, { title: '正在更新任务图片', percent: 94, detail: '图片已上传，正在保存任务', countText: `已完成 ${files.length}/${files.length}` });
+        const response = await adminXhrJson('/api/submissions', {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id, action: 'replaceProductImages', images })
+            body: JSON.stringify({ id, action: 'replaceProductImages', images }),
+            retryIncompleteUpload: false
         });
-        const result = await response.json().catch(() => ({}));
+        const result = response.result;
         if (!response.ok || !result.ok || !result.submission) {
             throw new Error(result.error || '更新任务图片失败');
         }
 
         const index = allData.findIndex(item => item.id === id);
         if (index >= 0) allData[index] = result.submission;
+        renderAdminProgress(progress, { title: '任务图片已更新', percent: 100, detail: '新图片已保存', countText: `已完成 ${files.length}/${files.length}`, state: 'success' });
         filterAndRender(filterSelect.value);
         alert('产品图片已更新');
     } catch (error) {
+        renderAdminProgress(progress, { title: '图片更新失败', percent: 0, detail: error.message || error, countText: '可重新选择图片', state: 'error' });
         alert(`上传失败：${error.message || error}`);
     } finally {
         if (trigger) {
@@ -1850,24 +1964,25 @@ async function submitLibraryCutoutTasks({ product, category, files, button, stat
     const submittedFiles = [];
     button.dataset.loading = '1';
     button.disabled = true;
-    status.style.color = '#6b7280';
+    renderAdminProgress(status, { title: '正在提交白底抠图任务', percent: 1, detail: batch[0]?.name || '', countText: `已完成 0/${batch.length}` });
 
     try {
         for (let index = 0; index < batch.length; index += 1) {
             const file = batch[index];
             button.textContent = `提交中 ${index + 1}/${batch.length}`;
-            status.textContent = `正在提交：${file.name}`;
+            renderAdminProgress(status, { title: `正在提交第 ${index + 1} 张`, percent: (index / batch.length) * 96, detail: file.name, countText: `已完成 ${submittedFiles.length}/${batch.length}` });
             try {
-                const response = await fetch('/api/admin-library-cutout', {
-                    method: 'POST',
+                const response = await adminXhrJson('/api/admin-library-cutout', {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         productName: product,
                         category,
                         files: [{ key: file.key, name: file.name }]
-                    })
+                    }),
+                    onProgress: fraction => renderAdminProgress(status, { title: `正在提交第 ${index + 1} 张`, percent: ((index + fraction) / batch.length) * 96, detail: file.name, countText: `已完成 ${submittedFiles.length}/${batch.length}` }),
+                    retryIncompleteUpload: false
                 });
-                const result = await response.json().catch(() => ({}));
+                const result = response.result;
                 if (!response.ok || !result.ok) throw new Error(result.error || `提交失败 (${response.status})`);
                 submittedFiles.push(file);
             } catch (error) {
@@ -1880,13 +1995,11 @@ async function submitLibraryCutoutTasks({ product, category, files, button, stat
     }
 
     if (!failures.length) {
-        status.textContent = `已静默提交 ${submittedFiles.length} 张，完成后自动替换原图`;
-        status.style.color = '#047857';
+        renderAdminProgress(status, { title: '白底抠图任务已提交', percent: 100, detail: '完成后自动替换资料库原图', countText: `已完成 ${submittedFiles.length}/${batch.length}`, state: 'success' });
         return { submittedFiles, failures };
     }
 
-    status.textContent = `成功 ${submittedFiles.length} 张，失败 ${failures.length} 张：${failures[0].file.name}（${failures[0].error}）`;
-    status.style.color = '#b91c1c';
+    renderAdminProgress(status, { title: '部分任务提交失败', percent: (submittedFiles.length / batch.length) * 100, detail: `${failures[0].file.name}：${failures[0].error}`, countText: `成功 ${submittedFiles.length} / 失败 ${failures.length}`, state: 'error' });
     return { submittedFiles, failures };
 }
 
@@ -1921,28 +2034,33 @@ function doLibUploadToProduct(product, category, btn) {
         input.remove();
         if (!files.length) return;
         const oldText = btn.textContent;
+        const status = ensureAdminProgressNear(btn, 'lib-append');
         btn.disabled = true;
         try {
             for (let i = 0; i < files.length; i++) {
                 btn.textContent = '上传中 ' + (i + 1) + '/' + files.length;
                 const file = files[i];
+                renderAdminProgress(status, { title: `正在追加第 ${i + 1} 个文件`, percent: (i / files.length) * 96, detail: file.name, countText: `已完成 ${i}/${files.length}` });
                 const base64 = await new Promise((resolve, reject) => {
                     const reader = new FileReader();
                     reader.onload = ev => resolve(ev.target.result.split(',')[1]);
                     reader.onerror = () => reject(new Error('读取失败：' + file.name));
                     reader.readAsDataURL(file);
                 });
-                const res = await fetch('/api/library-upload', {
-                    method: 'POST',
+                const res = await adminXhrJson('/api/library-upload', {
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ product, category, files: [{ name: file.name, base64, mimeType: file.type }] })
+                    body: JSON.stringify({ product, category, files: [{ name: file.name, base64, mimeType: file.type }] }),
+                    onProgress: fraction => renderAdminProgress(status, { title: `正在追加第 ${i + 1} 个文件`, percent: ((i + fraction) / files.length) * 96, detail: file.name, countText: `已完成 ${i}/${files.length}` }),
+                    onRetry: () => renderAdminProgress(status, { title: `正在重试第 ${i + 1} 个文件`, percent: (i / files.length) * 96, detail: '网络中断，正在重试一次', countText: `已完成 ${i}/${files.length}`, state: 'retrying' })
                 });
-                const json = await res.json();
+                const json = res.result;
                 if (!res.ok || !json.ok) throw new Error(json.error || ('上传失败：' + file.name));
             }
             btn.textContent = '✓ 已追加';
+            renderAdminProgress(status, { title: '文件追加成功', percent: 100, detail: `已保存到“${product}”`, countText: `已完成 ${files.length}/${files.length}`, state: 'success' });
             setTimeout(loadLibraryAdmin, 400);
         } catch (err) {
+            renderAdminProgress(status, { title: '追加失败', percent: 0, detail: err.message, countText: '可重新选择文件', state: 'error' });
             alert('追加失败：' + err.message);
             btn.disabled = false;
             btn.textContent = oldText;
@@ -2315,35 +2433,42 @@ function openStudioPhotographyUpload(task, cardButton) {
                 drop.style.borderColor = '#cbd5e1';
                 drop.style.background = '#f8fafc';
             }
-            status.textContent = '';
+            resetAdminProgress(status);
         };
     });
 
     submit.onclick = async () => {
         const files = inputs.map(input => input.files?.[0]).filter(Boolean);
         if (!files.length) {
-            status.textContent = '请至少选择一张拍摄图片';
-            status.style.color = '#b91c1c';
+            resetAdminProgress(status, '请至少选择一张拍摄图片', '#b91c1c');
             return;
         }
         if (files.some(file => file.size > 15 * 1024 * 1024)) {
-            status.textContent = '拍摄图片单张不能超过 15MB';
-            status.style.color = '#b91c1c';
+            resetAdminProgress(status, '拍摄图片单张不能超过 15MB', '#b91c1c');
             return;
         }
 
         submit.disabled = true;
         const retouchEnabled = retouchToggle.checked;
         submit.textContent = retouchEnabled ? '正在上传并加入精修队列...' : '正在上传并加入作图队列...';
-        status.textContent = '请不要关闭，正在把照片写入原任务';
-        status.style.color = '#6b7280';
+        renderAdminProgress(status, { title: '正在上传拍摄图片', percent: 1, detail: '请不要关闭，正在写入原任务', countText: `已完成 0/${files.length}` });
         try {
             const form = new FormData();
             form.append('taskId', task.id);
             form.append('retouchEnabled', String(retouchEnabled));
             files.forEach(file => form.append('files', file, file.name));
-            const response = await fetch('/api/studio-photography-photo', { method: 'POST', body: form });
-            const result = await response.json().catch(() => ({}));
+            const response = await adminXhrJson('/api/studio-photography-photo', {
+                body: form,
+                onProgress: fraction => renderAdminProgress(status, {
+                    title: '正在上传拍摄图片', percent: fraction * 94,
+                    detail: retouchEnabled ? '上传后将进入精修队列' : '上传后将进入作图队列',
+                    countText: `${files.length} 张图片`
+                }),
+                onRetry: () => renderAdminProgress(status, {
+                    title: '正在自动重试', percent: 0, detail: '网络中断，正在重试一次', countText: `${files.length} 张图片`, state: 'retrying'
+                })
+            });
+            const result = response.result;
             if (!response.ok || !result.ok) throw new Error(result.error || `操作失败 (${response.status})`);
             const stageText = result.retouchEnabled ? '精修' : '作图';
             const queueText = result.queueInfo?.aheadCount > 0
@@ -2351,14 +2476,12 @@ function openStudioPhotographyUpload(task, cardButton) {
                 : result.retouchEnabled
                     ? '已进入精修队列，完成后会自动开始作图'
                     : '已进入作图队列，系统会按顺序开始处理';
-            status.textContent = queueText;
-            status.style.color = '#047857';
+            renderAdminProgress(status, { title: '图片已上传', percent: 100, detail: queueText, countText: `已完成 ${files.length}/${files.length}`, state: 'success' });
             submit.textContent = result.retouchEnabled ? '已开始精修' : '已开始作图';
             if (cardButton) cardButton.textContent = result.retouchEnabled ? '拍摄图片精修中' : '已提交拍摄图片';
             setTimeout(() => { close(); loadStudioAdmin(); }, 900);
         } catch (error) {
-            status.textContent = error.message;
-            status.style.color = '#b91c1c';
+            renderAdminProgress(status, { title: '上传失败', percent: 0, detail: error.message, countText: '可点击重新上传', state: 'error' });
             submit.disabled = false;
             submit.textContent = retouchToggle.checked ? '重新上传并开始精修' : '重新上传并开始作图';
         }
@@ -2787,7 +2910,7 @@ function uploadSheetSelfPhotos(parentId, slotIndex, button, skipRetouch = false,
             }
             updateFileText(index);
             submit.textContent = '上传并启动';
-            status.textContent = '';
+            resetAdminProgress(status);
         };
     });
     modal.querySelector('#sheetPhotoLibraryOpen').onclick = () => {
@@ -2801,7 +2924,7 @@ function uploadSheetSelfPhotos(parentId, slotIndex, button, skipRetouch = false,
                 text.textContent = positionedFiles[index]?.name || `资料库图片 ${index + 1}`;
             });
             submit.textContent = photographyOnly ? '直接发送给用户' : '启动图生图';
-            status.textContent = '';
+            resetAdminProgress(status);
             renderLibrarySelection();
         }, photographyOnly);
     };
@@ -2816,26 +2939,28 @@ function uploadSheetSelfPhotos(parentId, slotIndex, button, skipRetouch = false,
         const retouchFlags = localEntries.map(entry => entry.needsRetouch);
         const cutoutFlags = localEntries.map(entry => entry.needsCutout);
         const needsProcessing = retouchFlags.some(Boolean) || cutoutFlags.some(Boolean);
-        if (!selectedLibraryFiles.length && (files.length < 1 || files.length > 2)) { status.textContent = '请上传图片，或从去白底资料库选择'; status.style.color = '#b91c1c'; return; }
-        if (files.some(file => file.size > 15 * 1024 * 1024)) { status.textContent = '图片单张不能超过 15MB'; status.style.color = '#b91c1c'; return; }
+        if (!selectedLibraryFiles.length && (files.length < 1 || files.length > 2)) { resetAdminProgress(status, '请上传图片，或从去白底资料库选择', '#b91c1c'); return; }
+        if (files.some(file => file.size > 15 * 1024 * 1024)) { resetAdminProgress(status, '图片单张不能超过 15MB', '#b91c1c'); return; }
         submitButton.disabled = true;
         submitButton.textContent = selectedLibraryFiles.length ? (photographyOnly ? '正在发送...' : '正在启动图生图...') : '上传并启动中...';
-        status.textContent = selectedLibraryFiles.length
+        const initialDetail = selectedLibraryFiles.length
             ? (selectedLibraryFiles.length === 1 ? '正在把这张资料库图片作为两张使用' : '正在使用两张资料库图片启动任务')
             : (files.length === 1 ? '正在上传，系统会把这张图作为两张处理' : '正在上传两张图片，请不要关闭');
-        status.style.color = '#6b7280';
+        const totalCount = selectedLibraryFiles.length || files.length;
+        renderAdminProgress(status, { title: selectedLibraryFiles.length ? '正在提交资料库图片' : '正在上传拍摄图片', percent: 2, detail: initialDetail, countText: `${totalCount} 张图片` });
         try {
             let response;
             if (selectedLibraryFiles.length) {
-                response = await fetch('/api/sheet-self-photo', {
-                    method: 'POST',
+                response = await adminXhrJson('/api/sheet-self-photo', {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         action: 'library',
                         parentId,
                         slotIndex,
                         libraryKeys: selectedLibraryFiles.map(({ key, name }) => ({ key, name }))
-                    })
+                    }),
+                    onProgress: fraction => renderAdminProgress(status, { title: '正在提交资料库图片', percent: fraction * 94, detail: initialDetail, countText: `${totalCount} 张图片` }),
+                    retryIncompleteUpload: false
                 });
             } else {
                 const form = new FormData();
@@ -2845,21 +2970,24 @@ function uploadSheetSelfPhotos(parentId, slotIndex, button, skipRetouch = false,
                 form.append('retouchFlags', JSON.stringify(retouchFlags));
                 form.append('cutoutFlags', JSON.stringify(cutoutFlags));
                 files.forEach(file => form.append('files', file, file.name));
-                response = await fetch('/api/sheet-self-photo', { method: 'POST', body: form });
+                response = await adminXhrJson('/api/sheet-self-photo', {
+                    body: form,
+                    onProgress: fraction => renderAdminProgress(status, { title: '正在上传拍摄图片', percent: fraction * 94, detail: initialDetail, countText: `${totalCount} 张图片` }),
+                    onRetry: () => renderAdminProgress(status, { title: '正在自动重试', percent: 0, detail: '网络中断，正在重试一次', countText: `${totalCount} 张图片`, state: 'retrying' })
+                });
             }
-            const result = await response.json().catch(() => ({}));
+            const result = response.result;
             if (!response.ok || !result.ok) throw new Error(result.error || `操作失败 (${response.status})`);
-            status.textContent = result.needsProcessing
+            const resultDetail = result.needsProcessing
                 ? (result.duplicatedSource
                     ? '已把同一张图作为两张，并按精修/抠图开关启动处理'
                     : '已按两张图片各自的精修/抠图开关启动处理')
                 : (photographyOnly ? '已跳过精修和抠图，正在直接发送给用户' : '已跳过精修和抠图，直接进入图生图');
-            status.style.color = '#047857';
+            renderAdminProgress(status, { title: '提交成功', percent: 100, detail: resultDetail, countText: `已完成 ${totalCount}/${totalCount}`, state: 'success' });
             button.textContent = result.needsProcessing ? '已启动处理' : (photographyOnly ? '已发送' : '已启动图生图');
             setTimeout(() => { close(); loadStudioAdmin(); }, 800);
         } catch (error) {
-            status.textContent = error.message;
-            status.style.color = '#b91c1c';
+            renderAdminProgress(status, { title: '提交失败', percent: 0, detail: error.message, countText: '可点击重新提交', state: 'error' });
             submitButton.disabled = false;
             submitButton.textContent = selectedLibraryFiles.length ? (photographyOnly ? '直接发送给用户' : '启动图生图') : '上传并启动';
         }
@@ -3677,29 +3805,30 @@ async function openManualUpload(taskId, card) {
             };
             reader.readAsDataURL(f);
         });
-        status.textContent = `已选择 ${files.length} 张图片`;
+        resetAdminProgress(status, `已选择 ${files.length} 张图片`);
     };
 
     submit.onclick = async () => {
-        if (!files.length) { status.textContent = '请先选择图片'; status.style.color = '#ef4444'; return; }
+        if (!files.length) { resetAdminProgress(status, '请先选择图片', '#ef4444'); return; }
         submit.disabled = true;
         submit.textContent = '上传中...';
-        status.textContent = '正在上传...';
-        status.style.color = '#6b7280';
+        renderAdminProgress(status, { title: '正在上传成品图', percent: 1, detail: '上传完成后会自动完成任务', countText: `已完成 0/${files.length}` });
         try {
             const fd = new FormData();
             fd.append('taskId', taskId);
             fd.append('password', localStorage.getItem('admin_password') || 'ylkj');
             files.forEach(f => fd.append('files', f));
-            const res = await fetch('/api/studio-result-upload', { method: 'POST', body: fd });
-            const json = await res.json();
+            const res = await adminXhrJson('/api/studio-result-upload', {
+                body: fd,
+                onProgress: fraction => renderAdminProgress(status, { title: '正在上传成品图', percent: fraction * 96, detail: '请保持页面打开', countText: `${files.length} 张图片` }),
+                onRetry: () => renderAdminProgress(status, { title: '正在自动重试', percent: 0, detail: '网络中断，正在重试一次', countText: `${files.length} 张图片`, state: 'retrying' })
+            });
+            const json = res.result;
             if (!res.ok || !json.ok) throw new Error(json.error || res.status);
-            status.textContent = '✓ 上传成功，任务已完成';
-            status.style.color = '#16a34a';
+            renderAdminProgress(status, { title: '上传成功，任务已完成', percent: 100, detail: '成品图已保存', countText: `已完成 ${files.length}/${files.length}`, state: 'success' });
             setTimeout(() => { modal.remove(); if (card) card.remove(); loadStudioAdmin(); }, 1500);
         } catch (err) {
-            status.textContent = '上传失败：' + err.message;
-            status.style.color = '#ef4444';
+            renderAdminProgress(status, { title: '上传失败', percent: 0, detail: err.message, countText: '可点击重新上传', state: 'error' });
             submit.disabled = false;
             submit.textContent = '上传并完成任务';
         }
@@ -4212,7 +4341,7 @@ function wireStudioGuideDocumentEditor(overlay) {
         if (!image) return;
         restoreSelection();
         insertStudioGuideDocumentImage(editor, image);
-        overlay.querySelector('#guideEditorStatus').textContent = '图片已插入文章';
+        resetAdminProgress(overlay.querySelector('#guideEditorStatus'), '图片已插入文章');
         rememberSelection();
     });
     editor.addEventListener('click', event => {
@@ -4321,18 +4450,22 @@ function syncStudioGuideBlocksFromDocument(overlay) {
 async function uploadStudioGuideImage(file, overlay) {
     if (!file) return null;
     const status = overlay.querySelector('#guideEditorStatus');
-    status.textContent = '正在上传图片...';
+    renderAdminProgress(status, { title: '正在上传文章图片', percent: 1, detail: file.name, countText: '1 张图片' });
     try {
         const form = new FormData();
         form.append('action', 'upload_image');
         form.append('file', file, file.name);
-        const response = await fetch('/api/studio-guides', { method: 'POST', body: form });
-        const result = await response.json().catch(() => ({}));
+        const response = await adminXhrJson('/api/studio-guides', {
+            body: form,
+            onProgress: fraction => renderAdminProgress(status, { title: '正在上传文章图片', percent: fraction * 98, detail: file.name, countText: '已完成 0/1' }),
+            onRetry: () => renderAdminProgress(status, { title: '正在自动重试', percent: 0, detail: '网络中断，正在重试一次', countText: '已完成 0/1', state: 'retrying' })
+        });
+        const result = response.result;
         if (!response.ok || !result.ok) throw new Error(result.error || `上传失败 (${response.status})`);
-        status.textContent = '图片已上传';
+        renderAdminProgress(status, { title: '图片已上传', percent: 100, detail: file.name, countText: '已完成 1/1', state: 'success' });
         return result.image;
     } catch (error) {
-        status.textContent = '图片上传失败：' + error.message;
+        renderAdminProgress(status, { title: '图片上传失败', percent: 0, detail: error.message, countText: '可重新选择图片', state: 'error' });
         return null;
     }
 }
@@ -4346,24 +4479,27 @@ async function saveStudioGuide(overlay) {
     const button = overlay.querySelector('#guideDraftSave');
     const status = overlay.querySelector('#guideEditorStatus');
     if (!studioGuideDraft.blocks.length) {
-        status.textContent = '请先在稿纸中填写正文或插入图片';
+        resetAdminProgress(status, '请先在稿纸中填写正文或插入图片', '#b91c1c');
         return;
     }
     button.disabled = true;
-    status.textContent = '正在保存...';
+    renderAdminProgress(status, { title: '正在保存帮助文章', percent: 15, detail: '正在提交文章内容', countText: '' });
     try {
-        const response = await fetch('/api/studio-guides', {
-            method: 'POST',
+        const response = await adminXhrJson('/api/studio-guides', {
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'save', article: studioGuideDraft })
+            body: JSON.stringify({ action: 'save', article: studioGuideDraft }),
+            onProgress: fraction => renderAdminProgress(status, { title: '正在保存帮助文章', percent: 15 + fraction * 80, detail: '正在提交文章内容', countText: '' }),
+            retryIncompleteUpload: false
         });
-        const result = await response.json().catch(() => ({}));
+        const result = response.result;
         if (!response.ok || !result.ok) throw new Error(result.error || `保存失败 (${response.status})`);
-        overlay.remove();
+        renderAdminProgress(status, { title: '文章保存成功', percent: 100, detail: '内容已更新', countText: '', state: 'success' });
         studioGuideDraft = null;
+        await new Promise(resolve => setTimeout(resolve, 650));
+        overlay.remove();
         await loadStudioGuidesAdmin();
     } catch (error) {
-        status.textContent = '保存失败：' + error.message;
+        renderAdminProgress(status, { title: '文章保存失败', percent: 0, detail: error.message, countText: '可重新保存', state: 'error' });
         button.disabled = false;
     }
 }

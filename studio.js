@@ -1634,22 +1634,43 @@ async function submitShoot() {
     }
 
     button.disabled = true;
+    const status = document.getElementById('shootStatus');
+    let lastPercent = shootImages.length ? 3 : 72;
+    renderSubmissionProgress(status, {
+        phase: 'uploading',
+        title: shootImages.length ? `准备上传 ${shootImages.length} 张参考图片` : '正在准备拍摄需求',
+        percent: lastPercent,
+        detail: shootImages.length ? '参考图片上传完成后自动创建拍摄需求' : '正在整理产品名称和拍摄说明',
+        countText: shootImages.length ? `已上传 0/${shootImages.length}` : '资料已准备'
+    });
     try {
-        const photoKeys = [];
-        for (let index = 0; index < shootImages.length; index += 1) {
-            const image = shootImages[index];
-            setShootStatus(`正在上传参考图片 ${index + 1}/${shootImages.length}...`);
-            const formData = new FormData();
-            const blob = await fetch(image.dataUrl).then(response => response.blob());
-            formData.append('file', blob, image.name);
-            formData.append('prefix', 'shoot/ref');
-            const uploadResponse = await fetch('/api/studio-upload', { method: 'POST', body: formData });
-            const uploadResult = await uploadResponse.json();
-            if (!uploadResponse.ok || !uploadResult.ok) throw new Error(uploadResult.error || '图片上传失败');
-            photoKeys.push({ key: uploadResult.key, name: uploadResult.name });
-        }
+        const photoKeys = shootImages.length ? await uploadImages(shootImages, 'shoot/ref', {
+            onProgress: ({ index, total, ratio }) => {
+                lastPercent = 4 + ((index + ratio) / total) * 78;
+                renderSubmissionProgress(status, {
+                    phase: 'uploading',
+                    title: `正在上传参考图片 ${index + 1}/${total}`,
+                    percent: lastPercent,
+                    detail: shootImages[index]?.name || '拍摄参考图',
+                    countText: `已上传 ${Math.floor(index + ratio)}/${total}`
+                });
+            },
+            onRetry: ({ index, total, attempt, maxAttempts, error }) => renderSubmissionProgress(status, {
+                phase: 'retrying',
+                title: `上传中断，正在自动重试 ${attempt}/${maxAttempts}`,
+                percent: lastPercent,
+                detail: error.message,
+                countText: `图片 ${index + 1}/${total}`
+            })
+        }) : [];
 
-        setShootStatus('正在提交拍摄需求...');
+        renderSubmissionProgress(status, {
+            phase: 'creating',
+            title: '图片上传完成，正在创建拍摄需求',
+            percent: 90,
+            detail: '正在确认需求已进入拍摄队列',
+            countText: shootImages.length ? `已上传 ${shootImages.length}/${shootImages.length}` : '资料已提交'
+        });
         const data = {
             fileName: '白底拍摄需求',
             submitTime: new Date().toLocaleString('zh-CN'),
@@ -1671,10 +1692,22 @@ async function submitShoot() {
         });
         const result = await response.json();
         if (!response.ok || !result.ok) throw new Error(result.error || `提交失败 (${response.status})`);
-        setShootStatus('拍摄需求已提交，我会尽快拍给你', 'success');
+        renderSubmissionProgress(status, {
+            phase: 'success',
+            title: '拍摄需求提交完成',
+            percent: 100,
+            detail: '需求已进入拍摄队列，我会尽快拍给你',
+            countText: '已完成'
+        });
         setTimeout(closeShootModal, 1200);
     } catch (error) {
-        setShootStatus(`提交失败：${error.message}`, 'error');
+        renderSubmissionProgress(status, {
+            phase: 'error',
+            title: '拍摄需求提交失败',
+            percent: lastPercent,
+            detail: error.message,
+            countText: '可以重新提交'
+        });
         button.disabled = false;
     }
 }
@@ -1878,12 +1911,43 @@ async function submitStudioHelp() {
     button.disabled = true;
     button.classList.add('is-loading');
     status.className = 'studio-status';
+    let lastPercent = uploads.helpImages.length ? 3 : 72;
+    renderSubmissionProgress(status, {
+        phase: 'uploading',
+        title: uploads.helpImages.length ? `准备上传 ${uploads.helpImages.length} 张问题图片` : '正在准备问题反馈',
+        percent: lastPercent,
+        detail: uploads.helpImages.length ? '图片上传完成后自动提交问题' : '正在整理问题说明',
+        countText: uploads.helpImages.length ? `已上传 0/${uploads.helpImages.length}` : '资料已准备'
+    });
     try {
-        status.textContent = '正在上传图片…';
         const images = uploads.helpImages.length
-            ? await uploadImages(uploads.helpImages, 'feedback-images/studio-help')
+            ? await uploadImages(uploads.helpImages, 'feedback-images/studio-help', {
+                onProgress: ({ index, total, ratio }) => {
+                    lastPercent = 4 + ((index + ratio) / total) * 78;
+                    renderSubmissionProgress(status, {
+                        phase: 'uploading',
+                        title: `正在上传问题图片 ${index + 1}/${total}`,
+                        percent: lastPercent,
+                        detail: uploads.helpImages[index]?.name || '问题图片',
+                        countText: `已上传 ${Math.floor(index + ratio)}/${total}`
+                    });
+                },
+                onRetry: ({ index, total, attempt, maxAttempts, error }) => renderSubmissionProgress(status, {
+                    phase: 'retrying',
+                    title: `上传中断，正在自动重试 ${attempt}/${maxAttempts}`,
+                    percent: lastPercent,
+                    detail: error.message,
+                    countText: `图片 ${index + 1}/${total}`
+                })
+            })
             : [];
-        status.textContent = '正在提交问题…';
+        renderSubmissionProgress(status, {
+            phase: 'creating',
+            title: '图片上传完成，正在提交问题',
+            percent: 90,
+            detail: '正在确认问题反馈已保存',
+            countText: uploads.helpImages.length ? `已上传 ${uploads.helpImages.length}/${uploads.helpImages.length}` : '资料已提交'
+        });
         const response = await fetch('/api/studio-help', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1895,11 +1959,21 @@ async function submitStudioHelp() {
         updateCharCount(document.getElementById('studioHelpMessage'), 'studioHelpMessageCount', 2000);
         uploads.helpImages = [];
         renderStudioHelpImages();
-        status.textContent = '问题已提交，我们会尽快协助处理。';
-        status.classList.add('ok');
+        renderSubmissionProgress(status, {
+            phase: 'success',
+            title: '问题提交完成',
+            percent: 100,
+            detail: '问题已保存，我们会尽快协助处理',
+            countText: '已完成'
+        });
     } catch (error) {
-        status.textContent = `提交失败：${error.message}`;
-        status.classList.add('err');
+        renderSubmissionProgress(status, {
+            phase: 'error',
+            title: '问题提交失败',
+            percent: lastPercent,
+            detail: error.message,
+            countText: '内容已保留'
+        });
     } finally {
         button.disabled = false;
         button.classList.remove('is-loading');
@@ -2454,16 +2528,44 @@ function openSheetAPlusDoubleModal(slotIndex) {
         slot.uploading = true;
         try {
             const merged = await mergeAPlusHalves(selected.top, selected.bottom);
-            const [uploaded] = await uploadImages([{ file: merged.file, name: merged.file.name }], 'studio/sheet-self');
+            const [uploaded] = await uploadImages([{ file: merged.file, name: merged.file.name }], 'studio/sheet-self', {
+                onProgress: ({ ratio }) => renderSubmissionProgress(status, {
+                    phase: 'uploading',
+                    title: '正在保存 A+ 连续双图',
+                    percent: 12 + ratio * 82,
+                    detail: merged.file.name,
+                    countText: '1 张合并图'
+                }),
+                onRetry: ({ attempt, maxAttempts, error }) => renderSubmissionProgress(status, {
+                    phase: 'retrying',
+                    title: `保存中断，正在自动重试 ${attempt}/${maxAttempts}`,
+                    percent: 20,
+                    detail: error.message,
+                    countText: '合并图已保留'
+                })
+            });
             slot.size = A_PLUS_DOUBLE_SIZE;
             slot.aPlusDouble = true;
             slot.referenceKey = uploaded;
             slot.status = 'A+ 上下双图已合并并保存';
             resetSheetSelfCopyAiState(slot);
             persistSheetSelfDraft(300);
+            renderSubmissionProgress(document.getElementById('sheetSelfStatus'), {
+                phase: 'success',
+                title: 'A+ 连续双图上传完成',
+                percent: 100,
+                detail: '上下两张图片已合并并保存到当前图片位',
+                countText: '已完成 1/1'
+            });
             close();
         } catch (error) {
-            setStatus(error.message, true);
+            renderSubmissionProgress(status, {
+                phase: 'error',
+                title: 'A+ 连续双图上传失败',
+                percent: 0,
+                detail: error.message,
+                countText: '图片已保留，可以重新提交'
+            });
             mergeButton.disabled = false;
             mergeButton.textContent = '合并并使用';
         } finally {
@@ -2531,9 +2633,37 @@ async function handleSheetSelfFiles(slotIndex, type, files) {
     slot.uploading = true;
     slot.status = `正在上传 ${selected.length} 张图片...`;
     renderSheetSelfGrid();
+    const globalStatus = document.getElementById('sheetSelfStatus');
+    let lastPercent = 3;
+    renderSubmissionProgress(globalStatus, {
+        phase: 'uploading',
+        title: `准备上传 ${selected.length} 张图片`,
+        percent: lastPercent,
+        detail: `图片位 ${slotIndex + 1}`,
+        countText: `已上传 0/${selected.length}`
+    });
     let shouldIdentifyProduct = false;
     try {
-        const keys = await uploadImages(selected.map(file => ({ file, name: file.name })), 'studio/sheet-self');
+        const uploadItems = selected.map(file => ({ file, name: file.name }));
+        const keys = await uploadImages(uploadItems, 'studio/sheet-self', {
+            onProgress: ({ index, total, ratio }) => {
+                lastPercent = 4 + ((index + ratio) / total) * 92;
+                renderSubmissionProgress(globalStatus, {
+                    phase: 'uploading',
+                    title: `正在上传图片 ${index + 1}/${total}`,
+                    percent: lastPercent,
+                    detail: uploadItems[index]?.name || `图片位 ${slotIndex + 1}`,
+                    countText: `已上传 ${Math.floor(index + ratio)}/${total}`
+                });
+            },
+            onRetry: ({ index, total, attempt, maxAttempts, error }) => renderSubmissionProgress(globalStatus, {
+                phase: 'retrying',
+                title: `上传中断，正在自动重试 ${attempt}/${maxAttempts}`,
+                percent: lastPercent,
+                detail: error.message,
+                countText: `图片 ${index + 1}/${total}`
+            })
+        });
         if (type === 'reference') {
             slot.referenceKey = keys[0];
             resetSheetSelfCopyAiState(slot);
@@ -2545,8 +2675,22 @@ async function handleSheetSelfFiles(slotIndex, type, files) {
         }
         slot.status = '图片已上传并保存';
         persistSheetSelfDraft(300);
+        renderSubmissionProgress(globalStatus, {
+            phase: 'success',
+            title: '图片上传完成',
+            percent: 100,
+            detail: `图片位 ${slotIndex + 1} 已保存`,
+            countText: `已完成 ${selected.length}/${selected.length}`
+        });
     } catch (error) {
         slot.status = '失败：' + error.message;
+        renderSubmissionProgress(globalStatus, {
+            phase: 'error',
+            title: '图片上传失败',
+            percent: lastPercent,
+            detail: error.message,
+            countText: '可以重新上传'
+        });
     } finally {
         slot.uploading = false;
         renderSheetSelfGrid();
@@ -2827,8 +2971,13 @@ async function submitSheetSelf() {
     button.dataset.loading = '1';
     button.disabled = true;
     button.textContent = `正在创建 ${activeSlots.length} 张任务...`;
-    status.className = 'studio-status';
-    status.textContent = '正在保存并启动自动流程...';
+    renderSubmissionProgress(status, {
+        phase: 'creating',
+        title: `正在创建 ${activeSlots.length} 个图片任务`,
+        percent: 35,
+        detail: '图片已经保存，正在启动自动处理流程',
+        countText: `任务 0/${activeSlots.length}`
+    });
     try {
         const response = await fetch('/api/sheet-self-submit', {
             method: 'POST',
@@ -2853,6 +3002,14 @@ async function submitSheetSelf() {
         const result = await response.json().catch(() => ({}));
         if (!response.ok || !result.ok) throw new Error(result.error || `提交失败 (${response.status})`);
 
+        renderSubmissionProgress(status, {
+            phase: 'success',
+            title: '表格任务提交完成',
+            percent: 100,
+            detail: '所有已填写图片位均已创建任务',
+            countText: `已完成 ${activeSlots.length}/${activeSlots.length}`
+        });
+
         clearTimeout(sheetSelfSaveTimer);
         sheetSelfDirty = false;
         try { localStorage.removeItem(SHEET_SELF_LOCAL_PREFIX + currentUser.unionId); } catch {}
@@ -2865,11 +3022,15 @@ async function submitSheetSelf() {
         document.getElementById('sheetSelfProductName').value = '';
         renderSheetSelfGrid();
         setSheetSelfSaveStatus('已提交，新表格等待填写', 'is-saved');
-        status.textContent = '';
         showSuccessModal(result, `已启动 ${result.automaticSlots} 个图片位；${result.photographerSlots} 个图片位等待摄影师补图。每完成一张就会立即发到钉钉。`);
     } catch (error) {
-        status.textContent = '提交失败：' + error.message;
-        status.classList.add('err');
+        renderSubmissionProgress(status, {
+            phase: 'error',
+            title: '表格任务提交失败',
+            percent: 35,
+            detail: error.message,
+            countText: '已填写内容仍然保留'
+        });
     } finally {
         button.dataset.loading = '';
         button.disabled = false;
@@ -3051,17 +3212,51 @@ async function handlePhotographyModeFile(slotIndex, file) {
         return;
     }
     slot.uploading = true;
-    status.textContent = '正在上传图片...';
-    status.className = 'studio-status';
+    let lastPercent = 3;
+    renderSubmissionProgress(status, {
+        phase: 'uploading',
+        title: '正在上传拍摄案例图',
+        percent: lastPercent,
+        detail: file.name,
+        countText: '已上传 0/1'
+    });
     renderPhotographyModeSlots();
     try {
-        const [key] = await uploadImages([{ file, name: file.name }], 'studio/sheet-self');
+        const [key] = await uploadImages([{ file, name: file.name }], 'studio/sheet-self', {
+            onProgress: ({ ratio }) => {
+                lastPercent = 4 + ratio * 92;
+                renderSubmissionProgress(status, {
+                    phase: 'uploading',
+                    title: '正在上传拍摄案例图',
+                    percent: lastPercent,
+                    detail: file.name,
+                    countText: ratio >= 1 ? '已上传 1/1' : '已上传 0/1'
+                });
+            },
+            onRetry: ({ attempt, maxAttempts, error }) => renderSubmissionProgress(status, {
+                phase: 'retrying',
+                title: `上传中断，正在自动重试 ${attempt}/${maxAttempts}`,
+                percent: lastPercent,
+                detail: error.message,
+                countText: '案例图已保留'
+            })
+        });
         slot.photographyExampleKey = key;
-        status.textContent = '图片已上传';
-        status.className = 'studio-status ok';
+        renderSubmissionProgress(status, {
+            phase: 'success',
+            title: '拍摄案例图上传完成',
+            percent: 100,
+            detail: file.name,
+            countText: '已完成 1/1'
+        });
     } catch (uploadError) {
-        status.textContent = '上传失败：' + uploadError.message;
-        status.className = 'studio-status err';
+        renderSubmissionProgress(status, {
+            phase: 'error',
+            title: '拍摄案例图上传失败',
+            percent: lastPercent,
+            detail: uploadError.message,
+            countText: '可以重新上传'
+        });
     } finally {
         slot.uploading = false;
         renderPhotographyModeSlots();
@@ -3079,8 +3274,14 @@ async function submitPhotographyMode() {
     button.dataset.loading = '1';
     button.disabled = true;
     button.textContent = `正在创建 ${photographyModeState.slots.length} 个图片位...`;
-    status.textContent = '正在创建图片拍摄任务...';
-    status.className = 'studio-status';
+    const slotCount = photographyModeState.slots.length;
+    renderSubmissionProgress(status, {
+        phase: 'creating',
+        title: `正在创建 ${slotCount} 个拍摄任务`,
+        percent: 40,
+        detail: '拍摄设置已经保存，正在写入拍摄队列',
+        countText: `任务 0/${slotCount}`
+    });
     try {
         const response = await fetch('/api/sheet-self-submit', {
             method: 'POST',
@@ -3104,13 +3305,24 @@ async function submitPhotographyMode() {
         });
         const result = await response.json().catch(() => ({}));
         if (!response.ok || !result.ok) throw new Error(result.error || `提交失败 (${response.status})`);
+        renderSubmissionProgress(status, {
+            phase: 'success',
+            title: '拍摄任务提交完成',
+            percent: 100,
+            detail: '任务已进入拍摄队列',
+            countText: `已完成 ${slotCount}/${slotCount}`
+        });
         photographyModeState.slots = [createPhotographyModeSlot(0)];
         renderPhotographyModeSlots();
-        status.textContent = '';
         showSuccessModal({ ...result, waitingPhotography: true }, `已提交 ${result.photographerSlots || 1} 个图片位。摄影师补图后会按设置处理，完成后通过钉钉通知。`);
     } catch (error) {
-        status.textContent = '提交失败：' + error.message;
-        status.className = 'studio-status err';
+        renderSubmissionProgress(status, {
+            phase: 'error',
+            title: '拍摄任务提交失败',
+            percent: 40,
+            detail: error.message,
+            countText: '拍摄设置仍然保留'
+        });
     } finally {
         button.dataset.loading = '';
         button.disabled = false;
@@ -3932,10 +4144,21 @@ function initResizeTool() {
         const originalFiles = [...selectedFiles];
         const prepared = [];
         try {
-            status.className = 'resize-status ai';
-            status.textContent = `正在读取 1/${originalFiles.length} 张图片...`;
+            renderSubmissionProgress(status, {
+                phase: 'uploading',
+                title: `正在读取 1/${originalFiles.length} 张图片`,
+                percent: 2,
+                detail: originalFiles[0]?.name || '准备图片',
+                countText: `已读取 0/${originalFiles.length}`
+            });
             for (let index = 0; index < originalFiles.length; index++) {
-                status.textContent = `正在读取 ${index + 1}/${originalFiles.length} 张图片...`;
+                renderSubmissionProgress(status, {
+                    phase: 'uploading',
+                    title: `正在读取 ${index + 1}/${originalFiles.length} 张图片`,
+                    percent: 2 + (index / originalFiles.length) * 13,
+                    detail: originalFiles[index].name,
+                    countText: `已读取 ${index}/${originalFiles.length}`
+                });
                 prepared.push({ file: originalFiles[index], image: await readImageFile(originalFiles[index]) });
             }
 
@@ -3956,7 +4179,14 @@ function initResizeTool() {
             const failedFiles = [];
             for (let index = 0; index < prepared.length; index++) {
                 const item = prepared[index];
-                status.textContent = `正在处理 ${index + 1}/${prepared.length}：${item.file.name}`;
+                const renderItemProgress = ({ phase = 'uploading', ratio = 0, detail = item.file.name } = {}) => renderSubmissionProgress(status, {
+                    phase,
+                    title: `正在处理图片 ${index + 1}/${prepared.length}`,
+                    percent: 16 + ((index + ratio) / prepared.length) * 80,
+                    detail,
+                    countText: `已完成 ${index}/${prepared.length}`
+                });
+                renderItemProgress();
                 try {
                     const useLocal = !aPlusDouble && !reflowInput.checked && canResizeLocally(item.image, target);
                     if (useLocal) {
@@ -3964,7 +4194,13 @@ function initResizeTool() {
                         localCount++;
                         await new Promise(resolve => setTimeout(resolve, 300));
                     } else {
-                        await submitResizeAiTask(item.file, target, aPlusDouble ? false : reflowInput.checked, aPlusDouble);
+                        await submitResizeAiTask(
+                            item.file,
+                            target,
+                            aPlusDouble ? false : reflowInput.checked,
+                            aPlusDouble,
+                            renderItemProgress
+                        );
                         aiCount++;
                     }
                 } catch (error) {
@@ -3982,12 +4218,23 @@ function initResizeTool() {
             currentImage = null;
 
             if (failedFiles.length) {
-                status.className = 'resize-status error';
-                status.textContent = `已完成 ${localCount + aiCount} 张，${failedFiles.length} 张失败并保留在列表中，可再次处理。`;
-                loadFile(failedFiles[0]);
+                await loadFile(failedFiles[0]);
+                renderSubmissionProgress(status, {
+                    phase: 'error',
+                    title: '部分图片处理失败',
+                    percent: 100,
+                    detail: `${failedFiles.length} 张失败并保留在列表中，可再次处理`,
+                    countText: `成功 ${localCount + aiCount}/${prepared.length}`
+                });
             } else {
                 reset(`已按顺序处理 ${localCount + aiCount} 张图片。`);
-                status.className = 'resize-status ready';
+                renderSubmissionProgress(status, {
+                    phase: 'success',
+                    title: '尺寸修改提交完成',
+                    percent: 100,
+                    detail: aiCount ? '图片已上传并创建后台任务' : '图片已在本地完成转换',
+                    countText: `已完成 ${prepared.length}/${prepared.length}`
+                });
             }
             if (aiCount) {
                 const successText = aPlusDouble
@@ -3997,8 +4244,13 @@ function initResizeTool() {
                 loadResizeQueue();
             }
         } catch (error) {
-            status.className = 'resize-status error';
-            status.textContent = error.message || '批量处理失败，请重试。';
+            renderSubmissionProgress(status, {
+                phase: 'error',
+                title: '尺寸修改失败',
+                percent: 0,
+                detail: error.message || '批量处理失败，请重试',
+                countText: '图片仍然保留'
+            });
         } finally {
             downloadBtn.dataset.loading = '';
             if (!selectedFiles.length) {
@@ -4029,32 +4281,36 @@ function fileToStudioUpload(file) {
     });
 }
 
-async function submitResizeAiTask(file, target, resizeReflow, aPlusDouble = false) {
+async function submitResizeAiTask(file, target, resizeReflow, aPlusDouble = false, onProgress) {
     const upload = await fileToStudioUpload(file);
-    const refKeys = await uploadImages([upload], 'studio/resize');
-    const size = `${target.width}x${target.height}`;
-    const response = await fetch('/api/studio-submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            mode: 'resize_ai',
-            submitter: currentUser,
-            productKeys: [],
-            modelKeys: [],
-            refKeys,
-            desc: `${aPlusDouble ? 'A+ 连续双图尺寸修改，合并图会在完成后自动拆成上下两张。' : 'AI 尺寸修改为 ' + size}${resizeReflow ? '，允许重新排版' : ''}`,
-            size,
-            resizeTarget: size,
-            resizeReflow,
-            aPlusDouble,
-            imageName: file.name.replace(/\.[^.]+$/, '')
+    const refKeys = await uploadImages([upload], 'studio/resize', {
+        onProgress: ({ ratio }) => onProgress?.({ phase: 'uploading', ratio: ratio * 0.84, detail: file.name }),
+        onRetry: ({ attempt, maxAttempts, error }) => onProgress?.({
+            phase: 'retrying',
+            ratio: 0.08,
+            detail: `${error.message}，正在进行第 ${attempt}/${maxAttempts} 次上传`
         })
     });
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok || !result.ok) {
-        throw new Error('提交失败：' + (result.error || response.status));
-    }
-    return result;
+    const size = `${target.width}x${target.height}`;
+    onProgress?.({ phase: 'creating', ratio: 0.9, detail: '图片上传完成，正在创建尺寸修改任务' });
+    return submitStudioTaskWithRetry({
+        mode: 'resize_ai',
+        submitter: currentUser,
+        productKeys: [],
+        modelKeys: [],
+        refKeys,
+        desc: `${aPlusDouble ? 'A+ 连续双图尺寸修改，合并图会在完成后自动拆成上下两张。' : 'AI 尺寸修改为 ' + size}${resizeReflow ? '，允许重新排版' : ''}`,
+        size,
+        resizeTarget: size,
+        resizeReflow,
+        aPlusDouble,
+        imageName: file.name.replace(/\.[^.]+$/, ''),
+        clientRequestId: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    }, ({ attempt, maxAttempts, error }) => onProgress?.({
+        phase: 'retrying',
+        ratio: 0.92,
+        detail: `${error.message}，正在进行第 ${attempt}/${maxAttempts} 次任务确认`
+    }));
 }
 
 function initSizePicker(inputId, hintId) {
@@ -4441,7 +4697,13 @@ function openExampleUploadModal() {
         const status = overlay.querySelector('#exampleUploadStatus');
         if (!exampleUploadImage) { status.textContent = '请先粘贴或选择图片'; status.style.color = '#ef4444'; return; }
         if (!prompt) { status.textContent = '请填写描述'; status.style.color = '#ef4444'; return; }
-        status.textContent = '保存中...'; status.style.color = '#6b7280';
+        renderSubmissionProgress(status, {
+            phase: 'creating',
+            title: '正在提交案例',
+            percent: 35,
+            detail: exampleUploadImage.name || '案例图片',
+            countText: '正在保存'
+        });
         try {
             const res = await fetch('/api/studio-examples', {
                 method: 'POST',
@@ -4451,12 +4713,22 @@ function openExampleUploadModal() {
             const json = await res.json();
             if (!res.ok || !json.ok) throw new Error(json.error || res.status);
             studioExamplesCache = null;
-            status.textContent = '已提交，待管理员审核通过后会显示在画廊';
-            status.style.color = '#10b981';
+            renderSubmissionProgress(status, {
+                phase: 'success',
+                title: '案例提交完成',
+                percent: 100,
+                detail: '待管理员审核通过后会显示在画廊',
+                countText: '已完成'
+            });
             setTimeout(() => overlay.remove(), 1500);
         } catch (err) {
-            status.textContent = '保存失败：' + err.message;
-            status.style.color = '#ef4444';
+            renderSubmissionProgress(status, {
+                phase: 'error',
+                title: '案例提交失败',
+                percent: 35,
+                detail: err.message,
+                countText: '内容已保留'
+            });
         }
     };
 }
@@ -4968,20 +5240,73 @@ async function submitTask(mode, payload, statusEl, btn, onSuccess) {
     btn.disabled = true;
     btn.classList.add('is-loading');
     btn.textContent = '提交中...';
-    statusEl.className = 'studio-status';
-    try {
-        statusEl.textContent = '上传图片中...';
-        const productKeys = payload.productImages && payload.productImages.length ? await uploadImages(payload.productImages, 'studio/product') : [];
-        const refPrefix = mode === 'retouch' ? 'studio/retouch' : mode === 'cutout' ? 'studio/cutout' : mode === 'variant' ? 'studio/variant' : mode === 'resize_ai' ? 'studio/resize' : mode === 'watermark' ? 'studio/watermark' : 'studio/ref';
-        const uploadedRefKeys = payload.refImages && payload.refImages.length ? await uploadImages(payload.refImages, refPrefix) : [];
-        const refKeys = uploadedRefKeys;
-        const modelKeys = payload.modelImages && payload.modelImages.length ? await uploadImages(payload.modelImages, 'studio/model') : [];
-        const photographyExampleKeys = payload.photographyExampleImage
-            ? await uploadImages([payload.photographyExampleImage], 'studio/photography-brief')
-            : [];
+    const statusId = statusEl.id;
+    const productImages = payload.productImages || [];
+    const refImages = payload.refImages || [];
+    const modelImages = payload.modelImages || [];
+    const photographyImages = payload.photographyExampleImage ? [payload.photographyExampleImage] : [];
+    const totalFiles = productImages.length + refImages.length + modelImages.length + photographyImages.length;
+    let uploadedFiles = 0;
+    let lastPercent = totalFiles ? 3 : 18;
+    const showProgress = state => {
+        lastPercent = Math.max(lastPercent, Number(state.percent) || 0);
+        renderSubmissionProgress(statusEl, { ...state, percent: lastPercent });
+    };
+    const uploadGroup = async (files, prefix, label) => {
+        if (!files.length) return [];
+        const result = await uploadImages(files, prefix, {
+            onProgress: ({ index, ratio }) => {
+                const current = uploadedFiles + index + ratio;
+                showProgress({
+                    phase: 'uploading',
+                    title: `正在上传图片 ${Math.min(totalFiles, uploadedFiles + index + 1)}/${totalFiles}`,
+                    percent: 4 + (current / totalFiles) * 78,
+                    detail: files[index]?.name || label,
+                    countText: `已上传 ${Math.floor(current)}/${totalFiles}`
+                });
+            },
+            onRetry: ({ index, attempt, maxAttempts, error }) => showProgress({
+                phase: 'retrying',
+                title: `上传中断，正在自动重试 ${attempt}/${maxAttempts}`,
+                percent: 4 + ((uploadedFiles + index) / totalFiles) * 78,
+                detail: `${files[index]?.name || label}：${error.message}`,
+                countText: `已上传 ${uploadedFiles + index}/${totalFiles}`
+            })
+        });
+        uploadedFiles += files.length;
+        return result;
+    };
 
-        statusEl.textContent = '提交中...';
-        const submitPayload = { mode, submitter: currentUser, productKeys, refKeys, modelKeys };
+    showProgress({
+        phase: 'uploading',
+        title: totalFiles ? `准备上传 ${totalFiles} 张图片` : '正在准备提交资料',
+        percent: lastPercent,
+        detail: totalFiles ? '图片会按顺序上传，上传完成后自动创建任务' : '资料检查完成后自动创建任务',
+        countText: totalFiles ? `已上传 0/${totalFiles}` : '资料已准备'
+    });
+    try {
+        const productKeys = await uploadGroup(productImages, 'studio/product', '产品图片');
+        const refPrefix = mode === 'retouch' ? 'studio/retouch' : mode === 'cutout' ? 'studio/cutout' : mode === 'variant' ? 'studio/variant' : mode === 'resize_ai' ? 'studio/resize' : mode === 'watermark' ? 'studio/watermark' : 'studio/ref';
+        const uploadedRefKeys = await uploadGroup(refImages, refPrefix, '参考图片');
+        const refKeys = uploadedRefKeys;
+        const modelKeys = await uploadGroup(modelImages, 'studio/model', '模特图片');
+        const photographyExampleKeys = await uploadGroup(photographyImages, 'studio/photography-brief', '拍摄案例图');
+
+        showProgress({
+            phase: 'creating',
+            title: '图片上传完成，正在创建任务',
+            percent: 90,
+            detail: '正在确认任务已写入处理队列',
+            countText: totalFiles ? `已上传 ${totalFiles}/${totalFiles}` : '资料已提交'
+        });
+        const submitPayload = {
+            mode,
+            submitter: currentUser,
+            productKeys,
+            refKeys,
+            modelKeys,
+            clientRequestId: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+        };
         if (payload.desc !== undefined) submitPayload.desc = payload.desc;
         if (payload.want !== undefined) submitPayload.want = payload.want;
         if (payload.note !== undefined) submitPayload.note = payload.note;
@@ -5006,23 +5331,38 @@ async function submitTask(mode, payload, statusEl, btn, onSuccess) {
         if (payload.photographyNote !== undefined) submitPayload.photographyNote = payload.photographyNote;
         if (photographyExampleKeys.length) submitPayload.photographyExampleKey = photographyExampleKeys[0];
 
-        const res = await fetch('/api/studio-submit', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(submitPayload)
+        const json = await submitStudioTaskWithRetry(submitPayload, ({ attempt, maxAttempts, error }) => showProgress({
+            phase: 'retrying',
+            title: `任务确认中断，正在自动重试 ${attempt}/${maxAttempts}`,
+            percent: 94,
+            detail: error.message,
+            countText: '图片已安全上传'
+        }));
+        renderSubmissionProgress(statusEl, {
+            phase: 'success',
+            title: '提交完成',
+            percent: 100,
+            detail: '图片已上传并成功创建任务',
+            countText: totalFiles ? `已完成 ${totalFiles}/${totalFiles}` : '任务已创建'
         });
-        const json = await res.json();
-        if (res.ok && json.ok) {
-            statusEl.textContent = '';
-            renderForm();
-            if (onSuccess) onSuccess(json);
-        } else {
-            statusEl.textContent = '提交失败：' + (json.error || res.status);
-            statusEl.classList.add('err');
-        }
+        renderForm();
+        const refreshedStatus = statusId ? document.getElementById(statusId) : null;
+        if (refreshedStatus) renderSubmissionProgress(refreshedStatus, {
+            phase: 'success',
+            title: '提交完成',
+            percent: 100,
+            detail: '图片已上传并成功创建任务',
+            countText: totalFiles ? `已完成 ${totalFiles}/${totalFiles}` : '任务已创建'
+        });
+        if (onSuccess) onSuccess(json);
     } catch (e) {
-        statusEl.textContent = '错误：' + e.message;
-        statusEl.classList.add('err');
+        renderSubmissionProgress(statusEl, {
+            phase: 'error',
+            title: '提交失败',
+            percent: lastPercent,
+            detail: e.message,
+            countText: totalFiles ? `已上传 ${uploadedFiles}/${totalFiles}` : '任务未创建'
+        });
     } finally {
         btn.disabled = false;
         btn.classList.remove('is-loading');
@@ -5369,6 +5709,15 @@ async function importSheetLibraryFile(libraryFile, modal) {
     slot.uploading = true;
     slot.status = '正在从资料库导入图片...';
     renderSheetSelfGrid();
+    const globalStatus = document.getElementById('sheetSelfStatus');
+    let lastPercent = 5;
+    renderSubmissionProgress(globalStatus, {
+        phase: 'uploading',
+        title: '正在读取资料库图片',
+        percent: lastPercent,
+        detail: libraryFile.name || '资料库图片',
+        countText: '准备导入'
+    });
     let shouldIdentifyProduct = false;
     try {
         const response = await fetch('/api/library-file/' + encodeURIComponent(libraryFile.key));
@@ -5388,7 +5737,25 @@ async function importSheetLibraryFile(libraryFile, modal) {
         const invalid = validateSheetSelfFile(file);
         if (invalid) throw new Error(invalid);
 
-        const [uploaded] = await uploadImages([{ file, name: file.name }], 'studio/sheet-self');
+        const [uploaded] = await uploadImages([{ file, name: file.name }], 'studio/sheet-self', {
+            onProgress: ({ ratio }) => {
+                lastPercent = 18 + ratio * 76;
+                renderSubmissionProgress(globalStatus, {
+                    phase: 'uploading',
+                    title: '正在导入资料库图片',
+                    percent: lastPercent,
+                    detail: file.name,
+                    countText: ratio >= 1 ? '已上传 1/1' : '已上传 0/1'
+                });
+            },
+            onRetry: ({ attempt, maxAttempts, error }) => renderSubmissionProgress(globalStatus, {
+                phase: 'retrying',
+                title: `导入中断，正在自动重试 ${attempt}/${maxAttempts}`,
+                percent: lastPercent,
+                detail: error.message,
+                countText: '资料库图片已保留'
+            })
+        });
         if (target.type === 'reference') {
             slot.referenceKey = uploaded;
             resetSheetSelfCopyAiState(slot);
@@ -5399,10 +5766,24 @@ async function importSheetLibraryFile(libraryFile, modal) {
         }
         slot.status = '已从资料库导入并保存';
         persistSheetSelfDraft(300);
+        renderSubmissionProgress(globalStatus, {
+            phase: 'success',
+            title: '资料库图片导入完成',
+            percent: 100,
+            detail: file.name,
+            countText: '已完成 1/1'
+        });
         modal.remove();
         sheetLibraryTarget = null;
     } catch (error) {
         slot.status = '失败：' + error.message;
+        renderSubmissionProgress(globalStatus, {
+            phase: 'error',
+            title: '资料库图片导入失败',
+            percent: lastPercent,
+            detail: error.message,
+            countText: '可以重新选择'
+        });
         alert('选取失败：' + error.message);
     } finally {
         slot.uploading = false;
@@ -5554,6 +5935,38 @@ function escapeBatchProgressText(value) {
         '"': '&quot;',
         "'": '&#39;'
     })[character]);
+}
+
+function renderSubmissionProgress(status, state) {
+    if (!status) return;
+    const percent = Math.max(0, Math.min(100, Math.round(Number(state.percent) || 0)));
+    const phase = state.phase || 'uploading';
+    const stateClass = phase === 'retrying'
+        ? ' is-retrying'
+        : phase === 'success'
+            ? ' is-success'
+            : phase === 'error'
+                ? ' is-error'
+                : '';
+    if (!status.dataset.progressBaseClass) {
+        status.dataset.progressBaseClass = String(status.className || 'studio-status')
+            .split(/\s+/)
+            .filter(name => name && !['batch-submit-progress', 'is-retrying', 'is-success', 'is-error', 'ok', 'err', 'error', 'ready', 'ai', 'busy'].includes(name))
+            .join(' ') || 'studio-status';
+    }
+    status.className = `${status.dataset.progressBaseClass} batch-submit-progress${stateClass}`;
+    status.innerHTML = `
+        <div class="batch-submit-progress-head">
+            <strong>${escapeBatchProgressText(state.title || '正在处理')}</strong>
+            <span>${percent}%</span>
+        </div>
+        <div class="batch-submit-progress-track" role="progressbar" aria-label="提交进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}">
+            <span class="batch-submit-progress-bar" style="width:${percent}%"></span>
+        </div>
+        <div class="batch-submit-progress-meta">
+            <span>${escapeBatchProgressText(state.detail || '')}</span>
+            <span>${escapeBatchProgressText(state.countText || '')}</span>
+        </div>`;
 }
 
 function renderBatchSubmissionProgress(status, state) {

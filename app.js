@@ -1008,6 +1008,7 @@ submitBtn.addEventListener('click', async () => {
 });
 
 async function doSubmit() {
+    submitProgressPercent = 0;
     if (directMode) return doDirectSubmit();
     
     const designMode = (selectedCat === '设计' && selectedSub === '说明书');
@@ -1017,7 +1018,7 @@ async function doSubmit() {
     if (packagingMode) return doPackagingSubmit();
     
     if (!parsedData || !taskType.value) return;
-    setStatus('提交中...', 'busy');
+    renderSubmitProgress('正在准备任务', 18, '表格内容已经读取，正在整理提交资料', '资料已准备');
     submitBtn.disabled = true;
 
     const payload = {
@@ -1029,6 +1030,7 @@ async function doSubmit() {
     };
 
     try {
+        renderSubmitProgress('正在创建任务', 86, '正在确认任务已写入处理队列', '资料已提交');
         const res = await fetch('/api/submit', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1041,6 +1043,7 @@ async function doSubmit() {
         });
         const json = await res.json();
         if (res.ok && json.ok) {
+            renderSubmitProgress('提交完成', 100, '需求已成功进入处理队列', '已完成', 'success');
             const q = json.queuePosition || 0;
             showSuccessModal(q);
             setTimeout(resetAll, 5000);
@@ -1064,24 +1067,14 @@ async function doPackagingSubmit() {
     
     if (!product || !brand || !amazonName || !size || !time || !taskType.value) return;
     
-    setStatus('提交中...', 'busy');
+    renderSubmitProgress('正在准备包装设计需求', 3, '正在检查产品资料和图片', '准备上传');
     submitBtn.disabled = true;
     
     try {
         // 上传产品图片
         const photoKeys = [];
         if (packagingImages.length > 0) {
-            setStatus('上传产品图片中...', 'busy');
-            for (const img of packagingImages) {
-                const fd = new FormData();
-                const blob = await fetch(img.dataUrl).then(r => r.blob());
-                fd.append('file', blob, img.name);
-                fd.append('prefix', 'design/packaging');
-                const upRes = await fetch('/api/studio-upload', { method: 'POST', body: fd });
-                const upJson = await upRes.json();
-                if (!upRes.ok || !upJson.ok) throw new Error('图片上传失败：' + (upJson.error || upRes.status));
-                photoKeys.push({ key: upJson.key, name: upJson.name });
-            }
+            photoKeys.push(...await uploadRequestImages(packagingImages, 'design/packaging', '包装产品图'));
         }
         
         const data = {
@@ -1107,7 +1100,7 @@ async function doPackagingSubmit() {
             }
         };
         
-        setStatus('提交中...', 'busy');
+        renderSubmitProgress('图片上传完成，正在创建任务', 90, '正在确认包装设计需求已写入队列', packagingImages.length ? `已上传 ${packagingImages.length}/${packagingImages.length}` : '资料已提交');
         const res = await fetch('/api/submit', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1120,6 +1113,7 @@ async function doPackagingSubmit() {
         });
         const json = await res.json();
         if (res.ok && json.ok) {
+            renderSubmitProgress('提交完成', 100, '包装设计需求已成功进入处理队列', '已完成', 'success');
             showSuccessModal(json.queuePosition || 0);
             setTimeout(resetAll, 5000);
         } else {
@@ -1141,24 +1135,14 @@ async function doDesignSubmit() {
     
     if (!product || !brand || !amazonName || !time || !taskType.value) return;
     
-    setStatus('提交中...', 'busy');
+    renderSubmitProgress('正在准备说明书设计需求', 3, '正在检查产品资料和图片', '准备上传');
     submitBtn.disabled = true;
     
     try {
         // 上传产品图片
         const photoKeys = [];
         if (designImages.length > 0) {
-            setStatus('上传产品图片中...', 'busy');
-            for (const img of designImages) {
-                const fd = new FormData();
-                const blob = await fetch(img.dataUrl).then(r => r.blob());
-                fd.append('file', blob, img.name);
-                fd.append('prefix', 'design/product');
-                const upRes = await fetch('/api/studio-upload', { method: 'POST', body: fd });
-                const upJson = await upRes.json();
-                if (!upRes.ok || !upJson.ok) throw new Error('图片上传失败：' + (upJson.error || upRes.status));
-                photoKeys.push({ key: upJson.key, name: upJson.name });
-            }
+            photoKeys.push(...await uploadRequestImages(designImages, 'design/product', '说明书产品图'));
         }
         
         const data = {
@@ -1182,7 +1166,7 @@ async function doDesignSubmit() {
             }
         };
         
-        setStatus('提交中...', 'busy');
+        renderSubmitProgress('图片上传完成，正在创建任务', 90, '正在确认说明书设计需求已写入队列', designImages.length ? `已上传 ${designImages.length}/${designImages.length}` : '资料已提交');
         const res = await fetch('/api/submit', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1195,6 +1179,7 @@ async function doDesignSubmit() {
         });
         const json = await res.json();
         if (res.ok && json.ok) {
+            renderSubmitProgress('提交完成', 100, '说明书设计需求已成功进入处理队列', '已完成', 'success');
             showSuccessModal(json.queuePosition || 0);
             setTimeout(resetAll, 5000);
         } else {
@@ -1209,20 +1194,10 @@ async function doDesignSubmit() {
 
 async function doDirectSubmit() {
     if (!directImages.length || !taskType.value) return;
-    setStatus('上传图片中...', 'busy');
+    renderSubmitProgress(`准备上传 ${directImages.length} 张图片`, 3, '图片上传完成后自动创建需求', `已上传 0/${directImages.length}`);
     submitBtn.disabled = true;
     try {
-        const photoKeys = [];
-        for (const img of directImages) {
-            const fd = new FormData();
-            const blob = await fetch(img.dataUrl).then(r => r.blob());
-            fd.append('file', blob, img.name);
-            fd.append('prefix', 'direct/image');
-            const upRes = await fetch('/api/studio-upload', { method: 'POST', body: fd });
-            const upJson = await upRes.json();
-            if (!upRes.ok || !upJson.ok) throw new Error('图片上传失败：' + (upJson.error || upRes.status));
-            photoKeys.push({ key: upJson.key, name: upJson.name });
-        }
+        const photoKeys = await uploadRequestImages(directImages, 'direct/image', '需求图片');
 
         const desc = directDesc ? directDesc.value.trim() : '';
         const data = {
@@ -1234,7 +1209,7 @@ async function doDirectSubmit() {
             directDesc: desc
         };
 
-        setStatus('提交中...', 'busy');
+        renderSubmitProgress('图片上传完成，正在创建任务', 90, '正在确认图片需求已写入队列', `已上传 ${directImages.length}/${directImages.length}`);
         const res = await fetch('/api/submit', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1247,6 +1222,7 @@ async function doDirectSubmit() {
         });
         const json = await res.json();
         if (res.ok && json.ok) {
+            renderSubmitProgress('提交完成', 100, '图片需求已成功进入处理队列', `已完成 ${directImages.length}/${directImages.length}`, 'success');
             showSuccessModal(json.queuePosition || 0);
             setTimeout(resetAll, 5000);
         } else {
@@ -1260,11 +1236,103 @@ async function doDirectSubmit() {
 }
 
 function setStatus(msg, cls) {
-    statusEl.textContent = msg;
-    statusEl.className = 'status ' + cls;
+    if (cls === 'err') {
+        renderSubmitProgress('提交失败', submitProgressPercent, msg.replace(/^(提交失败|网络错误|错误)：?/, ''), '内容已保留', 'error');
+        return;
+    }
+    renderSubmitProgress(msg, Math.max(submitProgressPercent, cls === 'busy' ? 12 : 0), '', '');
+}
+
+let submitProgressPercent = 0;
+
+function escapeSubmitProgress(value) {
+    return String(value || '').replace(/[&<>"']/g, character => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    })[character]);
+}
+
+function renderSubmitProgress(title, percent, detail = '', countText = '', state = '') {
+    submitProgressPercent = Math.max(state === 'error' ? 0 : submitProgressPercent, Math.max(0, Math.min(100, Math.round(Number(percent) || 0))));
+    const shownPercent = state === 'error' ? Math.max(0, Math.min(100, Math.round(Number(percent) || 0))) : submitProgressPercent;
+    statusEl.className = `status request-submit-progress${state ? ` is-${state}` : ''}`;
+    statusEl.innerHTML = `<div class="request-submit-progress-head"><strong>${escapeSubmitProgress(title)}</strong><span>${shownPercent}%</span></div>
+        <div class="request-submit-progress-track" role="progressbar" aria-label="提交进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${shownPercent}"><span class="request-submit-progress-bar" style="width:${shownPercent}%"></span></div>
+        <div class="request-submit-progress-meta"><span>${escapeSubmitProgress(detail)}</span><span>${escapeSubmitProgress(countText)}</span></div>`;
+}
+
+async function uploadRequestImage(blob, name, prefix, onProgress, onRetry) {
+    const uploadId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    let lastError;
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+        try {
+            return await new Promise((resolve, reject) => {
+        const form = new FormData();
+        form.append('file', blob, name);
+        form.append('prefix', prefix);
+                form.append('uploadId', uploadId);
+        const request = new XMLHttpRequest();
+        request.open('POST', '/api/studio-upload');
+        request.timeout = 120000;
+        request.upload.onprogress = event => {
+            if (event.lengthComputable) onProgress(event.loaded / event.total);
+        };
+        request.onload = () => {
+            let result = {};
+            try { result = JSON.parse(request.responseText || '{}'); } catch {}
+            if (request.status >= 200 && request.status < 300 && result.ok) {
+                onProgress(1);
+                resolve({ key: result.key, name: result.name });
+                return;
+            }
+                    const error = new Error('图片上传失败：' + (result.error || request.status || '未知错误'));
+                    error.status = request.status;
+                    reject(error);
+        };
+                request.onerror = () => { const error = new Error('图片上传失败：网络连接中断'); error.status = 0; reject(error); };
+                request.ontimeout = () => { const error = new Error('图片上传超时，请重试'); error.status = 408; reject(error); };
+        request.send(form);
+            });
+        } catch (error) {
+            lastError = error;
+            const retryable = !error.status || error.status === 408 || error.status === 429 || error.status >= 500;
+            if (!retryable || attempt === 3) throw error;
+            onRetry?.({ attempt: attempt + 1, maxAttempts: 3, error });
+            await new Promise(resolve => setTimeout(resolve, attempt * 700));
+        }
+    }
+    throw lastError;
+}
+
+async function uploadRequestImages(images, prefix, label) {
+    const results = [];
+    for (let index = 0; index < images.length; index += 1) {
+        const image = images[index];
+        const blob = image.file || await fetch(image.dataUrl).then(response => response.blob());
+        const uploaded = await uploadRequestImage(
+            blob,
+            image.name,
+            prefix,
+            ratio => renderSubmitProgress(
+                `正在上传图片 ${index + 1}/${images.length}`,
+                4 + ((index + ratio) / images.length) * 78,
+                image.name || label,
+                `已上传 ${Math.floor(index + ratio)}/${images.length}`
+            ),
+            ({ attempt, maxAttempts, error }) => renderSubmitProgress(
+                `上传中断，正在自动重试 ${attempt}/${maxAttempts}`,
+                4 + (index / images.length) * 78,
+                error.message,
+                `图片 ${index + 1}/${images.length}`,
+                'retrying'
+            )
+        );
+        results.push(uploaded);
+    }
+    return results;
 }
 
 function resetAll() {
+    submitProgressPercent = 0;
     resetFile();
     clearDirectImages();
     clearDesignFields();

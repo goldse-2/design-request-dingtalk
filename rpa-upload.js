@@ -6,10 +6,22 @@ const previewList = document.getElementById('previewList');
 const uploadBtn = document.getElementById('uploadBtn');
 const statusEl = document.getElementById('uploadStatus');
 let pendingFiles = [];
+let currentUploadPercent = 0;
 
 function setStatus(text, ok = null) {
     statusEl.textContent = text;
     statusEl.style.color = ok === true ? '#16a34a' : ok === false ? '#ef4444' : '#6b7280';
+}
+
+function renderUploadProgress(title, percent, detail = '', countText = '', state = '') {
+    const nextPercent = Math.max(0, Math.min(100, Math.round(Number(percent) || 0)));
+    currentUploadPercent = state === 'error' ? nextPercent : Math.max(currentUploadPercent, nextPercent);
+    const shownPercent = state === 'error' ? nextPercent : currentUploadPercent;
+    statusEl.className = `rpa-upload-status rpa-submit-progress${state ? ` is-${state}` : ''}`;
+    statusEl.style.color = '';
+    statusEl.innerHTML = `<div class="rpa-submit-progress-head"><strong>${escapeHtml(title)}</strong><span>${shownPercent}%</span></div>
+        <div class="rpa-submit-progress-track" role="progressbar" aria-label="上传进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${shownPercent}"><span class="rpa-submit-progress-bar" style="width:${shownPercent}%"></span></div>
+        <div class="rpa-submit-progress-meta"><span>${escapeHtml(detail)}</span><span>${escapeHtml(countText)}</span></div>`;
 }
 
 function addFiles(files) {
@@ -82,7 +94,7 @@ function canRetry(error) {
     return error instanceof TypeError || !error.status || error.status === 429 || error.status >= 500;
 }
 
-async function retryRequest(request, attempts = 3) {
+async function retryRequest(request, attempts = 3, onRetry) {
     let lastError;
     for (let attempt = 1; attempt <= attempts; attempt++) {
         try {
@@ -90,10 +102,40 @@ async function retryRequest(request, attempts = 3) {
         } catch (error) {
             lastError = error;
             if (!canRetry(error) || attempt === attempts) throw error;
+            onRetry?.({ attempt: attempt + 1, maxAttempts: attempts, error });
             await new Promise(resolve => setTimeout(resolve, attempt * 700));
         }
     }
     throw lastError;
+}
+
+function uploadResultFiles({ password, taskId, uploadId, files, onProgress }) {
+    return new Promise((resolve, reject) => {
+        const form = new FormData();
+        form.append('password', password);
+        form.append('taskId', taskId);
+        form.append('uploadId', uploadId);
+        files.forEach(file => form.append('files', file, file.name));
+        const request = new XMLHttpRequest();
+        request.open('POST', '/api/studio-result-upload');
+        request.timeout = 180000;
+        request.upload.onprogress = event => {
+            if (event.lengthComputable) onProgress(event.loaded / event.total);
+        };
+        request.onload = () => {
+            let data = {};
+            try { data = JSON.parse(request.responseText || '{}'); } catch {}
+            if (request.status >= 200 && request.status < 300 && data.ok) {
+                onProgress(1);
+                resolve(data);
+                return;
+            }
+            reject(requestError(data.error || request.status || '上传失败', request.status));
+        };
+        request.onerror = () => reject(requestError('网络连接中断', 0));
+        request.ontimeout = () => reject(requestError('上传超时', 408));
+        request.send(form);
+    });
 }
 
 function createUploadId() {
@@ -223,7 +265,8 @@ uploadBtn.addEventListener('click', async () => {
 
     uploadBtn.disabled = true;
     uploadBtn.textContent = '上传中...';
-    setStatus('正在读取任务类型...', null);
+    currentUploadPercent = 0;
+    renderUploadProgress('正在读取任务类型', 5, '确认任务需要的图片格式和处理方式', '准备上传');
 
     try {
         const taskInfo = await getUploadTaskMode(taskId, password);
@@ -238,42 +281,51 @@ uploadBtn.addEventListener('click', async () => {
         }
         if (taskInfo.aPlusDouble) {
             if (pendingFiles.length !== 1) throw new Error('A+ 连续双图任务请只上传一张完整成品图');
-            setStatus('正在自动拆分为上下两张 1464 × 600 JPG...', null);
+            renderUploadProgress('正在处理成品图片', 16, '自动拆分为上下两张 1464 × 600 JPG', '处理 1/1');
         } else if (taskInfo.mode === 'cutout' && taskInfo.cutoutMode === 'vector') {
-            setStatus('矢量图白底任务正在处理...', null);
+            renderUploadProgress('正在检查矢量图文件', 16, '确认 Adobe Illustrator 文件可以上传', `处理 0/${pendingFiles.length}`);
         } else if (taskInfo.mode === 'cutout') {
-            setStatus(`白底抠图任务将导出 ${taskInfo.outputFormat.toUpperCase()}，正在处理...`, null);
+            renderUploadProgress('正在处理成品图片', 16, `白底抠图任务将导出 ${taskInfo.outputFormat.toUpperCase()}`, `处理 0/${pendingFiles.length}`);
         } else {
-            setStatus('正在处理图片，PNG 将自动转换为 JPG...', null);
+            renderUploadProgress('正在处理成品图片', 16, 'PNG 将自动转换为 JPG', `处理 0/${pendingFiles.length}`);
         }
 
         const uploadFiles = [];
         if (taskInfo.aPlusDouble) {
             uploadFiles.push(...await splitAPlusDoubleFile(pendingFiles[0]));
         } else {
-            for (const file of pendingFiles) {
+            for (let index = 0; index < pendingFiles.length; index += 1) {
+                const file = pendingFiles[index];
+                renderUploadProgress('正在处理成品图片', 16 + (index / pendingFiles.length) * 16, file.name, `处理 ${index}/${pendingFiles.length}`);
                 uploadFiles.push(await normalizeUploadFile(file, taskInfo));
             }
         }
 
-        setStatus('正在上传并通知用户...', null);
+        renderUploadProgress(`准备上传 ${uploadFiles.length} 个文件`, 34, '上传完成后会自动通知用户', `已上传 0/${uploadFiles.length}`);
         const uploadId = createUploadId();
-        const json = await retryRequest(async () => {
-            const form = new FormData();
-            form.append('password', password);
-            form.append('taskId', taskId);
-            form.append('uploadId', uploadId);
-            uploadFiles.forEach(file => form.append('files', file, file.name));
-            const res = await fetch('/api/studio-result-upload', { method: 'POST', body: form });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok || !data.ok) throw requestError(data.error || res.status, res.status);
-            return data;
-        });
-        setStatus('上传成功，已通知用户，共 ' + json.uploaded.length + ' 个文件', true);
+        const json = await retryRequest(() => uploadResultFiles({
+            password,
+            taskId,
+            uploadId,
+            files: uploadFiles,
+            onProgress: ratio => renderUploadProgress(
+                '正在上传并通知用户',
+                35 + ratio * 60,
+                uploadFiles.length === 1 ? uploadFiles[0].name : `${uploadFiles.length} 个文件正在上传`,
+                ratio >= 1 ? `已上传 ${uploadFiles.length}/${uploadFiles.length}` : `已上传 ${Math.floor(ratio * uploadFiles.length)}/${uploadFiles.length}`
+            )
+        }), 3, ({ attempt, maxAttempts, error }) => renderUploadProgress(
+            `上传中断，正在自动重试 ${attempt}/${maxAttempts}`,
+            currentUploadPercent,
+            error.message,
+            '文件已保留',
+            'retrying'
+        ));
+        renderUploadProgress('上传完成', 100, '成品已保存并通知用户', `已完成 ${json.uploaded.length}/${json.uploaded.length}`, 'success');
         pendingFiles = [];
         renderPreview();
     } catch (err) {
-        setStatus('上传失败：' + err.message, false);
+        renderUploadProgress('上传失败', currentUploadPercent, err.message, '文件仍然保留', 'error');
     } finally {
         uploadBtn.disabled = false;
         uploadBtn.textContent = '上传并通知用户';

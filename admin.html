@@ -82,6 +82,22 @@
 .shoot-complete-message { width: 100%; min-height: 72px; margin-top: 14px; padding: 10px 12px; border: 1px solid #d5dbe4; border-radius: 7px; resize: vertical; font: inherit; font-size: .82rem; }
 .shoot-complete-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; }
 .shoot-complete-progress { min-height: 20px; color: #64748b; font-size: .76rem; }
+.admin-submit-progress { width:100%; min-height:0; padding:11px 12px; border:1px solid #dbe2ea; border-radius:8px; background:#f8fafc; color:#334155; box-sizing:border-box; }
+.admin-submit-progress-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px; }
+.admin-submit-progress-head strong { min-width:0; overflow:hidden; color:#111827; font-size:.78rem; line-height:1.4; text-overflow:ellipsis; white-space:nowrap; }
+.admin-submit-progress-head span { flex:none; color:#475569; font-size:.74rem; font-weight:800; font-variant-numeric:tabular-nums; }
+.admin-submit-progress-track { width:100%; height:8px; overflow:hidden; border-radius:4px; background:#e5e7eb; }
+.admin-submit-progress-bar { display:block; width:0; height:100%; border-radius:4px; background:#111827; transition:width .18s ease; }
+.admin-submit-progress-meta { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-top:8px; color:#64748b; font-size:.68rem; line-height:1.45; }
+.admin-submit-progress-meta span:first-child { min-width:0; overflow-wrap:anywhere; }
+.admin-submit-progress-meta span:last-child { flex:none; white-space:nowrap; }
+.admin-submit-progress.is-retrying { border-color:#fde68a; background:#fffbeb; }
+.admin-submit-progress.is-retrying .admin-submit-progress-bar { background:#d97706; }
+.admin-submit-progress.is-success { border-color:#a7f3d0; background:#ecfdf5; }
+.admin-submit-progress.is-success .admin-submit-progress-bar { background:#059669; }
+.admin-submit-progress.is-error { border-color:#fecaca; background:#fef2f2; }
+.admin-submit-progress.is-error .admin-submit-progress-bar { background:#dc2626; }
+.admin-inline-progress { grid-column:1 / -1; width:100%; margin-top:8px; }
 @media (max-width: 820px) {
     .shoot-admin-card { grid-template-columns: minmax(0, 1fr); gap: 12px; }
     .shoot-admin-actions { justify-content: flex-start; }
@@ -461,7 +477,7 @@ function setLibAdminTab(btn, tabKey) {
     });
 }
 </script>
-<script src="admin.js?v=20260723-help-guides"></script>
+<script src="admin.js?v=20260723-unified-progress"></script>
 </div>
 </body>
 </html>

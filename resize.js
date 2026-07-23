@@ -85,6 +85,7 @@ function loadFile(file) {
 
     const url = URL.createObjectURL(file);
     const image = new Image();
+    renderResizeProgress('正在读取图片', 18, file.name, '准备转换');
     image.onload = () => {
         URL.revokeObjectURL(url);
         const preset = getCurrentPreset();
@@ -103,8 +104,7 @@ function loadFile(file) {
         canvas.style.display = 'block';
         emptyPreview.hidden = true;
         downloadBtn.disabled = false;
-        status.className = 'status ready';
-        status.textContent = `转换完成：${preset.sourceWidth} × ${preset.sourceHeight} → ${preset.width} × ${preset.height}`;
+        renderResizeProgress('图片转换完成', 100, `${preset.sourceWidth} × ${preset.sourceHeight} → ${preset.width} × ${preset.height}`, '已完成 1/1', 'success');
     };
     image.onerror = () => {
         URL.revokeObjectURL(url);
@@ -141,8 +141,7 @@ function resetOutput() {
     downloadBtn.disabled = true;
     canvas.style.display = 'none';
     emptyPreview.hidden = false;
-    status.className = 'status';
-    status.textContent = '正在读取图片...';
+    renderResizeProgress('正在读取图片', 8, '正在检查图片格式和尺寸', '准备转换');
 }
 
 function resetIdle() {
@@ -154,8 +153,17 @@ function resetIdle() {
 }
 
 function showError(message) {
-    status.className = 'status error';
-    status.textContent = message;
+    renderResizeProgress('图片处理失败', 0, message, '可以重新上传', 'error');
+}
+
+function resizeProgressEsc(value) {
+    return String(value || '').replace(/[&<>"']/g, character => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[character]);
+}
+
+function renderResizeProgress(title, percent, detail, countText, state = '') {
+    const value = Math.max(0, Math.min(100, Math.round(Number(percent) || 0)));
+    status.className = `status resize-submit-progress${state ? ` is-${state}` : ''}`;
+    status.innerHTML = `<div class="resize-submit-progress-head"><strong>${resizeProgressEsc(title)}</strong><span>${value}%</span></div><div class="resize-submit-progress-track" role="progressbar" aria-label="图片处理进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${value}"><span class="resize-submit-progress-bar" style="width:${value}%"></span></div><div class="resize-submit-progress-meta"><span>${resizeProgressEsc(detail)}</span><span>${resizeProgressEsc(countText)}</span></div>`;
 }
 
 updatePresetText();
