@@ -797,7 +797,7 @@ async function storeAPlusResizeParts(env, task, image, safeName) {
 }
 
 export async function transformToExactJpeg(env, image, target, gravity = '') {
-    if (env.IMAGE_RESIZER?.fetch) {
+    if (env.IMAGE_RESIZER?.fetch && (!env.IMAGES?.input || !env.IMAGES?.info)) {
         const query = new URLSearchParams({ width: String(target.width), height: String(target.height) });
         if (gravity) query.set('gravity', gravity);
         const url = `https://image-resizer.internal/resize?${query.toString()}`;
