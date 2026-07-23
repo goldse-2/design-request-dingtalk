@@ -2400,10 +2400,10 @@ function renderStudioTask(task) {
             resendBtn.onclick = () => sendToRpa(task.id, resendBtn, card, task);
             actions.append(resendBtn);
         }
-        if (task.mode === 'resize_ai' && task.status !== 'done') {
+        if (['resize_ai', 'translate_image', 'variant', 'watermark'].includes(task.mode) && task.status !== 'done') {
             const retryBtn = document.createElement('button');
             retryBtn.type = 'button';
-            retryBtn.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 6v5h-5"/><path d="M20 11a8 8 0 1 0 2 5"/></svg><span>重新发送</span>';
+            retryBtn.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 6v5h-5"/><path d="M20 11a8 8 0 1 0 2 5"/></svg><span>手动重试</span>';
             retryBtn.style.cssText = 'display:inline-flex;align-items:center;gap:6px;font-size:0.82rem;color:#fff;background:#6366f1;border:none;border-radius:7px;padding:7px 14px;cursor:pointer;font-weight:600';
             retryBtn.onclick = () => retryImageTask(task.id, retryBtn);
             actions.append(retryBtn);
@@ -3209,10 +3209,10 @@ async function retrySheetSelfAdminSlot(parentId, slotIndex, button, confirmActiv
 }
 
 async function retryImageTask(taskId, btn) {
-    if (!confirm('确认重新发送这个尺寸修改任务吗？重新处理会消耗一次 AI 图片额度。')) return;
+    if (!confirm('确认重试当前未完成的图片吗？系统会从现有进度继续，不会重做已完成图片，并会消耗对应的 AI 图片额度。')) return;
     const label = btn.querySelector('span');
     btn.disabled = true;
-    label.textContent = '发送中...';
+    label.textContent = '重试中...';
     try {
         const response = await fetch('/api/studio-tasks', {
             method: 'PATCH',
@@ -3220,13 +3220,13 @@ async function retryImageTask(taskId, btn) {
             body: JSON.stringify({ id: taskId, action: 'retryImage' })
         });
         const data = await response.json().catch(() => ({}));
-        if (!response.ok || !data.ok) throw new Error(data.error || '重新发送失败');
-        label.textContent = '已重新发送';
+        if (!response.ok || !data.ok) throw new Error(data.error || '重试失败');
+        label.textContent = '已加入重试';
         setTimeout(() => loadStudioAdmin(), 800);
     } catch (error) {
-        alert('重新发送失败：' + error.message);
+        alert('重试失败：' + error.message);
         btn.disabled = false;
-        label.textContent = '重新发送';
+        label.textContent = '手动重试';
     }
 }
 

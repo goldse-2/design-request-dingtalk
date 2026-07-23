@@ -25,8 +25,8 @@ export async function onRequestPatch(context) {
     if (task.kind !== 'studio') return Response.json({ ok: false, error: 'Not a studio task' }, { status: 400 });
 
     if (action === 'retryImage') {
-        if (task.mode !== 'resize_ai') {
-            return Response.json({ ok: false, error: 'Only resize tasks can be resent here' }, { status: 400 });
+        if (!['resize_ai', 'translate_image', 'variant', 'watermark'].includes(task.mode)) {
+            return Response.json({ ok: false, error: '该任务不支持图片重试' }, { status: 400 });
         }
         if (task.status === 'done') {
             return Response.json({ ok: false, error: '已完成任务不能重新发送' }, { status: 409 });
@@ -41,8 +41,10 @@ export async function onRequestPatch(context) {
         if (!Array.isArray(queue)) queue = [];
 
         task.status = 'pending';
+        task.backgroundFailureCount = 0;
         task.backgroundLastError = '';
         task.backgroundLastAttemptAt = '';
+        task.backgroundNextAttemptAt = '';
         task.backgroundRetriedAt = new Date().toISOString();
         task.dingtalkNotified = false;
         task.r2AutoNotified = false;
