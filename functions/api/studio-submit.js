@@ -78,9 +78,7 @@ export async function onRequestPost(context) {
             let existingQueueResult = null;
             if (!existingTask.photographerDecision && existingTask.status === 'pending' && !existingTask.sentToRpa) {
                 const isBackgroundImageTask = isDirectImageTask(existingTask.mode);
-                if (isBackgroundImageTask) {
-                    await appendQueue(env.SUBMISSIONS, 'studio:imageQueue:v2', taskId);
-                } else {
+                if (!isBackgroundImageTask) {
                     existingQueueResult = await queueStudioRpaTask(env, taskId);
                 }
             }
@@ -156,8 +154,7 @@ export async function onRequestPost(context) {
         await env.SUBMISSIONS.put(taskId, JSON.stringify(task), studioTaskPutOptions(task));
         if (!waitingPhotography) {
             const isBackgroundImageTask = isDirectImageTask(mode);
-            if (isBackgroundImageTask) await appendQueue(env.SUBMISSIONS, 'studio:imageQueue:v2', taskId);
-            else rpaQueueResult = await queueStudioRpaTask(env, taskId);
+            if (!isBackgroundImageTask) rpaQueueResult = await queueStudioRpaTask(env, taskId);
         }
     } catch (err) {
         return Response.json({ ok: false, error: 'Storage failed' }, { status: 500 });
@@ -379,17 +376,6 @@ function isValidResizeTarget(value) {
 function isAPlusResizeTarget(value) {
     const match = String(value || '').trim().match(/^(\d{3,4})\s*[x×*]\s*(\d{3,4})$/i);
     return Number(match?.[1]) === 600 && Number(match?.[2]) === 900;
-}
-
-async function appendQueue(kv, key, taskId) {
-    const raw = await kv.get(key).catch(() => null);
-    let ids = [];
-    if (raw) {
-        try { ids = JSON.parse(raw); } catch { ids = []; }
-    }
-    if (!Array.isArray(ids)) ids = [];
-    if (!ids.includes(taskId)) ids.push(taskId);
-    await kv.put(key, JSON.stringify(ids.slice(-300)));
 }
 
 async function getAccessToken(env) {

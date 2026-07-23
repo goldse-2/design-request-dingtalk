@@ -58,9 +58,11 @@ export async function onRequestGet(context) {
             });
         }
 
-        let autoQueueIds = await readQueue(env.SUBMISSIONS, selectedQueueKey);
+        let autoQueueIds = imageOnly
+            ? await listDueImageTaskIds(env.SUBMISSIONS, now)
+            : await readQueue(env.SUBMISSIONS, selectedQueueKey);
         let processingQueueIds = imageOnly ? [] : await readQueue(env.SUBMISSIONS, PROCESSING_QUEUE_KEY);
-        if (autoQueueIds === null || processingQueueIds === null) {
+        if (!imageOnly && (autoQueueIds === null || processingQueueIds === null)) {
             const migrated = await migrateQueues(env);
             await writeQueue(env.SUBMISSIONS, RPA_QUEUE_KEY, migrated.rpaQueueIds);
             await writeQueue(env.SUBMISSIONS, IMAGE_QUEUE_KEY, migrated.imageQueueIds);
@@ -130,15 +132,11 @@ export async function onRequestGet(context) {
                                 : task.mode === 'translate_image'
                                     ? await processTranslationTaskStep(env, task)
                                 : await processVariantTaskStep(env, task, origin);
-                        const recoveredFromFailure = Number(task.backgroundFailureCount || 0) > 0
-                            || Boolean(task.backgroundLastError)
-                            || Boolean(task.backgroundNextAttemptAt);
                         task.backgroundFailureCount = 0;
                         task.backgroundLastError = '';
                         task.backgroundNextAttemptAt = '';
-                        if (recoveredFromFailure) {
-                            await env.SUBMISSIONS.put(task.id, JSON.stringify(task), studioTaskPutOptions(task));
-                        }
+                        task.backgroundLastAttemptAt = new Date().toISOString();
+                        await env.SUBMISSIONS.put(task.id, JSON.stringify(task), studioTaskPutOptions(task));
                         autoSent.push(task.id);
                         const needsNotify = result.done && task.submitter?.unionId && !task.dingtalkNotified && !task.r2AutoNotified;
                         let notifyOk = !needsNotify;
@@ -364,7 +362,7 @@ export async function onRequestGet(context) {
             ? unique([...deferredAutoQueue, ...nextAutoQueue])
             : unique([...nextAutoQueue, ...deferredAutoQueue]);
         const finalProcessingQueue = unique([...nextProcessingQueue, ...deferredProcessingQueue]);
-        if (!queuesEqual(initialAutoQueue, finalAutoQueue)) {
+        if (!imageOnly && !queuesEqual(initialAutoQueue, finalAutoQueue)) {
             await writeQueue(env.SUBMISSIONS, selectedQueueKey, finalAutoQueue);
         }
         if (!imageOnly && !queuesEqual(initialProcessingQueue, finalProcessingQueue)) {
@@ -444,6 +442,28 @@ async function readQueue(kv, key) {
         console.error('Read studio queue failed:', key, err.message);
         return [];
     }
+}
+
+async function listDueImageTaskIds(kv, now) {
+    const listed = await kv.list({ prefix: 'studio-', limit: 1000 });
+    return (listed.keys || [])
+        .filter(key => {
+            const metadata = key.metadata || {};
+            if (metadata.kind !== 'studio' || !isDirectImageTask(metadata.mode)) return false;
+            const active = metadata.status === 'pending'
+                || metadata.status === 'processing'
+                || (metadata.status === 'done' && !metadata.dingtalkNotified && !metadata.r2AutoNotified);
+            if (!active) return false;
+            const nextAttemptAt = Date.parse(metadata.backgroundNextAttemptAt || '');
+            return !Number.isFinite(nextAttemptAt) || nextAttemptAt <= now;
+        })
+        .sort((left, right) => {
+            const leftAttempt = Date.parse(left.metadata?.backgroundLastAttemptAt || '') || 0;
+            const rightAttempt = Date.parse(right.metadata?.backgroundLastAttemptAt || '') || 0;
+            if (leftAttempt !== rightAttempt) return leftAttempt - rightAttempt;
+            return Number(left.metadata?.timestamp || 0) - Number(right.metadata?.timestamp || 0);
+        })
+        .map(key => key.name);
 }
 
 async function writeQueue(kv, key, ids) {
