@@ -9,7 +9,7 @@ export async function onRequestPost(context) {
     try { body = await request.json(); }
     catch { return Response.json({ ok: false, error: 'Invalid JSON' }, { status: 400 }); }
 
-    const { mode, submitter, desc, want, note, scene, analyzePrompt, size, imageName, productName, title, subtitle, otherText, productKeys, refKeys, modelKeys, category, variantScope, colorName, colorHex, resizeTarget, resizeReflow, cutoutMode, cutoutOutputFormat, aPlusDouble, photographerDecision, photographyExampleKey, photographyNote } = body;
+    const { mode, submitter, desc, want, note, scene, analyzePrompt, size, imageName, productName, title, subtitle, otherText, productKeys, refKeys, modelKeys, category, variantScope, colorName, colorHex, watermarkType, watermarkText, resizeTarget, resizeReflow, cutoutMode, cutoutOutputFormat, aPlusDouble, photographerDecision, photographyExampleKey, photographyNote } = body;
     if (!mode || !submitter) {
         return Response.json({ ok: false, error: 'Missing required fields' }, { status: 400 });
     }
@@ -24,6 +24,12 @@ export async function onRequestPost(context) {
     }
     if (mode === 'resize_ai' && (!Array.isArray(refKeys) || refKeys.length !== 1)) {
         return Response.json({ ok: false, error: 'Resize AI mode requires exactly one image' }, { status: 400 });
+    }
+    if (mode === 'watermark' && (!Array.isArray(refKeys) || refKeys.length !== 1)) {
+        return Response.json({ ok: false, error: '去水印模式需要上传一张图片' }, { status: 400 });
+    }
+    if (mode === 'watermark' && watermarkType === 'other' && !String(watermarkText || '').trim()) {
+        return Response.json({ ok: false, error: '请输入需要去除的水印文字' }, { status: 400 });
     }
     if (mode === 'resize_ai' && !isValidResizeTarget(resizeTarget || size)) {
         return Response.json({ ok: false, error: '目标尺寸必须在 100–5000 px 之间' }, { status: 400 });
@@ -61,7 +67,7 @@ export async function onRequestPost(context) {
 
             let existingQueueResult = null;
             if (!existingTask.photographerDecision && existingTask.status === 'pending' && !existingTask.sentToRpa) {
-                const isBackgroundImageTask = existingTask.mode === 'variant' || existingTask.mode === 'resize_ai';
+                const isBackgroundImageTask = isDirectImageTask(existingTask.mode);
                 if (isBackgroundImageTask) {
                     await appendQueue(env.SUBMISSIONS, 'studio:imageQueue:v2', taskId);
                 } else {
@@ -105,6 +111,8 @@ export async function onRequestPost(context) {
         variantScope: ['product', 'background', 'style'].includes(variantScope) ? variantScope : '',
         colorName: colorName || '',
         colorHex: colorHex || '',
+        watermarkType: mode === 'watermark' && watermarkType === 'other' ? 'other' : (mode === 'watermark' ? 'doubao' : ''),
+        watermarkText: mode === 'watermark' && watermarkType === 'other' ? normalizeWatermarkText(watermarkText) : '',
         resizeTarget: resizeTarget || '',
         resizeReflow: resizeReflow === true,
         cutoutMode: mode === 'cutout' && cutoutMode === 'vector' ? 'vector' : (mode === 'cutout' ? 'normal' : ''),
@@ -134,7 +142,7 @@ export async function onRequestPost(context) {
     try {
         await env.SUBMISSIONS.put(taskId, JSON.stringify(task), studioTaskPutOptions(task));
         if (!waitingPhotography) {
-            const isBackgroundImageTask = mode === 'variant' || mode === 'resize_ai';
+            const isBackgroundImageTask = isDirectImageTask(mode);
             if (isBackgroundImageTask) await appendQueue(env.SUBMISSIONS, 'studio:imageQueue:v2', taskId);
             else rpaQueueResult = await queueStudioRpaTask(env, taskId);
         }
@@ -201,6 +209,9 @@ export async function onRequestPost(context) {
                 content += `🖼️ 尺寸修改任务已进入后台处理\n`;
                 content += `目标尺寸：${resizeTarget || size || '-'}\n`;
                 content += `⏱ 完成后会通过钉钉通知，页面可以先关闭\n\n`;
+            } else if (!waitingPhotography && mode === 'watermark') {
+                content += `🧽 去水印任务已进入 AI 后台处理\n`;
+                content += `⏱ 完成后会通过钉钉通知，页面可以先关闭\n\n`;
             }
 
             if (!waitingPhotography && queueInfo) {
@@ -249,7 +260,16 @@ function studioModeText(mode) {
     if (mode === 'cutout') return '白底抠图';
     if (mode === 'variant') return '变体改色';
     if (mode === 'resize_ai') return '尺寸修改';
+    if (mode === 'watermark') return '去水印';
     return mode === 'free' ? '自由模式' : '程序模式';
+}
+
+function isDirectImageTask(mode) {
+    return mode === 'variant' || mode === 'resize_ai' || mode === 'watermark';
+}
+
+function normalizeWatermarkText(value) {
+    return String(value || '').replace(/[\r\n]+/g, ' ').replace(/\s{2,}/g, ' ').trim().slice(0, 80);
 }
 
 async function dispatchCutoutTask(request, env, task) {

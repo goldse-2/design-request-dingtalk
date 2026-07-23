@@ -101,7 +101,7 @@ export async function onRequestGet(context) {
                 : '';
             const origin = new URL(request.url).origin;
             for (const task of autoSendTasks) {
-                const isImageTask = task.mode === 'variant' || task.mode === 'resize_ai';
+                const isImageTask = isDirectImageTask(task.mode);
                 if (imageOnly !== isImageTask) continue;
                 const createdAt = typeof task.timestamp === 'number'
                     ? task.timestamp
@@ -120,7 +120,9 @@ export async function onRequestGet(context) {
                     try {
                         const result = task.mode === 'resize_ai'
                             ? await processResizeAiTask(env, task)
-                            : await processVariantTaskStep(env, task, origin);
+                            : task.mode === 'watermark'
+                                ? await processWatermarkTask(env, task)
+                                : await processVariantTaskStep(env, task, origin);
                         autoSent.push(task.id);
                         const needsNotify = result.done && task.submitter?.unionId && !task.dingtalkNotified && !task.r2AutoNotified;
                         let notifyOk = !needsNotify;
@@ -447,7 +449,7 @@ async function migrateQueues(env) {
             const meta = key.metadata || {};
             const mode = meta.mode || '';
             const status = meta.status || '';
-            const isBackgroundTask = mode === 'variant' || mode === 'resize_ai';
+            const isBackgroundTask = isDirectImageTask(mode);
 
             if (isBackgroundTask) {
                 if (['pending', 'processing', 'done'].includes(status) && !meta.dingtalkNotified && !meta.r2AutoNotified) {
@@ -578,6 +580,58 @@ async function processResizeAiTask(env, task) {
     return { done: true, stored };
 }
 
+async function processWatermarkTask(env, task) {
+    if (!env.SUBMISSION_FILES) throw new Error('R2 storage not configured');
+    if (task.status === 'done' && Array.isArray(task.resultKeys) && task.resultKeys.length) return { done: true };
+
+    const source = Array.isArray(task.refKeys) ? task.refKeys[0] : null;
+    if (!source?.key) throw new Error('Watermark source image not found');
+    const sourceObject = await env.SUBMISSION_FILES.get(source.key);
+    if (!sourceObject) throw new Error('Watermark source image missing');
+
+    const mimeType = sourceObject.httpMetadata?.contentType || guessContentType(source.name || source.key);
+    const base64 = arrayBufferToBase64(await sourceObject.arrayBuffer());
+    const prompt = buildWatermarkPrompt(task.watermarkType, task.watermarkText);
+    const result = await editImageWithPrompt({
+        env,
+        prompt,
+        mimeType,
+        base64,
+        maxBytes: 15 * 1024 * 1024
+    });
+    const stored = await storeWatermarkResult(env, task, result, source.name || 'watermark-source.png');
+
+    task.resultKeys = [stored];
+    task.status = 'done';
+    task.completedAt = new Date().toISOString();
+    task.completeNote = task.watermarkType === 'other'
+        ? `去水印完成：${String(task.watermarkText || '').slice(0, 80)}`
+        : '豆包水印去除完成';
+    task.backgroundLastAttemptAt = new Date().toISOString();
+    task.backgroundLastError = '';
+    await env.SUBMISSIONS.put(task.id, JSON.stringify(task), studioTaskPutOptions(task));
+    return { done: true, stored };
+}
+
+export function buildWatermarkPrompt(type, watermarkText) {
+    const safeWatermarkText = String(watermarkText || '')
+        .replace(/[\r\n]+/g, ' ')
+        .replace(/"/g, "'")
+        .replace(/\s{2,}/g, ' ')
+        .trim()
+        .slice(0, 80);
+    const target = type === 'other'
+        ? `the watermark text or watermark mark that reads exactly "${safeWatermarkText}"`
+        : 'the Doubao watermark, including any small Doubao icon and text such as "豆包", "豆包AI生成", or equivalent Doubao-generated watermark';
+    return [
+        `Remove only ${target} from the uploaded image.`,
+        'Precisely reconstruct the pixels hidden behind that watermark so the repaired area blends naturally with the surrounding background, texture, lighting, gradients, and edges.',
+        'Preserve every other element exactly, including the product, people, composition, colors, materials, shadows, normal copy, titles, labels, logos, brand marks, UI elements, and all text that is not the specified watermark.',
+        'Do not crop, resize, recompose, retouch, recolor, rewrite text, remove unrelated content, or add any new object, text, border, logo, or watermark.',
+        'Keep the original aspect ratio and visual resolution. Return only one final image in JPEG format with an opaque background.'
+    ].join('\n');
+}
+
 export function buildResizePrompt(target, allowReflow, aPlusDouble = false) {
     return [
         `Resize and adapt the uploaded image to exactly ${target.width}x${target.height}px.`,
@@ -696,6 +750,17 @@ async function storeVariantResult(env, task, result, sourceName, index) {
     return { key, name: `${safeName}-变体改色-${index + 1}.${ext}` };
 }
 
+async function storeWatermarkResult(env, task, result, sourceName) {
+    const fetched = await resultToBytes(result);
+    const ext = extensionFromMime(fetched.mimeType);
+    const safeName = sanitizeName(String(sourceName || 'watermark-source.png').replace(/\.[^.]+$/, ''));
+    const key = `studio-results/${task.id}/watermark-${safeName}.${ext}`;
+    await env.SUBMISSION_FILES.put(key, fetched.bytes, {
+        httpMetadata: { contentType: fetched.mimeType }
+    });
+    return { key, name: `${safeName}-去水印.${ext}` };
+}
+
 async function resultToBytes(result) {
     if (result?.dataUrl) {
         const match = String(result.dataUrl).match(/^data:([^;]+);base64,(.+)$/);
@@ -728,7 +793,11 @@ async function notifyUserDone(env, task, origin) {
     const staffId = await getStaffId(token, task.submitter.unionId);
     if (!staffId) throw new Error('No staff id');
     const resultCount = Array.isArray(task.resultKeys) ? task.resultKeys.length : 0;
-    const modeText = task.mode === 'resize_ai' ? `尺寸修改已完成${task.resizeTarget ? '：' + task.resizeTarget : ''}` : '变体改色已完成';
+    const modeText = task.mode === 'resize_ai'
+        ? `尺寸修改已完成${task.resizeTarget ? '：' + task.resizeTarget : ''}`
+        : task.mode === 'watermark'
+            ? '去水印已完成'
+            : '变体改色已完成';
     const content = `图片制作完成 ✅\n\n${modeText}，共 ${resultCount} 张。\n请到网站查看下载：${origin}/studio-tasks.html`;
     const response = await fetch('https://api.dingtalk.com/v1.0/robot/oToMessages/batchSend', {
         method: 'POST',
@@ -880,7 +949,12 @@ function studioModeText(mode) {
     if (mode === 'cutout') return '白底抠图';
     if (mode === 'variant') return '变体改色';
     if (mode === 'resize_ai') return '尺寸修改';
+    if (mode === 'watermark') return '去水印';
     return mode === 'free' ? '自由模式' : '程序模式';
+}
+
+function isDirectImageTask(mode) {
+    return mode === 'variant' || mode === 'resize_ai' || mode === 'watermark';
 }
 
 async function resendStudioTaskAfterResultTimeout(env, task, origin) {

@@ -146,7 +146,8 @@ function renderTask(task) {
     const card = document.createElement('div');
     card.style.cssText = 'background:#fff;border-radius:12px;padding:18px 20px;box-shadow:0 1px 4px rgba(0,0,0,0.07)';
 
-    const modeText = task.mode === 'sheet_self' ? (task.standalonePhotography ? '图片拍摄' : '表格自助') : task.mode === 'retouch' ? '精修图片' : task.mode === 'cutout' ? '白底抠图' : task.mode === 'variant' ? '变体改色' : task.mode === 'resize_ai' ? '尺寸修改' : task.mode === 'free' ? '自由模式' : '程序模式';
+    const modeText = task.mode === 'sheet_self' ? (task.standalonePhotography ? '图片拍摄' : '表格自助') : task.mode === 'retouch' ? '精修图片' : task.mode === 'cutout' ? '白底抠图' : task.mode === 'variant' ? '变体改色' : task.mode === 'resize_ai' ? '尺寸修改' : task.mode === 'watermark' ? '去水印' : task.mode === 'free' ? '自由模式' : '程序模式';
+    const directImageTask = ['variant', 'resize_ai', 'watermark'].includes(task.mode);
     const time = new Date(task.timestamp).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
     
     const displayTitle = task.imageName ? task.imageName.replace(/^[^-]+-/, '') : '';
@@ -156,8 +157,8 @@ function renderTask(task) {
             <div style="display:flex;align-items:center;gap:10px">
                 <span style="font-weight:700;color:#111827">${modeText}</span>
                 <span style="font-size:0.75rem;background:${st.bg};color:${st.color};padding:2px 10px;border-radius:10px">${st.text}</span>
-                ${task.status === 'pending' && !task.pausedAuto ? `<button onclick="toggleAutoPause('${task.id}', true)" style="font-size:0.7rem;background:#94a3b8;color:#fff;border:none;padding:3px 10px;border-radius:10px;cursor:pointer">⏸ 暂停自动发送</button>` : ''}
-                ${task.pausedAuto ? `<button onclick="toggleAutoPause('${task.id}', false)" style="font-size:0.7rem;background:#16a34a;color:#fff;border:none;padding:3px 10px;border-radius:10px;cursor:pointer">▶ 恢复自动发送</button>` : ''}
+                ${task.status === 'pending' && !task.pausedAuto && !directImageTask ? `<button onclick="toggleAutoPause('${task.id}', true)" style="font-size:0.7rem;background:#94a3b8;color:#fff;border:none;padding:3px 10px;border-radius:10px;cursor:pointer">⏸ 暂停自动发送</button>` : ''}
+                ${task.pausedAuto && !directImageTask ? `<button onclick="toggleAutoPause('${task.id}', false)" style="font-size:0.7rem;background:#16a34a;color:#fff;border:none;padding:3px 10px;border-radius:10px;cursor:pointer">▶ 恢复自动发送</button>` : ''}
             </div>
             <span style="font-size:0.78rem;color:#9ca3af">${time}</span>
         </div>`;
@@ -196,11 +197,11 @@ function renderTask(task) {
                         <span style="font-size:0.75rem;color:${step3 ? '#16a34a' : '#9ca3af'};font-weight:${step3 ? '600' : '400'}">已完成</span>
                     </div>
                 </div>
-                ${task.status === 'processing' ? '<div style="font-size:0.72rem;color:#3b82f6;text-align:center;margin-top:6px">' + (task.mode === 'sheet_self' ? `已完成 ${Number(task.sheetSelfCompletedCount || 0)}/${Number(task.sheetSelfSlotCount || 0)} 张，每完成一张就会发到钉钉` : task.mode === 'retouch' ? '⏱ 图片正在精修中，预计约 30 分钟完成...' : task.mode === 'cutout' ? '⏱ 正在进行白底抠图，完成后会通过钉钉通知...' : '⏱ AI 正在生成中，预计还需 4-8 分钟...') + '</div>' : ''}
+                ${task.status === 'processing' ? '<div style="font-size:0.72rem;color:#3b82f6;text-align:center;margin-top:6px">' + (task.mode === 'sheet_self' ? `已完成 ${Number(task.sheetSelfCompletedCount || 0)}/${Number(task.sheetSelfSlotCount || 0)} 张，每完成一张就会发到钉钉` : task.mode === 'retouch' ? '⏱ 图片正在精修中，预计约 30 分钟完成...' : task.mode === 'cutout' ? '⏱ 正在进行白底抠图，完成后会通过钉钉通知...' : task.mode === 'watermark' ? '⏱ AI 正在去除水印，完成后会通过钉钉通知...' : '⏱ AI 正在生成中，预计还需 4-8 分钟...') + '</div>' : ''}
                 ${task.photographyUploadedAt && task.status !== 'done' && task.status !== 'rejected' ? `<div style="font-size:0.72rem;color:#047857;text-align:center;margin-top:6px">摄影师已上传 ${Number(task.photographyUploadedCount || task.photographySourceKeys?.length || 0)} 张图片</div>` : ''}
                 ${photographyRetouching ? `<div style="font-size:0.72rem;color:#1d4ed8;text-align:center;margin-top:6px">拍摄图片正在精修（${Number(task.photographyWorkflow?.completedCount || 0)}/${Number(task.photographyWorkflow?.sourceCount || 0)}），完成后会自动开始作图</div>` : ''}
                 ${waitingPhotography ? '<div style="font-size:0.72rem;color:#b45309;text-align:center;margin-top:6px">摄影师补上传照片后，任务会自动开始作图</div>' : ''}
-                ${task.status === 'pending' && !task.sentToRpa ? '<div style="font-size:0.72rem;color:#f59e0b;text-align:center;margin-top:6px">📋 任务已提交，等待自动发送到 RPA...</div>' : ''}
+                ${task.status === 'pending' && !task.sentToRpa ? `<div style="font-size:0.72rem;color:#f59e0b;text-align:center;margin-top:6px">📋 ${directImageTask ? '任务已提交，等待 AI 后台处理...' : '任务已提交，等待自动发送到 RPA...'}</div>` : ''}
             </div>`;
     }
     

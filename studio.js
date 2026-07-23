@@ -23,7 +23,7 @@ function initStudioTypewriter() {
 
 let currentUser = null;
 const requestedMode = new URLSearchParams(window.location.search).get('mode');
-let currentMode = ['free', 'program', 'sheet', 'photography', 'retouch', 'variant', 'resize'].includes(requestedMode) ? requestedMode : 'free';
+let currentMode = ['free', 'program', 'sheet', 'photography', 'retouch', 'variant', 'resize', 'watermark'].includes(requestedMode) ? requestedMode : 'free';
 
 const ANALYZE_PROMPT = `# 角色设定
 你是一位拥有十年经验的亚马逊资深视觉拆解专家。你的任务是对用户上传的电商图片进行"逆向工程"，将其拆解为 1:1 像素级复刻的"图层蓝图"，并生成精准包含"人物互动"的素材生图提示词。
@@ -131,7 +131,7 @@ function onAgreeChange(checked) {
 }
 function applyAgreementGate() {
     const agreed = hasAgreed();
-    document.querySelectorAll('.studio-submit-btn, #freeSubmit, #progSubmit, #sheetSelfSubmit, #photographySubmit, #retouchSubmit, #cutoutSubmit, #variantSubmit').forEach(btn => {
+    document.querySelectorAll('.studio-submit-btn, #freeSubmit, #progSubmit, #sheetSelfSubmit, #photographySubmit, #retouchSubmit, #cutoutSubmit, #variantSubmit, #watermarkSubmit').forEach(btn => {
         if (!btn) return;
         if (agreed) {
             btn.classList.remove('is-gated');
@@ -818,7 +818,43 @@ const VARIANT_FORM = `
         </div>
     </div>`;
 
-const uploads = { freeImages: [], freeModel: null, freeScene: null, freeProduct: [], freeProduct1: null, freeProduct2: null, helpImages: [], progRef: [], progProduct: [], retouchImages: [], cutoutImages: [], variantImages: [] };
+const WATERMARK_FORM = `
+    <div class="studio-layout watermark-layout">
+        <div class="studio-panel">
+            <div class="sf-section">
+                <div class="sf-label">水印类型 <span class="sf-req">*</span></div>
+                <select class="watermark-type-select" id="watermarkType">
+                    <option value="doubao">去除豆包水印</option>
+                    <option value="other">其他水印</option>
+                </select>
+                <label class="watermark-text-field" id="watermarkTextField" for="watermarkText" hidden>
+                    <span class="sf-label">水印文字 <span class="sf-req">*</span></span>
+                    <input id="watermarkText" type="text" maxlength="80" placeholder="请输入图片上需要去除的水印文字">
+                </label>
+            </div>
+            <div class="sf-section">
+                <div class="sf-label">待处理图片 <span class="sf-req">*</span></div>
+                <label class="sf-upload-box watermark-upload-box" id="watermarkDrop" for="watermarkInput">
+                    <input id="watermarkInput" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="26" height="26"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    <span>上传需要去水印的图片</span>
+                    <small>JPG、PNG、WebP，单张最大 15 MB</small>
+                </label>
+                <div class="watermark-selected" id="watermarkSelected"></div>
+                <div class="watermark-note">使用 GPT Image 2 后台处理，无需审批。提交后可以关闭页面，完成后会通过钉钉通知。</div>
+            </div>
+            <button class="sf-submit" id="watermarkSubmit">开始去水印</button>
+            <div id="watermarkStatus" class="studio-status" style="margin-top:10px" aria-live="polite"></div>
+        </div>
+        <div class="studio-preview watermark-preview">
+            <div class="studio-preview-tab">去水印结果</div>
+            <div class="studio-preview-body">
+                <div class="resize-empty">提交后进入后台处理，完成后可在「我的任务」预览和下载</div>
+            </div>
+        </div>
+    </div>`;
+
+const uploads = { freeImages: [], freeModel: null, freeScene: null, freeProduct: [], freeProduct1: null, freeProduct2: null, helpImages: [], progRef: [], progProduct: [], retouchImages: [], cutoutImages: [], variantImages: [], watermarkImage: null };
 const studioHelpState = { type: '' };
 const inlineShootRequestState = {
     free: { enabled: false, image: null },
@@ -847,6 +883,7 @@ let resizeAPlusApplyHandler = null;
 const MAX_STUDIO_FILE_SIZE = 8 * 1024 * 1024;
 const MAX_RETOUCH_FILE_SIZE = 15 * 1024 * 1024;
 const MAX_VARIANT_FILE_SIZE = 15 * 1024 * 1024;
+const MAX_WATERMARK_FILE_SIZE = 15 * 1024 * 1024;
 const MAX_VARIANT_IMAGES = 20;
 const MAX_RETOUCH_IMAGES = 20;
 const PHOTOGRAPHY_SLOT_COUNT = 8;
@@ -919,15 +956,21 @@ function createSheetSelfSlot(index) {
 
 function validateStudioImage(file) {
     if (!file?.type?.startsWith('image/')) return '请选择图片文件';
-    const isLargeImageMode = currentMode === 'retouch' || currentMode === 'variant';
-    const maxSize = currentMode === 'variant' ? MAX_VARIANT_FILE_SIZE : currentMode === 'retouch' ? MAX_RETOUCH_FILE_SIZE : MAX_STUDIO_FILE_SIZE;
+    const isLargeImageMode = currentMode === 'retouch' || currentMode === 'variant' || currentMode === 'watermark';
+    const maxSize = currentMode === 'variant'
+        ? MAX_VARIANT_FILE_SIZE
+        : currentMode === 'watermark'
+            ? MAX_WATERMARK_FILE_SIZE
+            : currentMode === 'retouch'
+                ? MAX_RETOUCH_FILE_SIZE
+                : MAX_STUDIO_FILE_SIZE;
     const maxSizeLabel = isLargeImageMode ? '15MB' : '8MB';
     if (file.size > maxSize) return '图片单张不能超过 ' + maxSizeLabel + '：' + file.name;
     return '';
 }
 
 function showStudioUploadError(message) {
-    const statusId = currentMode === 'program' ? 'progStatus' : currentMode === 'retouch' ? 'retouchStatus' : currentMode === 'variant' ? 'variantStatus' : 'freeStatus';
+    const statusId = currentMode === 'program' ? 'progStatus' : currentMode === 'retouch' ? 'retouchStatus' : currentMode === 'variant' ? 'variantStatus' : currentMode === 'watermark' ? 'watermarkStatus' : 'freeStatus';
     const status = document.getElementById(statusId);
     if (status) {
         status.textContent = message;
@@ -1907,7 +1950,7 @@ function renderForm() {
     programProductAiBusy = false;
     programCopyAiBusy = false;
     resetAPlusDoubleState();
-    uploads.freeImages = []; uploads.freeModel = null; uploads.freeScene = null; uploads.freeProduct = []; uploads.freeProduct1 = null; uploads.freeProduct2 = null; uploads.helpImages = []; uploads.progRef = []; uploads.progProduct = []; uploads.variantImages = [];
+    uploads.freeImages = []; uploads.freeModel = null; uploads.freeScene = null; uploads.freeProduct = []; uploads.freeProduct1 = null; uploads.freeProduct2 = null; uploads.helpImages = []; uploads.progRef = []; uploads.progProduct = []; uploads.variantImages = []; uploads.watermarkImage = null;
     studioHelpState.type = '';
     if (currentMode === 'free' || currentMode === 'program') resetInlineShootRequestState(currentMode);
     let galleryWasReady = false;
@@ -1945,12 +1988,16 @@ function renderForm() {
         if (attachedGallery) attachedGallery.remove();
         area.innerHTML = VARIANT_FORM;
         initVariantMode();
-    } else {
+    } else if (currentMode === 'resize') {
         if (attachedGallery) attachedGallery.remove();
         area.innerHTML = RESIZE_FORM;
         initResizeTool();
+    } else {
+        if (attachedGallery) attachedGallery.remove();
+        area.innerHTML = WATERMARK_FORM;
+        initWatermarkMode();
     }
-    if (currentMode !== 'resize' && currentMode !== 'retouch' && currentMode !== 'variant' && currentMode !== 'sheet' && currentMode !== 'photography' && !galleryWasReady) renderStudioGallery();
+    if (currentMode !== 'resize' && currentMode !== 'retouch' && currentMode !== 'variant' && currentMode !== 'watermark' && currentMode !== 'sheet' && currentMode !== 'photography' && !galleryWasReady) renderStudioGallery();
     applyAgreementGate();
 }
 
@@ -3481,6 +3528,91 @@ function renderVariantPreview() {
     });
 }
 
+function initWatermarkMode() {
+    const type = document.getElementById('watermarkType');
+    const textField = document.getElementById('watermarkTextField');
+    const input = document.getElementById('watermarkInput');
+    const drop = document.getElementById('watermarkDrop');
+
+    const syncType = () => {
+        const needsText = type.value === 'other';
+        textField.hidden = !needsText;
+        if (!needsText) document.getElementById('watermarkText').value = '';
+    };
+    const readFile = file => {
+        const validationError = validateStudioImage(file);
+        if (validationError) {
+            showStudioFieldError(document.getElementById('watermarkStatus'), validationError, drop);
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = event => {
+            uploads.watermarkImage = {
+                name: file.name,
+                base64: event.target.result.split(',')[1],
+                mimeType: file.type,
+                dataUrl: event.target.result
+            };
+            renderWatermarkPreview();
+            const status = document.getElementById('watermarkStatus');
+            status.textContent = '图片已上传，可以开始处理';
+            status.className = 'studio-status ok';
+        };
+        reader.onerror = () => showStudioFieldError(document.getElementById('watermarkStatus'), '图片读取失败，请重新上传', drop);
+        reader.readAsDataURL(file);
+    };
+
+    type.addEventListener('change', syncType);
+    drop.addEventListener('dragover', event => { event.preventDefault(); drop.classList.add('dragover'); });
+    drop.addEventListener('dragleave', () => drop.classList.remove('dragover'));
+    drop.addEventListener('drop', event => {
+        event.preventDefault();
+        drop.classList.remove('dragover');
+        const file = event.dataTransfer.files?.[0];
+        if (file) readFile(file);
+    });
+    input.addEventListener('change', event => {
+        const file = event.target.files?.[0];
+        event.target.value = '';
+        if (file) readFile(file);
+    });
+    document.getElementById('watermarkSubmit').addEventListener('click', submitWatermark);
+    syncType();
+    renderWatermarkPreview();
+}
+
+function renderWatermarkPreview() {
+    const selected = document.getElementById('watermarkSelected');
+    const drop = document.getElementById('watermarkDrop');
+    if (!selected || !drop) return;
+    const image = uploads.watermarkImage;
+    drop.hidden = Boolean(image);
+    selected.innerHTML = '';
+    if (!image) return;
+
+    const item = document.createElement('div');
+    item.className = 'watermark-selected-item';
+    const thumbnail = document.createElement('img');
+    thumbnail.src = image.dataUrl;
+    thumbnail.alt = '待处理图片';
+    const name = document.createElement('strong');
+    name.textContent = image.name || '待处理图片';
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.textContent = '×';
+    remove.setAttribute('aria-label', '移除图片');
+    remove.title = '移除图片';
+    remove.addEventListener('click', () => {
+        uploads.watermarkImage = null;
+        renderWatermarkPreview();
+        const status = document.getElementById('watermarkStatus');
+        status.textContent = '';
+        status.className = 'studio-status';
+    });
+    item.append(thumbnail, name, remove);
+    selected.appendChild(item);
+}
+
 function initResizeTool() {
     const input = document.getElementById('resizeImageInput');
     const targetGrid = document.getElementById('resizeTargetGrid');
@@ -4840,7 +4972,7 @@ async function submitTask(mode, payload, statusEl, btn, onSuccess) {
     try {
         statusEl.textContent = '上传图片中...';
         const productKeys = payload.productImages && payload.productImages.length ? await uploadImages(payload.productImages, 'studio/product') : [];
-        const refPrefix = mode === 'retouch' ? 'studio/retouch' : mode === 'cutout' ? 'studio/cutout' : mode === 'variant' ? 'studio/variant' : mode === 'resize_ai' ? 'studio/resize' : 'studio/ref';
+        const refPrefix = mode === 'retouch' ? 'studio/retouch' : mode === 'cutout' ? 'studio/cutout' : mode === 'variant' ? 'studio/variant' : mode === 'resize_ai' ? 'studio/resize' : mode === 'watermark' ? 'studio/watermark' : 'studio/ref';
         const uploadedRefKeys = payload.refImages && payload.refImages.length ? await uploadImages(payload.refImages, refPrefix) : [];
         const refKeys = uploadedRefKeys;
         const modelKeys = payload.modelImages && payload.modelImages.length ? await uploadImages(payload.modelImages, 'studio/model') : [];
@@ -4863,6 +4995,8 @@ async function submitTask(mode, payload, statusEl, btn, onSuccess) {
         if (payload.variantScope) submitPayload.variantScope = payload.variantScope;
         if (payload.colorName) submitPayload.colorName = payload.colorName;
         if (payload.colorHex) submitPayload.colorHex = payload.colorHex;
+        if (payload.watermarkType) submitPayload.watermarkType = payload.watermarkType;
+        if (payload.watermarkText !== undefined) submitPayload.watermarkText = payload.watermarkText;
         if (payload.resizeTarget) submitPayload.resizeTarget = payload.resizeTarget;
         if (payload.resizeReflow !== undefined) submitPayload.resizeReflow = payload.resizeReflow === true;
         if (payload.cutoutOutputFormat) submitPayload.cutoutOutputFormat = payload.cutoutOutputFormat;
@@ -5641,6 +5775,34 @@ async function submitVariant() {
         colorHex,
         refImages: uploads.variantImages
     }, status, btn, task => showSuccessModal(task, '改色任务已提交，完成后会通过钉钉通知'));
+}
+
+async function submitWatermark() {
+    const status = document.getElementById('watermarkStatus');
+    const btn = document.getElementById('watermarkSubmit');
+    const image = uploads.watermarkImage;
+    if (!image) {
+        showStudioFieldError(status, '请先上传需要去水印的图片', document.getElementById('watermarkDrop'));
+        return;
+    }
+
+    const watermarkType = document.getElementById('watermarkType')?.value === 'other' ? 'other' : 'doubao';
+    const watermarkText = (document.getElementById('watermarkText')?.value || '').trim();
+    if (watermarkType === 'other' && !watermarkText) {
+        showStudioFieldError(status, '请输入图片上需要去除的水印文字', document.getElementById('watermarkText'));
+        return;
+    }
+
+    const desc = watermarkType === 'doubao'
+        ? '去除豆包水印'
+        : `去除水印：${watermarkText}`;
+    submitTask('watermark', {
+        desc,
+        size: '2K 自动识别',
+        watermarkType,
+        watermarkText,
+        refImages: [image]
+    }, status, btn, task => showSuccessModal(task, '去水印任务已提交，完成后会通过钉钉通知'));
 }
 
 function appendVariantResult(result, sourceName, index) {

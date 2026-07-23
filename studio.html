@@ -306,6 +306,19 @@
         .variant-result-card { border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; background: #fff; }
         .variant-result-card img { width: 100%; aspect-ratio: 1; object-fit: contain; display: block; background: #f9fafb; }
         .variant-result-card a { display: block; padding: 8px; border-top: 1px solid #e5e7eb; color: #4338ca; font-size: .78rem; font-weight: 700; text-align: center; text-decoration: none; }
+        .watermark-type-select { width:100%; min-height:42px; padding:0 12px; border:1px solid #d1d5db; border-radius:7px; background:#fff; color:#111827; font:inherit; cursor:pointer; }
+        .watermark-text-field { margin-top:10px; }
+        .watermark-text-field[hidden] { display:none; }
+        .watermark-text-field input { width:100%; min-height:42px; padding:9px 11px; border:1px solid #d1d5db; border-radius:7px; background:#fff; color:#111827; font:inherit; outline:none; }
+        .watermark-text-field input:focus { border-color:#6366f1; box-shadow:0 0 0 3px rgba(99,102,241,.1); }
+        .watermark-upload-box { width:100%; min-height:170px; }
+        .watermark-selected { display:grid; grid-template-columns:minmax(0,1fr); gap:8px; margin-top:10px; }
+        .watermark-selected:empty { display:none; }
+        .watermark-selected-item { display:grid; grid-template-columns:58px minmax(0,1fr) 30px; gap:10px; align-items:center; padding:8px; border:1px solid #e5e7eb; border-radius:7px; background:#f9fafb; }
+        .watermark-selected-item img { width:58px; height:58px; object-fit:cover; border:1px solid #e5e7eb; border-radius:6px; background:#fff; }
+        .watermark-selected-item strong { overflow:hidden; color:#374151; font-size:.78rem; text-overflow:ellipsis; white-space:nowrap; }
+        .watermark-selected-item button { width:30px; height:30px; border:0; border-radius:6px; background:#f3f4f6; color:#64748b; font-size:1rem; cursor:pointer; }
+        .watermark-note { margin-top:10px; padding:9px 11px; border-left:3px solid #10b981; background:#ecfdf5; color:#047857; font-size:.75rem; line-height:1.55; }
         .photography-layout { width:100%; margin:0; }
         .photography-panel { position:static; width:100% !important; max-width:none !important; max-height:none; padding:0; overflow:hidden; }
         .photography-head { display:flex; align-items:flex-start; justify-content:space-between; gap:20px; padding:22px 24px 18px; border-bottom:1px solid #e5e7eb; }
@@ -607,6 +620,7 @@
             <button class="studio-tab" data-mode="retouch">精修/白底</button>
             <button class="studio-tab" data-mode="variant">变体改色</button>
             <button class="studio-tab" data-mode="resize">尺寸修改</button>
+            <button class="studio-tab" data-mode="watermark">去水印</button>
             <a href="studio-tasks.html" class="studio-tab-link">我的任务 →</a>
         </div>
 
