@@ -153,6 +153,10 @@ function isJpegFile(file) {
     return file.type === 'image/jpeg' || /\.jpe?g$/i.test(file.name || '');
 }
 
+function isWebpFile(file) {
+    return file.type === 'image/webp' || /\.webp$/i.test(file.name || '');
+}
+
 function isAdobeAiFile(file) {
     const type = String(file?.type || '').toLowerCase();
     return /\.ai$/i.test(file?.name || '') || ['application/postscript', 'application/illustrator', 'application/vnd.adobe.illustrator'].includes(type);
@@ -193,7 +197,7 @@ async function normalizeUploadFile(file, taskInfo) {
         } else {
             normalized = isPngFile(file) ? file : await convertImageFile(file, 'image/png', 'png', false);
         }
-    } else if (isPngFile(file)) {
+    } else if (isPngFile(file) || isWebpFile(file)) {
         normalized = await convertImageFile(file, 'image/jpeg', 'jpg', true);
     }
     return resizeLegacyAPlusFile(normalized);
@@ -329,7 +333,7 @@ uploadBtn.addEventListener('click', async () => {
         } else if (taskInfo.mode === 'cutout') {
             renderUploadProgress('正在处理成品图片', 16, `白底抠图任务将导出 ${taskInfo.outputFormat.toUpperCase()}`, `处理 0/${pendingFiles.length}`);
         } else {
-            renderUploadProgress('正在处理成品图片', 16, 'PNG 将自动转换为 JPG', `处理 0/${pendingFiles.length}`);
+            renderUploadProgress('正在处理成品图片', 16, 'PNG / WebP 将自动转换为 JPG', `处理 0/${pendingFiles.length}`);
         }
 
         const uploadFiles = [];
