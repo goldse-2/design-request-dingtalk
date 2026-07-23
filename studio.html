@@ -306,6 +306,11 @@
         .variant-result-card { border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; background: #fff; }
         .variant-result-card img { width: 100%; aspect-ratio: 1; object-fit: contain; display: block; background: #f9fafb; }
         .variant-result-card a { display: block; padding: 8px; border-top: 1px solid #e5e7eb; color: #4338ca; font-size: .78rem; font-weight: 700; text-align: center; text-decoration: none; }
+        .translation-language { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; }
+        .translation-language button { min-height:42px; border:1px solid #d1d5db; border-radius:7px; background:#fff; color:#374151; font-size:.86rem; font-weight:700; cursor:pointer; }
+        .translation-language button.active { border-color:#111827; background:#111827; color:#fff; }
+        .translation-dimension { position:absolute; right:5px; bottom:5px; left:5px; display:block; overflow:hidden; padding:3px 5px; border-radius:4px; background:rgba(17,24,39,.76); color:#fff; font-size:.66rem; line-height:1.3; text-align:center; text-overflow:ellipsis; white-space:nowrap; }
+        .translation-note { margin-top:10px; padding:9px 11px; border-left:3px solid #10b981; background:#ecfdf5; color:#047857; font-size:.75rem; line-height:1.55; }
         .watermark-type-select { width:100%; min-height:42px; padding:0 12px; border:1px solid #d1d5db; border-radius:7px; background:#fff; color:#111827; font:inherit; cursor:pointer; }
         .watermark-text-field { margin-top:10px; }
         .watermark-text-field[hidden] { display:none; }
@@ -522,6 +527,7 @@
             .retouch-queue-row { gap:10px; }
             .retouch-selected-grid { grid-template-columns:minmax(0,1fr); }
             .variant-palette { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+            .translation-language { grid-template-columns:repeat(2,minmax(0,1fr)); }
             .resize-file-list { grid-template-columns:minmax(0,1fr); }
             .sheet-self-workflow-list { grid-template-columns:repeat(2,minmax(0,1fr)); }
             .sheet-self-workflow-step:nth-child(2) { border-right:0; }
@@ -619,6 +625,7 @@
             <button class="studio-tab" data-mode="photography">图片拍摄</button>
             <button class="studio-tab" data-mode="retouch">精修/白底</button>
             <button class="studio-tab" data-mode="variant">变体改色</button>
+            <button class="studio-tab" data-mode="translate">转换语言</button>
             <button class="studio-tab" data-mode="resize">尺寸修改</button>
             <button class="studio-tab" data-mode="watermark">去水印</button>
             <a href="studio-tasks.html" class="studio-tab-link">我的任务 →</a>

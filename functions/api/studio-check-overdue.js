@@ -122,6 +122,8 @@ export async function onRequestGet(context) {
                             ? await processResizeAiTask(env, task)
                             : task.mode === 'watermark'
                                 ? await processWatermarkTask(env, task)
+                                : task.mode === 'translate_image'
+                                    ? await processTranslationTaskStep(env, task)
                                 : await processVariantTaskStep(env, task, origin);
                         autoSent.push(task.id);
                         const needsNotify = result.done && task.submitter?.unionId && !task.dingtalkNotified && !task.r2AutoNotified;
@@ -543,6 +545,112 @@ async function processVariantTaskStep(env, task, origin) {
     return { done: task.status === 'done', stored };
 }
 
+async function processTranslationTaskStep(env, task) {
+    if (!env.SUBMISSION_FILES) throw new Error('R2 storage not configured');
+    const refKeys = Array.isArray(task.refKeys) ? task.refKeys : [];
+    const dimensions = Array.isArray(task.translationDimensions) ? task.translationDimensions : [];
+    if (!refKeys.length || dimensions.length !== refKeys.length) {
+        throw new Error('Translation source images or dimensions are missing');
+    }
+
+    const index = Math.max(0, Number(task.translationNextIndex || 0));
+    if (index >= refKeys.length) {
+        task.status = 'done';
+        task.completedAt = task.completedAt || new Date().toISOString();
+        await env.SUBMISSIONS.put(task.id, JSON.stringify(task), studioTaskPutOptions(task));
+        return { done: true };
+    }
+
+    const source = refKeys[index];
+    const target = normalizeTranslationTarget(dimensions[index]);
+    let pending = task.translationPendingResult?.index === index ? task.translationPendingResult : null;
+    let generated;
+
+    if (pending?.key) {
+        const pendingObject = await env.SUBMISSION_FILES.get(pending.key);
+        if (pendingObject) {
+            generated = {
+                bytes: await pendingObject.arrayBuffer(),
+                mimeType: pendingObject.httpMetadata?.contentType || pending.mimeType || 'image/jpeg'
+            };
+        } else {
+            pending = null;
+        }
+    }
+
+    if (!generated) {
+        const sourceObject = await env.SUBMISSION_FILES.get(source.key);
+        if (!sourceObject) throw new Error('Translation source image missing');
+        const mimeType = sourceObject.httpMetadata?.contentType || guessContentType(source.name || source.key);
+        const result = await editImageWithPrompt({
+            env,
+            prompt: buildTranslationPrompt(task.translationLanguage, target),
+            mimeType,
+            base64: arrayBufferToBase64(await sourceObject.arrayBuffer()),
+            maxBytes: 15 * 1024 * 1024
+        });
+        generated = await resultToBytes(result);
+        const pendingKey = `studio-results/${task.id}/translation-pending-${index + 1}.${extensionFromMime(generated.mimeType)}`;
+        await env.SUBMISSION_FILES.put(pendingKey, generated.bytes, {
+            httpMetadata: { contentType: generated.mimeType }
+        });
+        task.translationPendingResult = { index, key: pendingKey, mimeType: generated.mimeType };
+        task.translationLastAttemptAt = new Date().toISOString();
+        await env.SUBMISSIONS.put(task.id, JSON.stringify(task), studioTaskPutOptions(task));
+        pending = task.translationPendingResult;
+    }
+
+    const exact = await transformToExactJpeg(env, generated, target);
+    const stored = await storeTranslationResult(env, task, exact, source.name || `source-${index + 1}.png`, index, target);
+    if (pending?.key) await env.SUBMISSION_FILES.delete(pending.key).catch(() => {});
+
+    const nextIndex = index + 1;
+    task.resultKeys = [
+        ...(Array.isArray(task.resultKeys) ? task.resultKeys.filter(item => item?.key !== stored.key) : []),
+        stored
+    ];
+    task.status = nextIndex >= refKeys.length ? 'done' : 'processing';
+    task.translationNextIndex = nextIndex;
+    task.translationPendingResult = null;
+    task.translationLastAttemptAt = new Date().toISOString();
+    task.translationLastError = '';
+    if (task.status === 'done') {
+        task.completedAt = new Date().toISOString();
+        task.completeNote = `图片语言转换完成：${translationLanguageName(task.translationLanguage)}`;
+    }
+
+    await env.SUBMISSIONS.put(task.id, JSON.stringify(task), studioTaskPutOptions(task));
+    return { done: task.status === 'done', stored };
+}
+
+export function buildTranslationPrompt(language, target) {
+    const targetLanguage = ({
+        en: 'English',
+        fr: 'French',
+        ja: 'Japanese',
+        de: 'German'
+    })[language] || 'English';
+    return [
+        `Translate all consumer-facing copy in this image into natural, accurate ${targetLanguage}.`,
+        'Keep brand names, logos, product model names, SKU codes, numbers, measurements, and universally recognized symbols unchanged unless they are clearly part of a translatable sentence.',
+        'Replace the original copy in place. Preserve the original meaning, information completeness, text hierarchy, font style, weight, size, color, alignment, spacing, line breaks, and visual position as closely as possible.',
+        'Preserve every non-text element exactly, including the product, people, background, composition, colors, materials, lighting, shadows, decorations, icons, and layout.',
+        'Do not add, remove, crop, stretch, recompose, retouch, recolor, or simplify any content. Do not add explanations, borders, logos, or watermarks.',
+        `The final image must keep the original aspect ratio and be suitable for exact restoration to ${target.width}x${target.height}px.`,
+        'Return only one final image in JPEG format with an opaque background.'
+    ].join('\n');
+}
+
+function normalizeTranslationTarget(value) {
+    const width = Number(value?.width);
+    const height = Number(value?.height);
+    if (!Number.isInteger(width) || !Number.isInteger(height)
+        || width < 1 || width > 10000 || height < 1 || height > 10000) {
+        throw new Error('Invalid original image dimensions');
+    }
+    return { width, height };
+}
+
 async function processResizeAiTask(env, task) {
     if (!env.SUBMISSION_FILES) throw new Error('R2 storage not configured');
     if (task.status === 'done' && Array.isArray(task.resultKeys) && task.resultKeys.length) return { done: true };
@@ -750,6 +858,16 @@ async function storeVariantResult(env, task, result, sourceName, index) {
     return { key, name: `${safeName}-变体改色-${index + 1}.${ext}` };
 }
 
+async function storeTranslationResult(env, task, image, sourceName, index, target) {
+    const safeName = sanitizeName(String(sourceName || `translation-${index + 1}.png`).replace(/\.[^.]+$/, ''));
+    const language = translationLanguageName(task.translationLanguage);
+    const key = `studio-results/${task.id}/translation-${index + 1}-${target.width}x${target.height}-${safeName}.jpg`;
+    await env.SUBMISSION_FILES.put(key, image.bytes, {
+        httpMetadata: { contentType: 'image/jpeg' }
+    });
+    return { key, name: `${safeName}-${language}-${index + 1}-${target.width}x${target.height}.jpg` };
+}
+
 async function storeWatermarkResult(env, task, result, sourceName) {
     const fetched = await resultToBytes(result);
     const ext = extensionFromMime(fetched.mimeType);
@@ -797,6 +915,8 @@ async function notifyUserDone(env, task, origin) {
         ? `尺寸修改已完成${task.resizeTarget ? '：' + task.resizeTarget : ''}`
         : task.mode === 'watermark'
             ? '去水印已完成'
+            : task.mode === 'translate_image'
+                ? `图片语言转换已完成：${translationLanguageName(task.translationLanguage)}`
             : '变体改色已完成';
     const content = `图片制作完成 ✅\n\n${modeText}，共 ${resultCount} 张。\n请到网站查看下载：${origin}/studio-tasks.html`;
     const response = await fetch('https://api.dingtalk.com/v1.0/robot/oToMessages/batchSend', {
@@ -832,6 +952,10 @@ function base64ToBytes(base64) {
 
 function sanitizeName(name) {
     return name.replace(/[\\/:*?"<>|#%{}^~[\]`]/g, '_').slice(0, 80) || 'variant';
+}
+
+function translationLanguageName(value) {
+    return ({ en: '英语', fr: '法语', ja: '日语', de: '德语' })[value] || '英语';
 }
 
 function guessContentType(name) {
@@ -948,13 +1072,14 @@ function studioModeText(mode) {
     if (mode === 'retouch') return '精修图片';
     if (mode === 'cutout') return '白底抠图';
     if (mode === 'variant') return '变体改色';
+    if (mode === 'translate_image') return '转换语言';
     if (mode === 'resize_ai') return '尺寸修改';
     if (mode === 'watermark') return '去水印';
     return mode === 'free' ? '自由模式' : '程序模式';
 }
 
 function isDirectImageTask(mode) {
-    return mode === 'variant' || mode === 'resize_ai' || mode === 'watermark';
+    return mode === 'variant' || mode === 'translate_image' || mode === 'resize_ai' || mode === 'watermark';
 }
 
 async function resendStudioTaskAfterResultTimeout(env, task, origin) {

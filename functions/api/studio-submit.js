@@ -9,7 +9,7 @@ export async function onRequestPost(context) {
     try { body = await request.json(); }
     catch { return Response.json({ ok: false, error: 'Invalid JSON' }, { status: 400 }); }
 
-    const { mode, submitter, desc, want, note, scene, analyzePrompt, size, imageName, productName, title, subtitle, otherText, productKeys, refKeys, modelKeys, category, variantScope, colorName, colorHex, watermarkType, watermarkText, resizeTarget, resizeReflow, cutoutMode, cutoutOutputFormat, aPlusDouble, photographerDecision, photographyExampleKey, photographyNote } = body;
+    const { mode, submitter, desc, want, note, scene, analyzePrompt, size, imageName, productName, title, subtitle, otherText, productKeys, refKeys, modelKeys, category, variantScope, colorName, colorHex, translationLanguage, translationDimensions, watermarkType, watermarkText, resizeTarget, resizeReflow, cutoutMode, cutoutOutputFormat, aPlusDouble, photographerDecision, photographyExampleKey, photographyNote } = body;
     if (!mode || !submitter) {
         return Response.json({ ok: false, error: 'Missing required fields' }, { status: 400 });
     }
@@ -21,6 +21,15 @@ export async function onRequestPost(context) {
     }
     if (mode === 'variant' && (!Array.isArray(refKeys) || refKeys.length < 1)) {
         return Response.json({ ok: false, error: 'Variant mode requires at least one image' }, { status: 400 });
+    }
+    if (mode === 'translate_image' && (!Array.isArray(refKeys) || refKeys.length < 1 || refKeys.length > 20)) {
+        return Response.json({ ok: false, error: '转换语言需要上传 1–20 张图片' }, { status: 400 });
+    }
+    if (mode === 'translate_image' && !['en', 'fr', 'ja', 'de'].includes(translationLanguage)) {
+        return Response.json({ ok: false, error: '请选择英语、法语、日语或德语' }, { status: 400 });
+    }
+    if (mode === 'translate_image' && !isValidTranslationDimensions(translationDimensions, refKeys.length)) {
+        return Response.json({ ok: false, error: '无法确认全部图片的原始尺寸，请重新上传' }, { status: 400 });
     }
     if (mode === 'resize_ai' && (!Array.isArray(refKeys) || refKeys.length !== 1)) {
         return Response.json({ ok: false, error: 'Resize AI mode requires exactly one image' }, { status: 400 });
@@ -111,6 +120,8 @@ export async function onRequestPost(context) {
         variantScope: ['product', 'background', 'style'].includes(variantScope) ? variantScope : '',
         colorName: colorName || '',
         colorHex: colorHex || '',
+        translationLanguage: mode === 'translate_image' ? translationLanguage : '',
+        translationDimensions: mode === 'translate_image' ? normalizeTranslationDimensions(translationDimensions) : [],
         watermarkType: mode === 'watermark' && watermarkType === 'other' ? 'other' : (mode === 'watermark' ? 'doubao' : ''),
         watermarkText: mode === 'watermark' && watermarkType === 'other' ? normalizeWatermarkText(watermarkText) : '',
         resizeTarget: resizeTarget || '',
@@ -123,6 +134,7 @@ export async function onRequestPost(context) {
         photographyNote: waitingPhotography ? String(photographyNote || '').trim().slice(0, 300) : '',
         photographyRequestedAt: waitingPhotography ? new Date(timestamp).toISOString() : '',
         variantNextIndex: 0,
+        translationNextIndex: 0,
         productKeys: productKeys || [],
         refKeys: refKeys || [],
         modelKeys: modelKeys || [],
@@ -205,6 +217,10 @@ export async function onRequestPost(context) {
             } else if (!waitingPhotography && mode === 'variant') {
                 content += `🎨 改色任务已进入处理队列\n`;
                 content += `⏱ 完成后会通过钉钉通知，页面可以先关闭\n\n`;
+            } else if (!waitingPhotography && mode === 'translate_image') {
+                content += `🌐 图片语言转换任务已进入 AI 后台处理\n`;
+                content += `目标语言：${translationLanguageName(translationLanguage)}\n`;
+                content += `原图尺寸会保持不变，完成后会通过钉钉通知\n\n`;
             } else if (!waitingPhotography && mode === 'resize_ai') {
                 content += `🖼️ 尺寸修改任务已进入后台处理\n`;
                 content += `目标尺寸：${resizeTarget || size || '-'}\n`;
@@ -259,13 +275,32 @@ function studioModeText(mode) {
     if (mode === 'retouch') return '精修图片';
     if (mode === 'cutout') return '白底抠图';
     if (mode === 'variant') return '变体改色';
+    if (mode === 'translate_image') return '转换语言';
     if (mode === 'resize_ai') return '尺寸修改';
     if (mode === 'watermark') return '去水印';
     return mode === 'free' ? '自由模式' : '程序模式';
 }
 
 function isDirectImageTask(mode) {
-    return mode === 'variant' || mode === 'resize_ai' || mode === 'watermark';
+    return mode === 'variant' || mode === 'translate_image' || mode === 'resize_ai' || mode === 'watermark';
+}
+
+function isValidTranslationDimensions(value, expectedLength) {
+    if (!Array.isArray(value) || value.length !== expectedLength) return false;
+    return value.every(item => Number.isInteger(Number(item?.width))
+        && Number.isInteger(Number(item?.height))
+        && Number(item.width) >= 1
+        && Number(item.width) <= 10000
+        && Number(item.height) >= 1
+        && Number(item.height) <= 10000);
+}
+
+function normalizeTranslationDimensions(value) {
+    return value.map(item => ({ width: Number(item.width), height: Number(item.height) }));
+}
+
+function translationLanguageName(value) {
+    return ({ en: '英语', fr: '法语', ja: '日语', de: '德语' })[value] || '英语';
 }
 
 function normalizeWatermarkText(value) {

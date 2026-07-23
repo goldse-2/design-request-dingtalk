@@ -23,7 +23,7 @@ function initStudioTypewriter() {
 
 let currentUser = null;
 const requestedMode = new URLSearchParams(window.location.search).get('mode');
-let currentMode = ['free', 'program', 'sheet', 'photography', 'retouch', 'variant', 'resize', 'watermark'].includes(requestedMode) ? requestedMode : 'free';
+let currentMode = ['free', 'program', 'sheet', 'photography', 'retouch', 'variant', 'translate', 'resize', 'watermark'].includes(requestedMode) ? requestedMode : 'free';
 
 const ANALYZE_PROMPT = `# 角色设定
 你是一位拥有十年经验的亚马逊资深视觉拆解专家。你的任务是对用户上传的电商图片进行"逆向工程"，将其拆解为 1:1 像素级复刻的"图层蓝图"，并生成精准包含"人物互动"的素材生图提示词。
@@ -131,7 +131,7 @@ function onAgreeChange(checked) {
 }
 function applyAgreementGate() {
     const agreed = hasAgreed();
-    document.querySelectorAll('.studio-submit-btn, #freeSubmit, #progSubmit, #sheetSelfSubmit, #photographySubmit, #retouchSubmit, #cutoutSubmit, #variantSubmit, #watermarkSubmit').forEach(btn => {
+    document.querySelectorAll('.studio-submit-btn, #freeSubmit, #progSubmit, #sheetSelfSubmit, #photographySubmit, #retouchSubmit, #cutoutSubmit, #variantSubmit, #translationSubmit, #watermarkSubmit').forEach(btn => {
         if (!btn) return;
         if (agreed) {
             btn.classList.remove('is-gated');
@@ -818,6 +818,44 @@ const VARIANT_FORM = `
         </div>
     </div>`;
 
+const TRANSLATION_FORM = `
+    <div class="studio-layout translation-layout">
+        <div class="studio-panel">
+            <div class="sf-section">
+                <div class="sf-label">转换语言 <span class="sf-req">*</span></div>
+                <div class="translation-language" id="translationLanguage">
+                    <button type="button" class="active" data-language="en">英语</button>
+                    <button type="button" data-language="fr">法语</button>
+                    <button type="button" data-language="ja">日语</button>
+                    <button type="button" data-language="de">德语</button>
+                </div>
+            </div>
+            <div class="sf-section">
+                <div class="sf-label">图片 <span class="sf-req">*</span> <span class="sf-sub" id="translationImgCount">(0/20)</span></div>
+                <div class="sf-upload-row">
+                    <div class="sf-upload-box variant-upload-box" id="translationDrop">
+                        <input type="file" id="translationInput" accept="image/jpeg,image/png,image/webp" multiple hidden>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="24" height="24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        <span>上传需要翻译的图片</span>
+                        <small>最多 20 张，单张最大 15 MB</small>
+                    </div>
+                    <div class="sf-preview-list" id="translationPreviewList"></div>
+                </div>
+                <div class="translation-note">只转换图片中的文案，产品、背景、构图和排版保持不变；每张成品会恢复为对应原图的精确宽高。</div>
+            </div>
+            <button class="sf-submit" id="translationSubmit">开始转换</button>
+            <div id="translationStatus" class="studio-status" style="margin-top:10px" aria-live="polite"></div>
+        </div>
+        <div class="studio-preview translation-preview">
+            <div class="studio-preview-tab">转换结果</div>
+            <div class="studio-preview-body">
+                <div class="variant-results">
+                    <div class="resize-empty">提交后进入 AI 后台逐张处理，完成后可在「我的任务」预览和下载</div>
+                </div>
+            </div>
+        </div>
+    </div>`;
+
 const WATERMARK_FORM = `
     <div class="studio-layout watermark-layout">
         <div class="studio-panel">
@@ -854,7 +892,7 @@ const WATERMARK_FORM = `
         </div>
     </div>`;
 
-const uploads = { freeImages: [], freeModel: null, freeScene: null, freeProduct: [], freeProduct1: null, freeProduct2: null, helpImages: [], progRef: [], progProduct: [], retouchImages: [], cutoutImages: [], variantImages: [], watermarkImage: null };
+const uploads = { freeImages: [], freeModel: null, freeScene: null, freeProduct: [], freeProduct1: null, freeProduct2: null, helpImages: [], progRef: [], progProduct: [], retouchImages: [], cutoutImages: [], variantImages: [], translationImages: [], watermarkImage: null };
 const studioHelpState = { type: '' };
 const inlineShootRequestState = {
     free: { enabled: false, image: null },
@@ -885,6 +923,7 @@ const MAX_RETOUCH_FILE_SIZE = 15 * 1024 * 1024;
 const MAX_VARIANT_FILE_SIZE = 15 * 1024 * 1024;
 const MAX_WATERMARK_FILE_SIZE = 15 * 1024 * 1024;
 const MAX_VARIANT_IMAGES = 20;
+const MAX_TRANSLATION_IMAGES = 20;
 const MAX_RETOUCH_IMAGES = 20;
 const PHOTOGRAPHY_SLOT_COUNT = 8;
 const A_PLUS_DOUBLE_WIDTH = 1464;
@@ -956,8 +995,8 @@ function createSheetSelfSlot(index) {
 
 function validateStudioImage(file) {
     if (!file?.type?.startsWith('image/')) return '请选择图片文件';
-    const isLargeImageMode = currentMode === 'retouch' || currentMode === 'variant' || currentMode === 'watermark';
-    const maxSize = currentMode === 'variant'
+    const isLargeImageMode = currentMode === 'retouch' || currentMode === 'variant' || currentMode === 'translate' || currentMode === 'watermark';
+    const maxSize = currentMode === 'variant' || currentMode === 'translate'
         ? MAX_VARIANT_FILE_SIZE
         : currentMode === 'watermark'
             ? MAX_WATERMARK_FILE_SIZE
@@ -970,7 +1009,7 @@ function validateStudioImage(file) {
 }
 
 function showStudioUploadError(message) {
-    const statusId = currentMode === 'program' ? 'progStatus' : currentMode === 'retouch' ? 'retouchStatus' : currentMode === 'variant' ? 'variantStatus' : currentMode === 'watermark' ? 'watermarkStatus' : 'freeStatus';
+    const statusId = currentMode === 'program' ? 'progStatus' : currentMode === 'retouch' ? 'retouchStatus' : currentMode === 'variant' ? 'variantStatus' : currentMode === 'translate' ? 'translationStatus' : currentMode === 'watermark' ? 'watermarkStatus' : 'freeStatus';
     const status = document.getElementById(statusId);
     if (status) {
         status.textContent = message;
@@ -2024,7 +2063,7 @@ function renderForm() {
     programProductAiBusy = false;
     programCopyAiBusy = false;
     resetAPlusDoubleState();
-    uploads.freeImages = []; uploads.freeModel = null; uploads.freeScene = null; uploads.freeProduct = []; uploads.freeProduct1 = null; uploads.freeProduct2 = null; uploads.helpImages = []; uploads.progRef = []; uploads.progProduct = []; uploads.variantImages = []; uploads.watermarkImage = null;
+    uploads.freeImages = []; uploads.freeModel = null; uploads.freeScene = null; uploads.freeProduct = []; uploads.freeProduct1 = null; uploads.freeProduct2 = null; uploads.helpImages = []; uploads.progRef = []; uploads.progProduct = []; uploads.variantImages = []; uploads.translationImages = []; uploads.watermarkImage = null;
     studioHelpState.type = '';
     if (currentMode === 'free' || currentMode === 'program') resetInlineShootRequestState(currentMode);
     let galleryWasReady = false;
@@ -2062,6 +2101,10 @@ function renderForm() {
         if (attachedGallery) attachedGallery.remove();
         area.innerHTML = VARIANT_FORM;
         initVariantMode();
+    } else if (currentMode === 'translate') {
+        if (attachedGallery) attachedGallery.remove();
+        area.innerHTML = TRANSLATION_FORM;
+        initTranslationMode();
     } else if (currentMode === 'resize') {
         if (attachedGallery) attachedGallery.remove();
         area.innerHTML = RESIZE_FORM;
@@ -2071,7 +2114,7 @@ function renderForm() {
         area.innerHTML = WATERMARK_FORM;
         initWatermarkMode();
     }
-    if (currentMode !== 'resize' && currentMode !== 'retouch' && currentMode !== 'variant' && currentMode !== 'watermark' && currentMode !== 'sheet' && currentMode !== 'photography' && !galleryWasReady) renderStudioGallery();
+    if (currentMode !== 'resize' && currentMode !== 'retouch' && currentMode !== 'variant' && currentMode !== 'translate' && currentMode !== 'watermark' && currentMode !== 'sheet' && currentMode !== 'photography' && !galleryWasReady) renderStudioGallery();
     applyAgreementGate();
 }
 
@@ -3740,6 +3783,110 @@ function renderVariantPreview() {
     });
 }
 
+function initTranslationMode() {
+    const input = document.getElementById('translationInput');
+    const drop = document.getElementById('translationDrop');
+    const language = document.getElementById('translationLanguage');
+    const status = document.getElementById('translationStatus');
+
+    const addFiles = async files => {
+        const remaining = MAX_TRANSLATION_IMAGES - uploads.translationImages.length;
+        if (remaining <= 0) {
+            showStudioFieldError(status, `转换语言最多上传 ${MAX_TRANSLATION_IMAGES} 张图片`, drop);
+            return;
+        }
+        const selected = Array.from(files).slice(0, remaining);
+        for (const file of selected) {
+            const validationError = validateStudioImage(file);
+            if (validationError) {
+                showStudioFieldError(status, validationError, drop);
+                continue;
+            }
+            try {
+                const dataUrl = await readStudioFileAsDataUrl(file);
+                const image = await loadAPlusImage(dataUrl);
+                uploads.translationImages.push({
+                    name: file.name,
+                    base64: dataUrl.split(',')[1],
+                    mimeType: file.type,
+                    dataUrl,
+                    width: image.naturalWidth,
+                    height: image.naturalHeight
+                });
+                renderTranslationPreview();
+            } catch (error) {
+                showStudioFieldError(status, `${file.name} 读取失败，请重新上传`, drop);
+            }
+        }
+        if (files.length > remaining) showStudioFieldError(status, `最多上传 ${MAX_TRANSLATION_IMAGES} 张，已自动限制`, drop);
+        if (uploads.translationImages.length) {
+            status.textContent = `已读取 ${uploads.translationImages.length} 张图片的原始尺寸，可以开始转换`;
+            status.className = 'studio-status ok';
+        }
+    };
+
+    language.querySelectorAll('button').forEach(button => {
+        button.addEventListener('click', () => {
+            language.querySelectorAll('button').forEach(item => item.classList.remove('active'));
+            button.classList.add('active');
+        });
+    });
+    drop.addEventListener('click', () => input.click());
+    drop.addEventListener('dragover', event => { event.preventDefault(); drop.classList.add('dragover'); });
+    drop.addEventListener('dragleave', () => drop.classList.remove('dragover'));
+    drop.addEventListener('drop', event => {
+        event.preventDefault();
+        drop.classList.remove('dragover');
+        addFiles(event.dataTransfer.files);
+    });
+    input.addEventListener('change', event => {
+        addFiles(event.target.files);
+        event.target.value = '';
+    });
+    document.getElementById('translationSubmit').addEventListener('click', submitTranslation);
+    renderTranslationPreview();
+}
+
+function readStudioFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = event => resolve(event.target.result);
+        reader.onerror = () => reject(reader.error || new Error('图片读取失败'));
+        reader.readAsDataURL(file);
+    });
+}
+
+function renderTranslationPreview() {
+    const list = document.getElementById('translationPreviewList');
+    const count = document.getElementById('translationImgCount');
+    const drop = document.getElementById('translationDrop');
+    if (!list) return;
+    const images = uploads.translationImages;
+    if (count) count.textContent = `(${images.length}/${MAX_TRANSLATION_IMAGES})`;
+    if (drop) drop.style.display = images.length >= MAX_TRANSLATION_IMAGES ? 'none' : '';
+    list.innerHTML = '';
+    images.forEach((image, index) => {
+        const item = document.createElement('div');
+        item.className = 'sf-preview-item';
+        const thumbnail = document.createElement('img');
+        thumbnail.src = image.dataUrl;
+        thumbnail.alt = image.name || `待转换图片 ${index + 1}`;
+        thumbnail.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block';
+        const dimension = document.createElement('span');
+        dimension.className = 'translation-dimension';
+        dimension.textContent = `${image.width} × ${image.height}`;
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.textContent = '\u00d7';
+        remove.addEventListener('click', () => {
+            uploads.translationImages.splice(index, 1);
+            renderTranslationPreview();
+        });
+        item.append(thumbnail, dimension, remove);
+        list.appendChild(item);
+    });
+}
+
 function initWatermarkMode() {
     const type = document.getElementById('watermarkType');
     const textField = document.getElementById('watermarkTextField');
@@ -5286,7 +5433,7 @@ async function submitTask(mode, payload, statusEl, btn, onSuccess) {
     });
     try {
         const productKeys = await uploadGroup(productImages, 'studio/product', '产品图片');
-        const refPrefix = mode === 'retouch' ? 'studio/retouch' : mode === 'cutout' ? 'studio/cutout' : mode === 'variant' ? 'studio/variant' : mode === 'resize_ai' ? 'studio/resize' : mode === 'watermark' ? 'studio/watermark' : 'studio/ref';
+        const refPrefix = mode === 'retouch' ? 'studio/retouch' : mode === 'cutout' ? 'studio/cutout' : mode === 'variant' ? 'studio/variant' : mode === 'translate_image' ? 'studio/translation' : mode === 'resize_ai' ? 'studio/resize' : mode === 'watermark' ? 'studio/watermark' : 'studio/ref';
         const uploadedRefKeys = await uploadGroup(refImages, refPrefix, '参考图片');
         const refKeys = uploadedRefKeys;
         const modelKeys = await uploadGroup(modelImages, 'studio/model', '模特图片');
@@ -5320,6 +5467,8 @@ async function submitTask(mode, payload, statusEl, btn, onSuccess) {
         if (payload.variantScope) submitPayload.variantScope = payload.variantScope;
         if (payload.colorName) submitPayload.colorName = payload.colorName;
         if (payload.colorHex) submitPayload.colorHex = payload.colorHex;
+        if (payload.translationLanguage) submitPayload.translationLanguage = payload.translationLanguage;
+        if (payload.translationDimensions) submitPayload.translationDimensions = payload.translationDimensions;
         if (payload.watermarkType) submitPayload.watermarkType = payload.watermarkType;
         if (payload.watermarkText !== undefined) submitPayload.watermarkText = payload.watermarkText;
         if (payload.resizeTarget) submitPayload.resizeTarget = payload.resizeTarget;
@@ -6188,6 +6337,30 @@ async function submitVariant() {
         colorHex,
         refImages: uploads.variantImages
     }, status, btn, task => showSuccessModal(task, '改色任务已提交，完成后会通过钉钉通知'));
+}
+
+async function submitTranslation() {
+    const status = document.getElementById('translationStatus');
+    const btn = document.getElementById('translationSubmit');
+    const images = uploads.translationImages;
+    if (!images.length) {
+        showStudioFieldError(status, '请先上传需要转换语言的图片', document.getElementById('translationDrop'));
+        return;
+    }
+    if (images.some(image => !Number.isInteger(image.width) || !Number.isInteger(image.height))) {
+        showStudioFieldError(status, '有图片未能读取原始尺寸，请删除后重新上传', document.getElementById('translationDrop'));
+        return;
+    }
+
+    const language = document.querySelector('#translationLanguage button.active')?.dataset.language || 'en';
+    const languageNames = { en: '英语', fr: '法语', ja: '日语', de: '德语' };
+    submitTask('translate_image', {
+        desc: `将图片文案转换为${languageNames[language]}`,
+        size: '保持原图尺寸',
+        translationLanguage: language,
+        translationDimensions: images.map(image => ({ width: image.width, height: image.height })),
+        refImages: images
+    }, status, btn, task => showSuccessModal(task, `语言转换任务已提交，共 ${images.length} 张；完成后会通过钉钉通知`));
 }
 
 async function submitWatermark() {

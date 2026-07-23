@@ -21,7 +21,7 @@ export async function onRequestPost(context) {
     }
     const maxSize = prefix === 'studio/resize'
         ? 20 * 1024 * 1024
-        : (['studio/retouch', 'studio/cutout', 'studio/variant', 'studio/watermark', 'studio/sheet-self', 'shoot/complete'].includes(prefix))
+        : (['studio/retouch', 'studio/cutout', 'studio/variant', 'studio/translation', 'studio/watermark', 'studio/sheet-self', 'shoot/complete'].includes(prefix))
             ? 15 * 1024 * 1024
             : 8 * 1024 * 1024;
     if (file.size > maxSize) {

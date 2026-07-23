@@ -2168,7 +2168,7 @@ function renderStudioTask(task) {
         : task.status === 'processing'
             ? ['处理中', '#3b82f6', '#dbeafe']
             : ['待处理', '#f59e0b', '#fef3c7'];
-    const modeText = task.mode === 'sheet_self' ? '表格自助' : task.mode === 'retouch' ? '精修图片' : task.mode === 'cutout' ? '白底抠图' : task.mode === 'variant' ? '变体改色' : task.mode === 'resize_ai' ? '尺寸修改' : task.mode === 'watermark' ? '去水印' : task.mode === 'free' ? '自由模式' : '程序模式';
+    const modeText = task.mode === 'sheet_self' ? '表格自助' : task.mode === 'retouch' ? '精修图片' : task.mode === 'cutout' ? '白底抠图' : task.mode === 'variant' ? '变体改色' : task.mode === 'translate_image' ? '转换语言' : task.mode === 'resize_ai' ? '尺寸修改' : task.mode === 'watermark' ? '去水印' : task.mode === 'free' ? '自由模式' : '程序模式';
     const time = new Date(task.timestamp).toLocaleString('zh-CN', { timeZone:'Asia/Shanghai', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
 
     const card = document.createElement('div');
@@ -3921,7 +3921,7 @@ function renderStudioHistoryCard(task) {
     const card = document.createElement('div');
     card.style.cssText = 'background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:14px 16px;margin-bottom:10px';
     
-    const modeText = task.mode === 'sheet_self' ? '表格自助' : task.mode === 'retouch' ? '精修图片' : task.mode === 'cutout' ? '白底抠图' : task.mode === 'variant' ? '变体改色' : task.mode === 'resize_ai' ? '尺寸修改' : task.mode === 'watermark' ? '去水印' : task.mode === 'free' ? '自由模式' : '程序模式';
+    const modeText = task.mode === 'sheet_self' ? '表格自助' : task.mode === 'retouch' ? '精修图片' : task.mode === 'cutout' ? '白底抠图' : task.mode === 'variant' ? '变体改色' : task.mode === 'translate_image' ? '转换语言' : task.mode === 'resize_ai' ? '尺寸修改' : task.mode === 'watermark' ? '去水印' : task.mode === 'free' ? '自由模式' : '程序模式';
     const time = new Date(task.timestamp).toLocaleString('zh-CN', { timeZone:'Asia/Shanghai', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
     
     let html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
