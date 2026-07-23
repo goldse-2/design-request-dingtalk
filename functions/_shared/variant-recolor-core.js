@@ -1,5 +1,5 @@
 const DEFAULT_API_BASE = 'https://api.apikey.fun/v1';
-const DEFAULT_MODEL = 'gpt-5.6-sol';
+const DEFAULT_MODEL = 'gpt-image-2';
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
 
 export async function recolorImage({ env, scope, colorName, colorHex, mimeType, base64 }) {
@@ -25,10 +25,10 @@ export async function recolorImage({ env, scope, colorName, colorHex, mimeType, 
 
     try {
         let { response, data } = await callResponsesApi({ apiBase, apiKey, model, prompt, mimeType: safeMimeType, base64: safeBase64, signal: controller.signal, toolMode: 'high' });
-        if (!response.ok && response.status === 400) {
+        if (!response.ok && [400, 422, 502, 503, 504].includes(response.status)) {
             ({ response, data } = await callResponsesApi({ apiBase, apiKey, model, prompt, mimeType: safeMimeType, base64: safeBase64, signal: controller.signal, toolMode: 'basic' }));
         }
-        if (!response.ok && response.status === 400) {
+        if (!response.ok && [400, 422, 502, 503, 504].includes(response.status)) {
             ({ response, data } = await callResponsesApi({ apiBase, apiKey, model, prompt, mimeType: safeMimeType, base64: safeBase64, signal: controller.signal, toolMode: 'none' }));
         }
         if (!response.ok) {

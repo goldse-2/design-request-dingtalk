@@ -1,6 +1,6 @@
 const DEFAULT_API_BASE = 'https://api.apikey.fun/v1';
 const DEFAULT_FALLBACK_API_BASE = 'https://jojocode.com';
-const DEFAULT_MODEL = 'gpt-5.6-sol';
+const DEFAULT_MODEL = 'gpt-image-2';
 const modelAvailabilityCache = new Map();
 
 export async function editImageWithPrompt({ env, prompt, mimeType, base64, maxBytes = 20 * 1024 * 1024 }) {
@@ -18,9 +18,7 @@ export async function editImageWithPrompt({ env, prompt, mimeType, base64, maxBy
         const providerName = safeProviderName(provider.apiBase);
         const available = await providerHasModel(provider);
         if (available === false) {
-            lastError = new Error('AI image model is unavailable');
-            providerErrors.push(`${providerName} [${provider.model}]: ${lastError.message}`);
-            continue;
+            providerErrors.push(`${providerName} [${provider.model}]: model list does not advertise this image model; trying the image request directly`);
         }
         try {
             return await editImageWithProvider({
@@ -66,7 +64,7 @@ async function editImageWithProvider({ apiBase, apiKey, model, actorAuthorizatio
                 toolMode: 'basic'
             }));
         }
-        if (!response.ok && (response.status === 400 || response.status === 422)) {
+        if (!response.ok && shouldRetryWithBasicImageTool(response.status)) {
             ({ response, data, rawBody } = await callResponsesApi({
                 apiBase,
                 apiKey,
@@ -95,7 +93,7 @@ async function editImageWithProvider({ apiBase, apiKey, model, actorAuthorizatio
 }
 
 function shouldRetryWithBasicImageTool(status) {
-    return [400, 422].includes(Number(status));
+    return [400, 422, 502, 503, 504].includes(Number(status));
 }
 
 function imageProviders(env) {
