@@ -481,23 +481,29 @@ ${renderShootRequestLauncher('program')}
             </div>
             <div class="sf-section">
                 <div class="program-ai-label-row program-title-ai-row">
-                    <div class="sf-label">标题 <span class="sf-sub">（可选，输入中文会自动翻译成英语，英语默认）</span></div>
+                    <div class="sf-label">标题 <span class="sf-sub">会自动翻译英语</span></div>
                     <div class="program-copy-ai-action">
-                        <button type="button" class="program-ai-btn program-copy-ai-btn" id="progGenerateCopyBtn" aria-describedby="progCopyAiStatus">
-                            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l1.3 4.2L17.5 8.5l-4.2 1.3L12 14l-1.3-4.2-4.2-1.3 4.2-1.3L12 3Z"/><path d="M5 15l.8 2.7 2.7.8-2.7.8L5 22l-.8-2.7-2.7-.8 2.7-.8L5 15Z"/></svg>
-                            <span>AI 优化</span>
-                        </button>
+                        <div class="program-copy-ai-buttons">
+                            <button type="button" class="program-ai-btn program-copy-extract-btn" id="progExtractCopyBtn" aria-describedby="progCopyAiStatus">
+                                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>
+                                <span>提取原图文案</span>
+                            </button>
+                            <button type="button" class="program-ai-btn program-copy-ai-btn" id="progGenerateCopyBtn" aria-describedby="progCopyAiStatus">
+                                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l1.3 4.2L17.5 8.5l-4.2 1.3L12 14l-1.3-4.2-4.2-1.3 4.2-1.3L12 3Z"/><path d="M5 15l.8 2.7 2.7.8-2.7.8L5 22l-.8-2.7-2.7-.8 2.7-.8L5 15Z"/></svg>
+                                <span>AI 优化</span>
+                            </button>
+                        </div>
                         <span class="program-ai-status program-ai-popover" id="progCopyAiStatus" role="status" aria-live="polite" hidden></span>
                     </div>
                 </div>
                 <input class="sf-input" id="progTitle" type="text" maxlength="100" placeholder="例如：高品质蓝牙耳机">
             </div>
             <div class="sf-section">
-                <div class="sf-label">副标题 <span class="sf-sub">（可选，输入中文会自动翻译成英语，英语默认）</span></div>
+                <div class="sf-label">副标题 <span class="sf-sub">会自动翻译英语</span></div>
                 <input class="sf-input" id="progSubtitle" type="text" maxlength="100" placeholder="例如：震撼音质，舒适佩戴">
             </div>
             <div class="sf-section">
-                <div class="sf-label">其他文案 <span class="sf-sub">（可选，输入中文会自动翻译成英语，英语默认）</span></div>
+                <div class="sf-label">其他文案 <span class="sf-sub">会自动翻译英语</span></div>
                 <textarea class="sf-textarea" id="progOtherText" rows="3" maxlength="300" placeholder="例如：降噪技术；续航持久；蓝牙5.0"></textarea>
             </div>
             <div class="sf-section" id="progSizeSection">
@@ -4432,7 +4438,8 @@ function wireProgramAiTools() {
     const productInput = document.getElementById('progProductName');
     const identifyButton = document.getElementById('progIdentifyProductBtn');
     const copyButton = document.getElementById('progGenerateCopyBtn');
-    if (!productInput || !identifyButton || !copyButton) return;
+    const extractButton = document.getElementById('progExtractCopyBtn');
+    if (!productInput || !identifyButton || !copyButton || !extractButton) return;
 
     productInput.addEventListener('input', () => {
         productInput.dataset.aiGenerated = 'false';
@@ -4442,6 +4449,7 @@ function wireProgramAiTools() {
     });
     identifyButton.addEventListener('click', () => runProgramProductRecognition(true));
     copyButton.addEventListener('click', runProgramCopyGeneration);
+    extractButton.addEventListener('click', runProgramCopyExtraction);
     updateProgramAiControls();
 }
 
@@ -4449,10 +4457,12 @@ function updateProgramAiControls() {
     if (currentMode !== 'program') return;
     const identifyButton = document.getElementById('progIdentifyProductBtn');
     const copyButton = document.getElementById('progGenerateCopyBtn');
+    const extractButton = document.getElementById('progExtractCopyBtn');
     const productStatus = document.getElementById('progProductAiStatus');
     const copyStatus = document.getElementById('progCopyAiStatus');
     if (identifyButton) identifyButton.disabled = programProductAiBusy || uploads.progProduct.length === 0;
     if (copyButton) copyButton.disabled = programCopyAiBusy;
+    if (extractButton) extractButton.disabled = programCopyAiBusy;
 
     if (productStatus && !programProductAiBusy && uploads.progProduct.length === 0) {
         setProgramAiStatus(productStatus, '上传白底产品图后自动识别', '');
@@ -4513,8 +4523,30 @@ async function runProgramProductRecognition(force) {
 }
 
 async function runProgramCopyGeneration() {
+    return runProgramCopyAction({
+        action: 'generate_copy',
+        buttonId: 'progGenerateCopyBtn',
+        busyText: '正在优化...',
+        progressText: '正在分析竞品图片...',
+        successText: '标题和文案已生成',
+        idleText: 'AI 优化'
+    });
+}
+
+async function runProgramCopyExtraction() {
+    return runProgramCopyAction({
+        action: 'extract_copy',
+        buttonId: 'progExtractCopyBtn',
+        busyText: '正在提取...',
+        progressText: '正在识别原图文案...',
+        successText: '原图文案已提取',
+        idleText: '提取原图文案'
+    });
+}
+
+async function runProgramCopyAction(options) {
     const image = uploads.progRef[0];
-    const button = document.getElementById('progGenerateCopyBtn');
+    const button = document.getElementById(options.buttonId);
     const status = document.getElementById('progCopyAiStatus');
     if (!button || !status || programCopyAiBusy) return;
     clearTimeout(programCopyAiStatusTimer);
@@ -4526,25 +4558,25 @@ async function runProgramCopyGeneration() {
 
     programCopyAiBusy = true;
     button.classList.add('loading');
-    button.querySelector('span').textContent = '正在优化...';
-    setProgramAiStatus(status, '正在分析参考图...', '');
+    button.querySelector('span').textContent = options.busyText;
+    setProgramAiStatus(status, options.progressText, '');
     updateProgramAiControls();
     try {
         const data = await callProgramAi({
-            action: 'generate_copy',
+            action: options.action,
             image,
             productName: document.getElementById('progProductName')?.value.trim() || ''
         });
         document.getElementById('progTitle').value = data.title || '';
         document.getElementById('progSubtitle').value = data.subtitle || '';
         document.getElementById('progOtherText').value = data.otherText || '';
-        setProgramAiStatus(status, '标题和文案已生成', 'success');
+        setProgramAiStatus(status, options.successText, 'success');
     } catch (error) {
         setProgramAiStatus(status, error.message || 'AI 文案生成失败，请重试', 'error');
     } finally {
         programCopyAiBusy = false;
         button.classList.remove('loading');
-        button.querySelector('span').textContent = 'AI 优化';
+        button.querySelector('span').textContent = options.idleText;
         updateProgramAiControls();
     }
 }

@@ -3,7 +3,7 @@ const DEFAULT_MODEL = 'gpt-5.6-sol';
 
 export async function generateAiText(env, options) {
     const apiBase = String(env.AI_API_BASE || DEFAULT_API_BASE).replace(/\/+$/, '');
-    const model = String(env.AI_TEXT_MODEL || DEFAULT_MODEL);
+    const model = String(options.model || env.AI_TEXT_MODEL || DEFAULT_MODEL);
     const mode = String(env.AI_API_MODE || 'chat_completions').toLowerCase();
     const useResponses = mode.includes('response');
     const endpoint = buildEndpoint(apiBase, useResponses ? 'responses' : 'chat/completions');

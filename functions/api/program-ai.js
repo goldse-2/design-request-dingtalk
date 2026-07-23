@@ -16,7 +16,7 @@ export async function onRequestPost({ request, env }) {
     const action = String(body.action || '');
     const userId = String(body.userId || '').trim().slice(0, 160);
     if (!userId) return jsonError('请先登录后使用 AI 功能', 401);
-    if (!['identify_product', 'generate_copy'].includes(action)) return jsonError('不支持的 AI 操作', 400);
+    if (!['identify_product', 'generate_copy', 'extract_copy'].includes(action)) return jsonError('不支持的 AI 操作', 400);
 
     const image = body.imageKey
         ? await loadStoredImage(env, body.imageKey)
@@ -41,6 +41,21 @@ export async function onRequestPost({ request, env }) {
             const productName = sanitizeProductName(raw);
             if (!productName) throw new Error('AI 没有识别出有效产品名称');
             return Response.json({ ok: true, productName, remaining: quota.remaining, limit: DAILY_LIMIT });
+        }
+
+        if (action === 'extract_copy') {
+            const raw = await generateAiText(env, {
+                model: 'gpt-5.6-luna',
+                system: '你是电商图片文字提取助手。只提取图片中真实可见的文案，严禁改写、翻译、润色、补充或猜测。按视觉层级区分主标题、副标题和其他文案。只返回严格 JSON，不要代码块或解释，格式必须为 {"title":"","subtitle":"","otherText":""}。只有能够明确判断为主标题或副标题的文字才能分别填入 title 或 subtitle；无法确定是否属于标题的文字必须放入 otherText。otherText 中的每段文字都必须标注图片内的具体位置，格式为“左上角：原文”“画面底部：原文”等，并按从上到下、从左到右的阅读顺序使用中文分号分隔。品牌 Logo 中的文字不提取；模糊、遮挡或无法确认的文字不要猜测。没有对应内容的字段返回空字符串。',
+                user: '请逐字读取这张竞品图片中的可见文案，并按主标题、副标题和其他文案分类输出。',
+                images: [image],
+                temperature: 0,
+                maxTokens: 600,
+                timeoutMs: 35000
+            });
+            const copy = parseProgramCopy(raw);
+            if (!copy.title && !copy.subtitle && !copy.otherText) throw new Error('图片中没有识别到可提取的文案');
+            return Response.json({ ok: true, ...copy, remaining: quota.remaining, limit: DAILY_LIMIT });
         }
 
         const productName = cleanText(body.productName, 100) || '图中的产品';
