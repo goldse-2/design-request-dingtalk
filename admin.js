@@ -4007,8 +4007,9 @@ function renderStudioGuidesAdmin() {
         const cover = article.cover?.url
             ? `<img src="${escapeHtml(article.cover.url)}" alt="">`
             : '<span>暂无封面</span>';
+        const faqMark = article.category === 'faq' ? '<b class="guide-faq-mark" aria-hidden="true">?</b>' : '';
         return `<article class="guide-admin-card">
-            <div class="guide-admin-cover">${cover}</div>
+            <div class="guide-admin-cover">${cover}${faqMark}</div>
             <div class="guide-admin-card-body">
                 <div class="guide-admin-card-meta"><span>${category}</span><span>${article.published === false ? '未发布' : '已发布'}</span></div>
                 <h3 title="${escapeHtml(article.title || '')}">${escapeHtml(article.title || '未命名文章')}</h3>

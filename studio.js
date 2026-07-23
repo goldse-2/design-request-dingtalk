@@ -4180,8 +4180,9 @@ function renderStudioGuideCards() {
         const cover = article.cover?.url
             ? `<img src="${studioGuideEsc(article.cover.url)}" alt="" loading="lazy">`
             : `<div class="studio-guide-cover-placeholder"><span>${article.category === 'faq' ? 'FAQ' : String(index + 1).padStart(2, '0')}</span></div>`;
+        const faqMark = article.category === 'faq' ? '<b class="studio-guide-faq-mark" aria-hidden="true">?</b>' : '';
         return `<button type="button" class="studio-guide-card sf-fade-in" data-studio-guide-id="${studioGuideEsc(article.id)}">
-            <div class="studio-guide-cover">${cover}<span>${article.category === 'faq' ? '常见问题' : '上手指南'}</span></div>
+            <div class="studio-guide-cover">${cover}<span>${article.category === 'faq' ? '常见问题' : '上手指南'}</span>${faqMark}</div>
             <div class="studio-guide-card-copy"><strong>${title}</strong><small>${subtitle}</small></div>
         </button>`;
     }).join('')}</div>`;
