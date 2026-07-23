@@ -389,9 +389,7 @@ const FREE_FORM = `
 ${renderShootRequestLauncher('free')}
                 <button type="button" class="sf-lib-btn" style="margin-top:10px" onclick="openLibPicker()">📦 从白底素材库选</button>
                 <button type="button" class="sf-lib-btn" style="margin-top:10px" onclick="openModelPicker()">🧍 选择模特</button>
-                <button type="button" class="sf-lib-btn" style="margin-top:10px" onclick="openScenePicker()">🏞 选择场景</button>
                 <div id="freeModelPreview" style="margin-top:10px"></div>
-                <div id="freeScenePreview" style="margin-top:10px"></div>
             </div>
             <div class="sf-section">
                 <div class="free-prompt-label-row">
