@@ -178,6 +178,7 @@ function normalizeStudioSize(size, desc) {
     const fromSize = extractDimension(size);
     if (fromSize) return fromSize;
     const rawSize = String(size || '');
+    if (/4\s*K/i.test(rawSize)) return '4K';
     if (/2\s*K|自动识别/i.test(rawSize)) return '2K 自动识别';
     const text = String(desc || '');
     const fromDesc = extractDimension(text);

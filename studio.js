@@ -240,9 +240,9 @@ function renderSizePicker(inputId) {
                     <div class="size-picker-title">分辨率</div>
                     <div class="size-resolution-row">
                         <button type="button" class="active" data-size-mode="auto">自动识别</button>
-                        <button type="button" data-size-mode="square" data-size-value="亚马逊主图 1600x1600">1600</button>
-                        <button type="button" data-size-mode="aplus">A+</button>
-                        <button type="button" data-size-mode="default" data-size-value="2K 自动识别">默认</button>
+                        <button type="button" data-size-mode="square" data-size-value="亚马逊主图 1600x1600">1600x1600</button>
+                        <button type="button" data-size-mode="aplus">A+尺寸</button>
+                        <button type="button" data-size-mode="custom">自定义</button>
                     </div>
                     <div class="size-auto-detection" id="${inputId}AutoStatus" data-size-auto-status-for="${inputId}">自动识别：上传${inputId === 'progSizeSelect' ? '竞品图片' : '参考图'}后显示结果，当前按 1600 × 1600</div>
                     <div class="size-a-plus-options" data-size-options="aplus" hidden>
@@ -253,11 +253,18 @@ function renderSizePicker(inputId) {
                             <button type="button" class="size-card" data-size-value="横版图 970x600"><span class="size-card-icon"></span><strong>97:60</strong><small>970 × 600</small></button>
                         </div>
                     </div>
-                    <button type="button" class="size-custom-toggle" data-size-mode="custom"><span class="size-card-icon portrait"></span><span><strong>自定义尺寸</strong><small>输入宽度和高度</small></span></button>
-                    <div class="size-custom-row" hidden>
-                        <input type="number" min="100" max="9999" step="1" data-size-width placeholder="宽度 px">
-                        <span>×</span>
-                        <input type="number" min="100" max="9999" step="1" data-size-height placeholder="高度 px">
+                    <div class="size-custom-options" data-size-options="custom" hidden>
+                        <div class="size-picker-title">自定义尺寸</div>
+                        <div class="size-card-grid">
+                            <button type="button" class="size-card active" data-size-value="2K 自动识别"><span class="size-card-icon"></span><strong>2K</strong><small>默认高清</small></button>
+                            <button type="button" class="size-card" data-size-value="4K"><span class="size-card-icon"></span><strong>4K</strong><small>更高精度</small></button>
+                            <button type="button" class="size-card" data-size-custom="1"><span class="size-card-icon portrait"></span><strong>自定义</strong><small>输入宽高</small></button>
+                        </div>
+                        <div class="size-custom-row" hidden>
+                            <input type="number" min="100" max="9999" step="1" data-size-width placeholder="宽度 px">
+                            <span>×</span>
+                            <input type="number" min="100" max="9999" step="1" data-size-height placeholder="高度 px">
+                        </div>
                     </div>
                 </div>`;
 }
@@ -1031,7 +1038,7 @@ function applyStudioAutoSize(inputId, source) {
         source.width = width;
         source.height = height;
         input.value = target.value;
-        if (status) status.textContent = `已识别参考图 ${width} × ${height}，输出尺寸 ${target.width} × ${target.height}`;
+        if (status) status.textContent = `输出尺寸：${target.width} × ${target.height}`;
         input.dispatchEvent(new Event('change', { bubbles: true }));
     };
 
@@ -1098,20 +1105,23 @@ function syncSizePickerValue(inputId, value, preferredMode = '') {
     if (!input || !picker) return;
     input.value = value || '';
     const customMatch = String(value || '').match(/自定义尺寸\s*(\d+)x(\d+)/);
-    const mode = preferredMode || (customMatch ? 'custom' : String(value).includes('2K') ? 'default' : String(value).includes('1600x1600') ? 'square' : 'aplus');
+    const mode = preferredMode || (customMatch || /[24]\s*K/i.test(String(value)) ? 'custom' : String(value).includes('1600x1600') ? 'square' : 'aplus');
     input.dataset.sizeMode = mode;
     picker.querySelectorAll('[data-size-mode]').forEach(button => button.classList.toggle('active', button.dataset.sizeMode === mode));
-    const options = picker.querySelector('[data-size-options="aplus"]');
-    if (options) options.hidden = mode !== 'aplus';
+    const aPlusOptions = picker.querySelector('[data-size-options="aplus"]');
+    const customOptions = picker.querySelector('[data-size-options="custom"]');
+    if (aPlusOptions) aPlusOptions.hidden = mode !== 'aplus';
+    if (customOptions) customOptions.hidden = mode !== 'custom';
     const customRow = picker.querySelector('.size-custom-row');
-    if (customRow) customRow.hidden = mode !== 'custom';
+    if (customRow) customRow.hidden = !customMatch;
     if (customMatch) {
         const width = picker.querySelector('[data-size-width]');
         const height = picker.querySelector('[data-size-height]');
         if (width) width.value = customMatch[1];
         if (height) height.value = customMatch[2];
     }
-    picker.querySelectorAll('.size-card[data-size-value]').forEach(button => button.classList.toggle('active', mode === 'aplus' && button.dataset.sizeValue === value));
+    picker.querySelectorAll('.size-card[data-size-value]').forEach(button => button.classList.toggle('active', (mode === 'aplus' || mode === 'custom') && button.dataset.sizeValue === value));
+    picker.querySelectorAll('[data-size-custom]').forEach(button => button.classList.toggle('active', Boolean(customMatch)));
     if (mode === 'auto') refreshStudioAutoSize(inputId);
     input.dispatchEvent(new Event('change', { bubbles: true }));
 }
@@ -1125,7 +1135,7 @@ function setAPlusSizeLocked(inputId, locked) {
     let lockLabel = picker.querySelector('.a-plus-size-lock');
     if (locked) {
         input.value = A_PLUS_DOUBLE_SIZE;
-        picker.querySelectorAll('[data-size-mode], [data-size-value]').forEach(button => button.classList.remove('active'));
+        picker.querySelectorAll('[data-size-mode], [data-size-value], [data-size-custom]').forEach(button => button.classList.remove('active'));
         if (!lockLabel) {
             lockLabel = document.createElement('div');
             lockLabel.className = 'a-plus-size-lock';
@@ -1198,8 +1208,8 @@ function activateAPlusDouble(mode, top, bottom, merged) {
     if (!isAPlusDoubleActive(mode)) {
         if (mode === 'free' || mode === 'program') {
             const sizeInput = document.getElementById(mode === 'free' ? 'freeSizeSelect' : 'progSizeSelect');
-            aPlusDoubleState.previousSize = sizeInput?.value || '2K 自动识别';
-            aPlusDoubleState.previousSizeMode = sizeInput?.dataset.sizeMode || 'default';
+            aPlusDoubleState.previousSize = sizeInput?.value || '亚马逊主图 1600x1600';
+            aPlusDoubleState.previousSizeMode = sizeInput?.dataset.sizeMode || 'auto';
             aPlusDoubleState.previousRefs = mode === 'free' ? [...uploads.freeImages] : [...uploads.progRef];
         }
     }
@@ -1220,8 +1230,8 @@ function activateAPlusDouble(mode, top, bottom, merged) {
 
 function deactivateAPlusDouble(mode) {
     if (!isAPlusDoubleActive(mode)) return;
-    const previousSize = aPlusDoubleState.previousSize || '2K 自动识别';
-    const previousSizeMode = aPlusDoubleState.previousSizeMode || 'default';
+    const previousSize = aPlusDoubleState.previousSize || '亚马逊主图 1600x1600';
+    const previousSizeMode = aPlusDoubleState.previousSizeMode || 'auto';
     const previousRefs = [...aPlusDoubleState.previousRefs];
     resetAPlusDoubleState();
     if (mode === 'free') {
@@ -3936,6 +3946,8 @@ function initSizePicker(inputId, hintId) {
     const modeButtons = Array.from(picker.querySelectorAll('[data-size-mode]'));
     const sizeButtons = Array.from(picker.querySelectorAll('.size-card[data-size-value]'));
     const aPlusOptions = picker.querySelector('[data-size-options="aplus"]');
+    const customOptions = picker.querySelector('[data-size-options="custom"]');
+    const customSizeButton = picker.querySelector('[data-size-custom="1"]');
     const customRow = picker.querySelector('.size-custom-row');
     const widthInput = picker.querySelector('[data-size-width]');
     const heightInput = picker.querySelector('[data-size-height]');
@@ -3953,21 +3965,26 @@ function initSizePicker(inputId, hintId) {
             input.dataset.sizeMode = mode;
             modeButtons.forEach(item => item.classList.toggle('active', item === button));
             if (aPlusOptions) aPlusOptions.hidden = mode !== 'aplus';
-            if (customRow) customRow.hidden = mode !== 'custom';
+            if (customOptions) customOptions.hidden = mode !== 'custom';
+            if (customRow) customRow.hidden = true;
             sizeButtons.forEach(item => item.classList.remove('active'));
+            customSizeButton?.classList.remove('active');
             if (mode === 'auto') {
                 refreshStudioAutoSize(inputId);
                 return;
             }
             if (mode === 'aplus') {
-                const firstSize = sizeButtons[0];
+                const firstSize = aPlusOptions?.querySelector('.size-card[data-size-value]');
                 if (firstSize) {
                     firstSize.classList.add('active');
                     input.value = firstSize.dataset.sizeValue || '';
                 }
             } else if (mode === 'custom') {
-                updateCustomValue();
-                setTimeout(() => widthInput?.focus(), 0);
+                const firstSize = customOptions?.querySelector('.size-card[data-size-value]');
+                if (firstSize) {
+                    firstSize.classList.add('active');
+                    input.value = firstSize.dataset.sizeValue || '';
+                }
             } else {
                 input.value = button.dataset.sizeValue || '';
             }
@@ -3979,9 +3996,18 @@ function initSizePicker(inputId, hintId) {
     sizeButtons.forEach(button => {
         button.addEventListener('click', () => {
             sizeButtons.forEach(item => item.classList.toggle('active', item === button));
+            customSizeButton?.classList.remove('active');
+            if (customRow) customRow.hidden = true;
             input.value = button.dataset.sizeValue || '';
             emitChange();
         });
+    });
+    customSizeButton?.addEventListener('click', () => {
+        sizeButtons.forEach(item => item.classList.remove('active'));
+        customSizeButton.classList.add('active');
+        if (customRow) customRow.hidden = false;
+        updateCustomValue();
+        setTimeout(() => widthInput?.focus(), 0);
     });
     [widthInput, heightInput].forEach(element => element?.addEventListener('input', updateCustomValue));
     refreshStudioAutoSize(inputId);
