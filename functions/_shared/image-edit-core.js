@@ -13,10 +13,13 @@ export async function editImageWithPrompt({ env, prompt, mimeType, base64, maxBy
     if (estimateBase64Bytes(safeBase64) > maxBytes) throw new Error('Image is too large');
 
     let lastError = new Error('AI image model is unavailable');
+    const providerErrors = [];
     for (const provider of providers) {
+        const providerName = safeProviderName(provider.apiBase);
         const available = await providerHasModel(provider);
         if (available === false) {
             lastError = new Error('AI image model is unavailable');
+            providerErrors.push(`${providerName} [${provider.model}]: ${lastError.message}`);
             continue;
         }
         try {
@@ -28,9 +31,10 @@ export async function editImageWithPrompt({ env, prompt, mimeType, base64, maxBy
             });
         } catch (error) {
             lastError = error;
+            providerErrors.push(`${providerName} [${provider.model}]: ${error.message || error}`);
         }
     }
-    throw lastError;
+    throw new Error(providerErrors.length ? providerErrors.join(' | ').slice(0, 500) : lastError.message);
 }
 
 async function editImageWithProvider({ apiBase, apiKey, model, actorAuthorization, prompt, mimeType, base64 }) {
@@ -38,7 +42,7 @@ async function editImageWithProvider({ apiBase, apiKey, model, actorAuthorizatio
     const timeout = setTimeout(() => controller.abort(), 120000);
 
     try {
-        let { response, data } = await callResponsesApi({
+        let { response, data, rawBody } = await callResponsesApi({
             apiBase,
             apiKey,
             model,
@@ -50,7 +54,7 @@ async function editImageWithProvider({ apiBase, apiKey, model, actorAuthorizatio
             toolMode: 'high'
         });
         if (!response.ok && shouldRetryWithBasicImageTool(response.status)) {
-            ({ response, data } = await callResponsesApi({
+            ({ response, data, rawBody } = await callResponsesApi({
                 apiBase,
                 apiKey,
                 model,
@@ -63,7 +67,7 @@ async function editImageWithProvider({ apiBase, apiKey, model, actorAuthorizatio
             }));
         }
         if (!response.ok && (response.status === 400 || response.status === 422)) {
-            ({ response, data } = await callResponsesApi({
+            ({ response, data, rawBody } = await callResponsesApi({
                 apiBase,
                 apiKey,
                 model,
@@ -76,7 +80,7 @@ async function editImageWithProvider({ apiBase, apiKey, model, actorAuthorizatio
             }));
         }
         if (!response.ok) {
-            const error = data?.error?.message || data?.message || `AI HTTP ${response.status}`;
+            const error = data?.error?.message || data?.message || rawBody || `AI HTTP ${response.status}`;
             throw new Error(normalizeUpstreamError(error, response.status));
         }
         const result = extractImageResult(data);
@@ -186,8 +190,15 @@ async function callResponsesApi({ apiBase, apiKey, model, actorAuthorization, pr
         body: JSON.stringify(body),
         signal
     });
-    const data = await response.json().catch(() => ({}));
-    return { response, data };
+    const rawBody = await response.text().catch(() => '');
+    let data = {};
+    try { data = rawBody ? JSON.parse(rawBody) : {}; } catch {}
+    return { response, data, rawBody };
+}
+
+function safeProviderName(apiBase) {
+    try { return new URL(apiBase).hostname; }
+    catch { return 'image-provider'; }
 }
 
 function extractImageResult(data) {
