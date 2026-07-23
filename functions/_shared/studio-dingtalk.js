@@ -11,20 +11,23 @@ export async function sendStudioResultImages(env, accessToken, staffId, task, or
     for (let index = 0; index < resultKeys.length; index++) {
         const item = resultKeys[index];
         const fileName = safeDisplayName(item.name || `成品图-${index + 1}.jpg`);
+        const imageResult = isImageResult(item, fileName);
         const imageUrl = `${origin}/api/public-image/${encodeKeyToken(item.key)}`;
-        const downloadUrl = task.mode === 'resize_ai'
+        const downloadUrl = task.mode === 'resize_ai' || !imageResult
             ? `${origin}/api/library-file/${encodeURIComponent(item.key)}?dl=1&name=${encodeURIComponent(fileName)}`
             : `${imageUrl}?download=1&name=${encodeURIComponent(fileName)}`;
         const position = `${index + 1}/${resultKeys.length}`;
-        const imageMarkdown = `**${fileName}**\n\n![${fileName}](${imageUrl})\n\n[按原文件名下载](${downloadUrl})`;
+        const resultMarkdown = imageResult
+            ? `**${fileName}**\n\n![${fileName}](${imageUrl})\n\n[按原文件名下载](${downloadUrl})`
+            : `**${fileName}**\n\nAdobe Illustrator 文件无法在钉钉内直接预览。\n\n[下载 AI 文件](${downloadUrl})`;
         try {
             await sendDingTalkMessage(accessToken, {
                 robotCode: env.DINGTALK_APPKEY,
                 userIds: [staffId],
                 msgKey: 'sampleMarkdown',
                 msgParam: JSON.stringify({
-                    title: `图片制作完成 ${position}`,
-                    text: `图片制作完成 ${position}\n\n${imageMarkdown}`
+                    title: `成品制作完成 ${position}`,
+                    text: `成品制作完成 ${position}\n\n${resultMarkdown}`
                 })
             });
             sentCount++;
@@ -65,6 +68,11 @@ async function sendDingTalkMessage(accessToken, body) {
 
 function safeDisplayName(name) {
     return String(name || '成品图.jpg').replace(/[\[\]()`\r\n]/g, '_').slice(0, 120);
+}
+
+function isImageResult(item, fileName) {
+    const source = `${fileName} ${item?.key || ''}`.toLowerCase();
+    return /\.(?:jpe?g|png|webp|gif)(?:\s|$|[?#])/.test(source);
 }
 
 export async function markStudioNotificationSent(env, taskId, field = 'dingtalkNotified') {

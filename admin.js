@@ -99,8 +99,8 @@ function showAdmin() {
     loadSubmissions();
     initLibrary();
     document.getElementById('examplesAdminSection').hidden = false;
-    initExamplesToggle();
-    loadExamplesAdmin();
+    initStudioGuidesToggle();
+    loadStudioGuidesAdmin();
     setInterval(refreshEtaCountdowns, 60 * 60 * 1000);
     document.getElementById('studioSection').hidden = false;
     loadStudioAdmin();
@@ -3872,12 +3872,23 @@ function renderStudioHistoryCard(task) {
         const previewSize = studioResultPreviewSize(task);
         const label = document.createElement('div');
         label.style.cssText = 'font-size:0.82rem;color:#16a34a;font-weight:600;margin:14px 0 6px';
-        label.textContent = '✓ 成品图（点击预览）';
+        label.textContent = '✓ 成品文件';
         card.appendChild(label);
         const row = document.createElement('div');
         row.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px';
         task.resultKeys.forEach(k => {
             const imageUrl = '/api/library-file/' + encodeURIComponent(k.key);
+            const isAi = /\.ai$/i.test(String(k.name || k.key || ''));
+            if (isAi) {
+                const download = document.createElement('a');
+                download.href = imageUrl + '?dl=1&name=' + encodeURIComponent(k.name || '成品.ai');
+                download.download = k.name || '成品.ai';
+                download.title = '下载 Adobe Illustrator 文件';
+                download.style.cssText = 'width:90px;height:80px;display:grid;place-items:center;border:1px solid #fed7aa;border-radius:8px;background:#fff7ed;color:#9a3412;font-weight:900;text-decoration:none';
+                download.textContent = 'AI';
+                row.appendChild(download);
+                return;
+            }
             const previewButton = document.createElement('button');
             previewButton.type = 'button';
             previewButton.className = 'studio-result-preview-trigger';
@@ -3955,6 +3966,281 @@ function studioResultPreviewSize(task) {
     if (!Number.isFinite(ratio) || ratio <= 0) return { width: 160, height: 80, fit: 'contain' };
     if (ratio >= 1) return { width: 180, height: Math.max(56, Math.round(180 / ratio)), fit: 'contain' };
     return { width: Math.max(56, Math.round(110 * ratio)), height: 110, fit: 'contain' };
+}
+
+let studioGuidesAdmin = [];
+let studioGuideDraft = null;
+
+function initStudioGuidesToggle() {
+    const button = document.getElementById('examplesToggleBtn');
+    const content = document.getElementById('examplesAdminContent');
+    const arrow = document.getElementById('examplesToggleArrow');
+    if (!button || !content || button.dataset.guideWired === '1') return;
+    button.dataset.guideWired = '1';
+    button.addEventListener('click', () => {
+        const willOpen = content.hidden;
+        content.hidden = !willOpen;
+        if (arrow) arrow.style.transform = willOpen ? 'rotate(90deg)' : 'rotate(0deg)';
+    });
+}
+
+async function loadStudioGuidesAdmin() {
+    const box = document.getElementById('examplesAdminContent');
+    if (!box) return;
+    box.innerHTML = '<div style="color:#64748b;font-size:.82rem">正在加载帮助内容...</div>';
+    try {
+        const response = await fetch('/api/studio-guides?all=1', { cache: 'no-store' });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.ok) throw new Error(result.error || `加载失败 (${response.status})`);
+        studioGuidesAdmin = Array.isArray(result.articles) ? result.articles : [];
+        renderStudioGuidesAdmin();
+    } catch (error) {
+        box.innerHTML = `<div style="color:#b91c1c;font-size:.82rem">加载失败：${escapeHtml(error.message)}</div>`;
+    }
+}
+
+function renderStudioGuidesAdmin() {
+    const box = document.getElementById('examplesAdminContent');
+    if (!box) return;
+    const cards = studioGuidesAdmin.map(article => {
+        const category = article.category === 'faq' ? '常见问题' : '上手指南';
+        const cover = article.cover?.url
+            ? `<img src="${escapeHtml(article.cover.url)}" alt="">`
+            : '<span>暂无封面</span>';
+        return `<article class="guide-admin-card">
+            <div class="guide-admin-cover">${cover}</div>
+            <div class="guide-admin-card-body">
+                <div class="guide-admin-card-meta"><span>${category}</span><span>${article.published === false ? '未发布' : '已发布'}</span></div>
+                <h3 title="${escapeHtml(article.title || '')}">${escapeHtml(article.title || '未命名文章')}</h3>
+                <p>${escapeHtml(article.subtitle || '未填写文章简介')}</p>
+                <div class="guide-admin-card-actions">
+                    <button type="button" data-guide-edit="${escapeHtml(article.id)}">编辑</button>
+                    <button type="button" data-guide-delete="${escapeHtml(article.id)}">删除</button>
+                </div>
+            </div>
+        </article>`;
+    }).join('');
+    box.innerHTML = `<div class="guide-admin-toolbar">
+        <p>右侧使用帮助仅显示已发布的文章。</p>
+        <button type="button" class="guide-admin-primary" id="studioGuideCreate">新建文章</button>
+    </div>
+    ${cards ? `<div class="guide-admin-list">${cards}</div>` : '<div style="padding:18px 0;color:#64748b;font-size:.82rem">还没有帮助文章，点击“新建文章”开始添加。</div>'}`;
+    box.querySelector('#studioGuideCreate')?.addEventListener('click', () => openStudioGuideEditor());
+    box.querySelectorAll('[data-guide-edit]').forEach(button => button.addEventListener('click', () => {
+        openStudioGuideEditor(studioGuidesAdmin.find(article => article.id === button.dataset.guideEdit));
+    }));
+    box.querySelectorAll('[data-guide-delete]').forEach(button => button.addEventListener('click', () => deleteStudioGuide(button.dataset.guideDelete)));
+}
+
+function openStudioGuideEditor(article = null) {
+    document.querySelector('.guide-editor-overlay')?.remove();
+    studioGuideDraft = article
+        ? JSON.parse(JSON.stringify(article))
+        : { id: '', category: 'getting-started', title: '', subtitle: '', cover: null, published: true, blocks: [{ type: 'paragraph', text: '', fontSize: 16 }] };
+
+    const overlay = document.createElement('div');
+    overlay.className = 'guide-editor-overlay';
+    overlay.innerHTML = `<section class="guide-editor-dialog" role="dialog" aria-modal="true" aria-labelledby="studioGuideEditorTitle">
+        <header class="guide-editor-head">
+            <h3 id="studioGuideEditorTitle">${article ? '编辑帮助文章' : '新建帮助文章'}</h3>
+            <button type="button" class="guide-editor-close" aria-label="关闭">×</button>
+        </header>
+        <div class="guide-editor-body">
+            <aside class="guide-editor-settings">
+                <label class="guide-editor-field"><span>分类</span><select id="guideDraftCategory"><option value="getting-started">上手指南</option><option value="faq">常见问题</option></select></label>
+                <label class="guide-editor-field"><span>文章标题</span><input id="guideDraftTitle" maxlength="80" placeholder="例如：如何提交图生图任务"></label>
+                <label class="guide-editor-field"><span>卡片简介</span><textarea id="guideDraftSubtitle" maxlength="160" placeholder="简短说明文章内容"></textarea></label>
+                <div class="guide-editor-field"><span>封面图片</span><button type="button" class="guide-editor-cover" id="guideDraftCover"></button><input id="guideDraftCoverInput" type="file" accept="image/jpeg,image/png,image/webp" hidden></div>
+                <label class="guide-editor-published"><input id="guideDraftPublished" type="checkbox"> 发布到自助处理台</label>
+            </aside>
+            <main class="guide-editor-main">
+                <div class="guide-editor-toolbar">
+                    <strong>文章正文</strong>
+                    <button type="button" data-guide-add="heading">+ 大标题</button>
+                    <button type="button" data-guide-add="subheading">+ 小标题</button>
+                    <button type="button" data-guide-add="paragraph">+ 正文</button>
+                    <button type="button" data-guide-add="image">+ 图片</button>
+                </div>
+                <div class="guide-editor-blocks" id="guideDraftBlocks"></div>
+            </main>
+        </div>
+        <footer class="guide-editor-foot">
+            <div class="guide-editor-status" id="guideEditorStatus"></div>
+            <button type="button" class="guide-admin-primary" id="guideDraftSave">保存文章</button>
+        </footer>
+    </section>`;
+    document.body.appendChild(overlay);
+
+    const close = () => { overlay.remove(); studioGuideDraft = null; };
+    overlay.querySelector('.guide-editor-close').addEventListener('click', close);
+    overlay.addEventListener('click', event => { if (event.target === overlay) close(); });
+    overlay.querySelector('#guideDraftCategory').value = studioGuideDraft.category;
+    overlay.querySelector('#guideDraftTitle').value = studioGuideDraft.title || '';
+    overlay.querySelector('#guideDraftSubtitle').value = studioGuideDraft.subtitle || '';
+    overlay.querySelector('#guideDraftPublished').checked = studioGuideDraft.published !== false;
+    renderStudioGuideCover(overlay);
+    renderStudioGuideBlocks(overlay);
+
+    overlay.querySelector('#guideDraftCover').addEventListener('click', () => overlay.querySelector('#guideDraftCoverInput').click());
+    overlay.querySelector('#guideDraftCoverInput').addEventListener('change', async event => {
+        const file = event.target.files?.[0];
+        event.target.value = '';
+        if (!file) return;
+        const image = await uploadStudioGuideImage(file, overlay);
+        if (image) { studioGuideDraft.cover = image; renderStudioGuideCover(overlay); }
+    });
+    overlay.querySelectorAll('[data-guide-add]').forEach(button => button.addEventListener('click', () => {
+        addStudioGuideBlock(button.dataset.guideAdd, overlay);
+    }));
+    overlay.querySelector('#guideDraftSave').addEventListener('click', () => saveStudioGuide(overlay));
+}
+
+function renderStudioGuideCover(overlay) {
+    const button = overlay.querySelector('#guideDraftCover');
+    if (!button) return;
+    button.innerHTML = studioGuideDraft.cover?.url
+        ? `<img src="${escapeHtml(studioGuideDraft.cover.url)}" alt="封面预览">`
+        : '<span>点击上传封面<br>JPG / PNG / WebP，最大 8MB</span>';
+}
+
+function addStudioGuideBlock(type, overlay) {
+    const defaults = {
+        heading: { type: 'heading', text: '', fontSize: 30 },
+        subheading: { type: 'subheading', text: '', fontSize: 22 },
+        paragraph: { type: 'paragraph', text: '', fontSize: 16 },
+        image: { type: 'image', key: '', url: '', name: '', alt: '' }
+    };
+    studioGuideDraft.blocks.push(defaults[type]);
+    renderStudioGuideBlocks(overlay);
+    overlay.querySelector('.guide-editor-block:last-child textarea')?.focus();
+}
+
+function renderStudioGuideBlocks(overlay) {
+    const container = overlay.querySelector('#guideDraftBlocks');
+    if (!container) return;
+    const names = { heading: '大标题', subheading: '小标题', paragraph: '正文', image: '图片' };
+    container.innerHTML = studioGuideDraft.blocks.map((block, index) => {
+        const actions = `<div class="guide-editor-block-actions">
+            <button type="button" data-guide-move="up" data-index="${index}" aria-label="上移">↑</button>
+            <button type="button" data-guide-move="down" data-index="${index}" aria-label="下移">↓</button>
+            <button type="button" data-guide-remove data-index="${index}">删除</button>
+        </div>`;
+        if (block.type === 'image') {
+            return `<section class="guide-editor-block" data-block-index="${index}">
+                <div class="guide-editor-block-head"><strong>${names[block.type]}</strong>${actions}</div>
+                <button type="button" class="guide-editor-image-picker" data-guide-image="${index}">${block.url ? `<img src="${escapeHtml(block.url)}" alt="">` : '<span>点击上传正文图片</span>'}</button>
+                <input class="guide-editor-image-alt" data-guide-alt="${index}" value="${escapeHtml(block.alt || '')}" maxlength="120" placeholder="图片说明（可选）">
+            </section>`;
+        }
+        return `<section class="guide-editor-block" data-block-index="${index}">
+            <div class="guide-editor-block-head"><strong>${names[block.type]}</strong>${actions}</div>
+            <div class="guide-editor-text-row">
+                <textarea data-guide-text="${index}" maxlength="${block.type === 'paragraph' ? 8000 : 500}" placeholder="输入${names[block.type]}">${escapeHtml(block.text || '')}</textarea>
+                <select data-guide-size="${index}" aria-label="字号">${studioGuideFontOptions(block.fontSize)}</select>
+            </div>
+        </section>`;
+    }).join('');
+
+    container.querySelectorAll('[data-guide-text]').forEach(input => input.addEventListener('input', () => {
+        studioGuideDraft.blocks[Number(input.dataset.guideText)].text = input.value;
+    }));
+    container.querySelectorAll('[data-guide-size]').forEach(select => select.addEventListener('change', () => {
+        studioGuideDraft.blocks[Number(select.dataset.guideSize)].fontSize = Number(select.value);
+    }));
+    container.querySelectorAll('[data-guide-alt]').forEach(input => input.addEventListener('input', () => {
+        studioGuideDraft.blocks[Number(input.dataset.guideAlt)].alt = input.value;
+    }));
+    container.querySelectorAll('[data-guide-move]').forEach(button => button.addEventListener('click', () => {
+        const index = Number(button.dataset.index);
+        const target = button.dataset.guideMove === 'up' ? index - 1 : index + 1;
+        if (target < 0 || target >= studioGuideDraft.blocks.length) return;
+        [studioGuideDraft.blocks[index], studioGuideDraft.blocks[target]] = [studioGuideDraft.blocks[target], studioGuideDraft.blocks[index]];
+        renderStudioGuideBlocks(overlay);
+    }));
+    container.querySelectorAll('[data-guide-remove]').forEach(button => button.addEventListener('click', () => {
+        studioGuideDraft.blocks.splice(Number(button.dataset.index), 1);
+        renderStudioGuideBlocks(overlay);
+    }));
+    container.querySelectorAll('[data-guide-image]').forEach(button => button.addEventListener('click', () => selectStudioGuideBlockImage(Number(button.dataset.guideImage), overlay)));
+}
+
+function studioGuideFontOptions(current) {
+    return [12, 14, 16, 18, 20, 22, 24, 28, 30, 36, 42, 48]
+        .map(size => `<option value="${size}"${Number(current) === size ? ' selected' : ''}>${size}px</option>`).join('');
+}
+
+function selectStudioGuideBlockImage(index, overlay) {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/jpeg,image/png,image/webp';
+    input.addEventListener('change', async () => {
+        const image = await uploadStudioGuideImage(input.files?.[0], overlay);
+        if (!image || !studioGuideDraft.blocks[index]) return;
+        studioGuideDraft.blocks[index] = { type: 'image', ...image, alt: studioGuideDraft.blocks[index].alt || '' };
+        renderStudioGuideBlocks(overlay);
+    });
+    input.click();
+}
+
+async function uploadStudioGuideImage(file, overlay) {
+    if (!file) return null;
+    const status = overlay.querySelector('#guideEditorStatus');
+    status.textContent = '正在上传图片...';
+    try {
+        const form = new FormData();
+        form.append('action', 'upload_image');
+        form.append('file', file, file.name);
+        const response = await fetch('/api/studio-guides', { method: 'POST', body: form });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.ok) throw new Error(result.error || `上传失败 (${response.status})`);
+        status.textContent = '图片已上传';
+        return result.image;
+    } catch (error) {
+        status.textContent = '图片上传失败：' + error.message;
+        return null;
+    }
+}
+
+async function saveStudioGuide(overlay) {
+    studioGuideDraft.category = overlay.querySelector('#guideDraftCategory').value;
+    studioGuideDraft.title = overlay.querySelector('#guideDraftTitle').value.trim();
+    studioGuideDraft.subtitle = overlay.querySelector('#guideDraftSubtitle').value.trim();
+    studioGuideDraft.published = overlay.querySelector('#guideDraftPublished').checked;
+    const button = overlay.querySelector('#guideDraftSave');
+    const status = overlay.querySelector('#guideEditorStatus');
+    button.disabled = true;
+    status.textContent = '正在保存...';
+    try {
+        const response = await fetch('/api/studio-guides', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'save', article: studioGuideDraft })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.ok) throw new Error(result.error || `保存失败 (${response.status})`);
+        overlay.remove();
+        studioGuideDraft = null;
+        await loadStudioGuidesAdmin();
+    } catch (error) {
+        status.textContent = '保存失败：' + error.message;
+        button.disabled = false;
+    }
+}
+
+async function deleteStudioGuide(id) {
+    if (!id || !confirm('确定删除这篇帮助文章？文章中的图片也会一起删除。')) return;
+    try {
+        const response = await fetch('/api/studio-guides', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.ok) throw new Error(result.error || `删除失败 (${response.status})`);
+        await loadStudioGuidesAdmin();
+    } catch (error) {
+        alert('删除失败：' + error.message);
+    }
 }
 
 function initExamplesToggle() {

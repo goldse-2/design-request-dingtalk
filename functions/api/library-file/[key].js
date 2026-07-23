@@ -12,7 +12,7 @@
     const storedName = decodeURIComponent(key.split('/').pop());
     const fileName = sanitizeFileName(url.searchParams.get('name') || storedName);
     const ext = storedName.split('.').pop().toLowerCase();
-    const mimeMap = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', pdf: 'application/pdf', zip: 'application/zip' };
+    const mimeMap = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', pdf: 'application/pdf', zip: 'application/zip', ai: 'application/postscript' };
     const contentType = stored.contentType || mimeMap[ext] || 'application/octet-stream';
 
     const headers = {

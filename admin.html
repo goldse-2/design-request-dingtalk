@@ -134,6 +134,55 @@
 .studio-result-preview-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 18px; border-top: 1px solid #e5e7eb; }
 .studio-result-preview-download { min-height: 34px; padding: 7px 12px; border: 1px solid #4f46e5; border-radius: 7px; background: #4f46e5; color: #fff; font-size: .76rem; font-weight: 700; text-decoration: none; cursor: pointer; }
 .studio-result-preview-download:hover { border-color: #4338ca; background: #4338ca; }
+.guide-admin-toolbar { display:flex; align-items:center; justify-content:space-between; gap:14px; margin-bottom:16px; }
+.guide-admin-toolbar p { margin:0; color:#64748b; font-size:.8rem; }
+.guide-admin-primary { min-height:36px; padding:7px 13px; border:1px solid #111827; border-radius:7px; background:#111827; color:#fff; font-size:.78rem; font-weight:750; cursor:pointer; }
+.guide-admin-list { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:13px; }
+.guide-admin-card { min-width:0; overflow:hidden; border:1px solid #e2e8f0; border-radius:8px; background:#fff; }
+.guide-admin-cover { aspect-ratio:2/1; overflow:hidden; border-bottom:1px solid #e2e8f0; background:#eef2f7; }
+.guide-admin-cover img { display:block; width:100%; height:100%; object-fit:cover; }
+.guide-admin-cover span { display:grid; width:100%; height:100%; place-items:center; color:#64748b; font-size:.8rem; font-weight:750; }
+.guide-admin-card-body { padding:12px; }
+.guide-admin-card-meta { display:flex; align-items:center; gap:6px; color:#64748b; font-size:.68rem; }
+.guide-admin-card-meta span { padding:3px 6px; border-radius:4px; background:#f1f5f9; }
+.guide-admin-card h3 { margin:9px 0 0; overflow:hidden; color:#111827; font-size:.88rem; text-overflow:ellipsis; white-space:nowrap; }
+.guide-admin-card p { margin:5px 0 0; min-height:34px; overflow:hidden; color:#64748b; font-size:.72rem; line-height:1.5; }
+.guide-admin-card-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:11px; }
+.guide-admin-card-actions button { min-height:34px; border:1px solid #cbd5e1; border-radius:7px; background:#fff; color:#475569; font-size:.74rem; font-weight:700; cursor:pointer; }
+.guide-admin-card-actions button:last-child { color:#b91c1c; }
+.guide-editor-overlay { position:fixed; inset:0; z-index:17000; display:grid; place-items:center; padding:18px; background:rgba(15,23,42,.62); }
+.guide-editor-dialog { display:flex; flex-direction:column; width:min(1120px,100%); max-height:calc(100vh - 36px); overflow:hidden; border-radius:8px; background:#fff; box-shadow:0 28px 80px rgba(0,0,0,.32); }
+.guide-editor-head { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:15px 18px; border-bottom:1px solid #e5e7eb; }
+.guide-editor-head h3 { margin:0; color:#111827; font-size:1rem; }
+.guide-editor-close { display:grid; width:32px; height:32px; place-items:center; border:0; border-radius:6px; background:#f1f5f9; color:#475569; font-size:20px; cursor:pointer; }
+.guide-editor-body { display:grid; grid-template-columns:280px minmax(0,1fr); min-height:0; overflow:hidden; }
+.guide-editor-settings { overflow:auto; padding:18px; border-right:1px solid #e5e7eb; background:#f8fafc; }
+.guide-editor-field { display:block; margin-bottom:13px; }
+.guide-editor-field > span { display:block; margin-bottom:5px; color:#374151; font-size:.74rem; font-weight:750; }
+.guide-editor-field input,.guide-editor-field textarea,.guide-editor-field select { width:100%; min-height:38px; padding:8px 10px; border:1px solid #cbd5e1; border-radius:7px; outline:none; background:#fff; color:#1f2937; font:inherit; font-size:.8rem; }
+.guide-editor-field textarea { min-height:76px; resize:vertical; }
+.guide-editor-cover { display:grid; min-height:110px; place-items:center; overflow:hidden; border:1px dashed #94a3b8; border-radius:7px; background:#fff; color:#64748b; font-size:.74rem; text-align:center; cursor:pointer; }
+.guide-editor-cover img { display:block; width:100%; height:130px; object-fit:cover; }
+.guide-editor-published { display:flex; align-items:center; gap:8px; color:#374151; font-size:.76rem; }
+.guide-editor-main { min-width:0; overflow:auto; padding:18px; }
+.guide-editor-toolbar { display:flex; align-items:center; flex-wrap:wrap; gap:7px; margin-bottom:13px; padding-bottom:13px; border-bottom:1px solid #e5e7eb; }
+.guide-editor-toolbar strong { margin-right:auto; color:#111827; font-size:.82rem; }
+.guide-editor-toolbar button { min-height:33px; padding:6px 9px; border:1px solid #cbd5e1; border-radius:6px; background:#fff; color:#475569; font-size:.72rem; font-weight:700; cursor:pointer; }
+.guide-editor-blocks { display:grid; gap:10px; }
+.guide-editor-block { padding:11px; border:1px solid #e2e8f0; border-radius:7px; background:#fff; }
+.guide-editor-block-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px; }
+.guide-editor-block-head strong { color:#475569; font-size:.72rem; }
+.guide-editor-block-actions { display:flex; gap:5px; }
+.guide-editor-block-actions button { min-height:28px; padding:4px 7px; border:1px solid #dbe3ee; border-radius:5px; background:#f8fafc; color:#64748b; font-size:.68rem; cursor:pointer; }
+.guide-editor-text-row { display:grid; grid-template-columns:minmax(0,1fr) 96px; gap:9px; }
+.guide-editor-text-row textarea,.guide-editor-text-row select,.guide-editor-image-alt { width:100%; padding:8px 10px; border:1px solid #cbd5e1; border-radius:6px; outline:none; background:#fff; font:inherit; font-size:.78rem; }
+.guide-editor-text-row textarea { min-height:72px; resize:vertical; line-height:1.5; }
+.guide-editor-image-picker { display:grid; min-height:128px; place-items:center; overflow:hidden; border:1px dashed #94a3b8; border-radius:6px; background:#f8fafc; color:#64748b; font-size:.74rem; cursor:pointer; }
+.guide-editor-image-picker img { display:block; width:100%; max-height:280px; object-fit:contain; background:#eef2f7; }
+.guide-editor-image-alt { margin-top:8px; }
+.guide-editor-foot { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:13px 18px; border-top:1px solid #e5e7eb; background:#f8fafc; }
+.guide-editor-status { min-height:18px; color:#64748b; font-size:.76rem; }
+@media (max-width:760px) { .guide-editor-overlay { padding:8px; } .guide-editor-dialog { max-height:calc(100vh - 16px); } .guide-editor-body { grid-template-columns:minmax(0,1fr); overflow:auto; } .guide-editor-settings { overflow:visible; border-right:0; border-bottom:1px solid #e5e7eb; } .guide-editor-main { overflow:visible; } .guide-editor-text-row { grid-template-columns:minmax(0,1fr); } }
 @media (max-width: 620px) {
     .retouch-library-review-grid { grid-template-columns: 1fr; }
     .retouch-review-dialog-body { grid-template-columns: minmax(0, 1fr); }
@@ -297,15 +346,15 @@
     <div id="libAdminContent"></div>
 </div>
 
-<!-- 案例管理 -->
+<!-- 帮助内容管理 -->
 <div id="examplesAdminSection" class="container" hidden style="margin-top:0;padding-top:0">
     <button id="examplesToggleBtn" type="button" style="width:100%;margin:32px 0 12px;background:#fff;border:none;border-radius:12px;padding:16px 20px;box-shadow:0 1px 4px rgba(0,0,0,0.07);display:flex;align-items:center;justify-content:space-between;cursor:pointer;text-align:left">
         <div>
-            <h2 style="font-size:1.2rem;font-weight:700;color:#111827">案例管理</h2>
-            <p style="color:#6b7280;font-size:0.85rem;margin-top:2px">管理图片制作右侧示例画廊中用户上传的案例</p>
+            <h2 style="font-size:1.2rem;font-weight:700;color:#111827">帮助内容管理</h2>
+            <p style="color:#6b7280;font-size:0.85rem;margin-top:2px">管理图片制作右侧的上手指南与常见问题</p>
         </div>
         <span style="display:flex;align-items:center;gap:14px">
-            <a href="studio.html" target="_blank" onclick="event.stopPropagation()" style="font-size:0.8rem;color:#6366f1;text-decoration:none">查看图片制作 →</a>
+            <a href="studio.html" target="_blank" onclick="event.stopPropagation()" style="font-size:0.8rem;color:#6366f1;text-decoration:none">查看使用帮助 →</a>
             <span id="examplesToggleArrow" style="font-size:1.1rem;color:#9ca3af;transition:transform .18s">▶</span>
         </span>
     </button>
@@ -407,7 +456,7 @@ function setLibAdminTab(btn, tabKey) {
     });
 }
 </script>
-<script src="admin.js?v=20260721-rpa-queue"></script>
+<script src="admin.js?v=20260723-help-guides"></script>
 </div>
 </body>
 </html>

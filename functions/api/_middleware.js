@@ -37,6 +37,9 @@ function requiresAdmin(request, url) {
     if (url.pathname === '/api/studio-examples') {
         return ['PATCH', 'DELETE'].includes(request.method) || url.searchParams.get('all') === '1';
     }
+    if (url.pathname === '/api/studio-guides') {
+        return request.method !== 'GET' || url.searchParams.get('all') === '1';
+    }
     if (url.pathname === '/api/studio-tasks') {
         if (request.method !== 'GET') return true;
         return ['active', 'history', 'all', 'id'].some(key => url.searchParams.has(key));

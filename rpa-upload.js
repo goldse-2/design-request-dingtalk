@@ -13,9 +13,12 @@ function setStatus(text, ok = null) {
 }
 
 function addFiles(files) {
-    const imgs = Array.from(files).filter(f => f.type.startsWith('image/'));
-    if (!imgs.length) return;
-    pendingFiles.push(...imgs);
+    const accepted = Array.from(files).filter(file => file.type.startsWith('image/') || isAdobeAiFile(file));
+    if (!accepted.length) {
+        setStatus('请选择图片或 Adobe Illustrator（.ai）文件', false);
+        return;
+    }
+    pendingFiles.push(...accepted);
     renderPreview();
 }
 
@@ -25,11 +28,15 @@ function renderPreview() {
     pendingFiles.forEach((file, idx) => {
         const item = document.createElement('div');
         item.className = 'rpa-preview-item';
-        const url = URL.createObjectURL(file);
-        item.innerHTML = `<img src="${url}" alt=""><div><strong>${escapeHtml(file.name)}</strong><small>${formatSize(file.size)}</small></div><button type="button">×</button>`;
+        const isAi = isAdobeAiFile(file);
+        const url = isAi ? '' : URL.createObjectURL(file);
+        const preview = isAi
+            ? '<div aria-hidden="true" style="width:58px;height:58px;border-radius:9px;background:#fff7ed;color:#9a3412;display:grid;place-items:center;font-weight:900;font-size:1rem;border:1px solid #fed7aa">AI</div>'
+            : `<img src="${url}" alt="">`;
+        item.innerHTML = `${preview}<div><strong>${escapeHtml(file.name)}</strong><small>${isAi ? 'Adobe Illustrator · ' : ''}${formatSize(file.size)}</small></div><button type="button">×</button>`;
         item.querySelector('button').onclick = () => {
             pendingFiles.splice(idx, 1);
-            URL.revokeObjectURL(url);
+            if (url) URL.revokeObjectURL(url);
             renderPreview();
         };
         previewList.appendChild(item);
@@ -59,7 +66,8 @@ async function getUploadTaskMode(taskId, password) {
             mode: json.mode,
             cutoutMode: json.cutoutMode === 'vector' ? 'vector' : 'normal',
             outputFormat: json.outputFormat || (json.mode === 'cutout' ? 'png' : ''),
-            aPlusDouble: json.aPlusDouble === true
+            aPlusDouble: json.aPlusDouble === true,
+            libraryReplacement: json.libraryReplacement === true
         };
     });
 }
@@ -101,6 +109,11 @@ function isJpegFile(file) {
     return file.type === 'image/jpeg' || /\.jpe?g$/i.test(file.name || '');
 }
 
+function isAdobeAiFile(file) {
+    const type = String(file?.type || '').toLowerCase();
+    return /\.ai$/i.test(file?.name || '') || ['application/postscript', 'application/illustrator', 'application/vnd.adobe.illustrator'].includes(type);
+}
+
 async function convertImageFile(file, mimeType, extension, fillWhite) {
     const dataUrl = await readFileAsDataUrl(file);
     const image = await loadImage(dataUrl);
@@ -120,6 +133,7 @@ async function convertImageFile(file, mimeType, extension, fillWhite) {
 }
 
 async function normalizeUploadFile(file, taskInfo) {
+    if (isAdobeAiFile(file)) return file;
     if (taskInfo.mode === 'cutout') {
         if (taskInfo.outputFormat === 'jpg') {
             return isJpegFile(file) ? file : convertImageFile(file, 'image/jpeg', 'jpg', true);
@@ -205,7 +219,7 @@ uploadBtn.addEventListener('click', async () => {
     const taskId = taskIdEl.value.trim();
     if (!password) { setStatus('请输入上传密码', false); passwordEl.focus(); return; }
     if (!taskId) { setStatus('请输入任务 ID', false); taskIdEl.focus(); return; }
-    if (!pendingFiles.length) { setStatus('请选择成品图片', false); return; }
+    if (!pendingFiles.length) { setStatus('请选择成品文件', false); return; }
 
     uploadBtn.disabled = true;
     uploadBtn.textContent = '上传中...';
@@ -213,6 +227,15 @@ uploadBtn.addEventListener('click', async () => {
 
     try {
         const taskInfo = await getUploadTaskMode(taskId, password);
+        const containsAi = pendingFiles.some(isAdobeAiFile);
+        if (taskInfo.aPlusDouble && containsAi) throw new Error('A+ 连续双图需要上传可拆分的图片，不能上传 AI 文件');
+        if (taskInfo.libraryReplacement && containsAi) throw new Error('资料库替换任务需要上传图片，不能上传 AI 文件');
+        if (taskInfo.mode === 'cutout' && taskInfo.cutoutMode === 'vector' && pendingFiles.some(file => !isAdobeAiFile(file))) {
+            throw new Error('矢量图白底任务请上传 Adobe Illustrator（.ai）文件');
+        }
+        if (taskInfo.mode === 'cutout' && taskInfo.cutoutMode !== 'vector' && containsAi) {
+            throw new Error('普通白底抠图任务需要上传 PNG 或 JPG 图片');
+        }
         if (taskInfo.aPlusDouble) {
             if (pendingFiles.length !== 1) throw new Error('A+ 连续双图任务请只上传一张完整成品图');
             setStatus('正在自动拆分为上下两张 1464 × 600 JPG...', null);
@@ -246,7 +269,7 @@ uploadBtn.addEventListener('click', async () => {
             if (!res.ok || !data.ok) throw requestError(data.error || res.status, res.status);
             return data;
         });
-        setStatus('上传成功，已通知用户，共 ' + json.uploaded.length + ' 张图片', true);
+        setStatus('上传成功，已通知用户，共 ' + json.uploaded.length + ' 个文件', true);
         pendingFiles = [];
         renderPreview();
     } catch (err) {

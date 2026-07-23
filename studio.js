@@ -309,7 +309,7 @@ function renderShootRequestLauncher(mode) {
                 <div class="studio-photographer-decision" data-studio-photographer="${mode}">
                     <div class="studio-photographer-decision-row">
                         <div class="studio-photographer-decision-main">
-                            ${mode === 'program' ? '<img class="studio-photographer-program-mascot" src="/assets/studio-help/program-photographer-penguin.png" alt="">' : ''}
+                            ${mode === 'program' ? '<img class="studio-photographer-program-mascot" src="/assets/studio-help/program-waiting-processing.png" alt="">' : ''}
                             <div class="studio-photographer-decision-copy"><strong>由摄影师决定</strong><small>没有白底图或者是需要拍摄就可以打开，无需图片也可以打开</small></div>
                         </div>
                         <div class="sheet-self-switch-control">
@@ -335,6 +335,25 @@ function renderShootRequestLauncher(mode) {
                         </div>
                     </div>
                 </div>`;
+}
+
+function renderStudioGuidePanel() {
+    return `<div class="studio-preview studio-gallery-preview studio-guide-preview">
+        <div class="studio-preview-tab">使用帮助</div>
+        <div class="studio-preview-body studio-guide-preview-body">
+            <div class="studio-guide-head">
+                <div>
+                    <div class="studio-gallery-title"><span class="dot"></span> 使用帮助</div>
+                    <div class="studio-gallery-sub">上手指南与常见问题</div>
+                </div>
+                <div class="studio-guide-category-tabs" role="tablist" aria-label="帮助分类">
+                    <button type="button" class="active" data-studio-guide-category="getting-started">上手指南</button>
+                    <button type="button" data-studio-guide-category="faq">常见问题</button>
+                </div>
+            </div>
+            <div class="studio-guide-stage" id="studioGalleryStage"></div>
+        </div>
+    </div>`;
 }
 
 const FREE_FORM = `
@@ -420,19 +439,7 @@ ${renderSizePicker('freeSizeSelect')}
                 <div id="freeStatus" class="studio-status"></div>
             </div>
         </div>
-        <div class="studio-preview studio-gallery-preview">
-            <div class="studio-preview-tab">预览</div>
-            <div class="studio-preview-body">
-                <div class="studio-gallery-head">
-                    <div>
-                        <div class="studio-gallery-title"><span class="dot"></span> 示例画廊</div>
-                        <div class="studio-gallery-sub">点击案例查看图片与提示词，可一键使用提示词</div>
-                    </div>
-                    <button type="button" class="studio-example-upload-btn" onclick="openExampleUploadModal()">上传案例</button>
-                </div>
-                <div class="studio-gallery-stage" id="studioGalleryStage"></div>
-            </div>
-        </div>
+        ${renderStudioGuidePanel()}
     </div>`
 
 const PROGRAM_FORM = `
@@ -526,19 +533,7 @@ ${renderSizePicker('progSizeSelect')}
                 <div id="progStatus" class="studio-status"></div>
             </div>
         </div>
-        <div class="studio-preview studio-gallery-preview">
-            <div class="studio-preview-tab">预览</div>
-            <div class="studio-preview-body">
-                <div class="studio-gallery-head">
-                    <div>
-                        <div class="studio-gallery-title"><span class="dot"></span> 示例画廊</div>
-                        <div class="studio-gallery-sub">点击案例查看图片与提示词，可一键使用提示词</div>
-                    </div>
-                    <button type="button" class="studio-example-upload-btn" onclick="openExampleUploadModal()">上传案例</button>
-                </div>
-                <div class="studio-gallery-stage" id="studioGalleryStage"></div>
-            </div>
-        </div>
+        ${renderStudioGuidePanel()}
     </div>`;
 
 const SHEET_SELF_WORKFLOW = `
@@ -4128,6 +4123,8 @@ function updatePromptQuota(remaining) {
 
 
 let studioExamplesCache = null;
+let studioGuidesCache = null;
+let studioGuideCategory = 'getting-started';
 let studioGalleryShown = 0;
 const STUDIO_GALLERY_PAGE = 13;
 let studioGalleryObserver = null;
@@ -4137,22 +4134,92 @@ async function renderStudioGallery() {
     const stage = document.getElementById('studioGalleryStage');
     if (!stage) return;
     try {
-        if (!studioExamplesCache) {
-            stage.innerHTML = '<div class="studio-examples-loading">案例加载中...</div>';
-            const res = await fetch('/api/studio-examples');
-            const json = await res.json();
-            studioExamplesCache = shuffleExamples(json.examples || []);
+        wireStudioGuideTabs();
+        if (!studioGuidesCache) {
+            stage.innerHTML = '<div class="studio-guide-loading">帮助内容加载中...</div>';
+            const res = await fetch('/api/studio-guides', { cache: 'no-store' });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok || !json.ok) throw new Error(json.error || '请求失败');
+            studioGuidesCache = Array.isArray(json.articles) ? json.articles : [];
         }
-        if (!studioExamplesCache || !studioExamplesCache.length) {
-            stage.innerHTML = '<div class="studio-examples-loading">暂无案例</div>';
-            return;
-        }
-        stage.innerHTML = '';
-        studioGalleryShown = 0;
-        appendStudioGalleryPage();
+        renderStudioGuideCards();
     } catch (err) {
-        stage.innerHTML = '<div class="studio-examples-loading">案例加载失败：' + err.message + '</div>';
+        stage.innerHTML = '<div class="studio-guide-empty">帮助内容加载失败：' + studioGuideEsc(err.message) + '</div>';
     }
+}
+
+function wireStudioGuideTabs() {
+    document.querySelectorAll('[data-studio-guide-category]').forEach(button => {
+        button.classList.toggle('active', button.dataset.studioGuideCategory === studioGuideCategory);
+        if (button.dataset.wired === '1') return;
+        button.dataset.wired = '1';
+        button.addEventListener('click', () => {
+            studioGuideCategory = button.dataset.studioGuideCategory;
+            document.querySelectorAll('[data-studio-guide-category]').forEach(tab => {
+                tab.classList.toggle('active', tab.dataset.studioGuideCategory === studioGuideCategory);
+            });
+            renderStudioGuideCards();
+        });
+    });
+}
+
+function renderStudioGuideCards() {
+    const stage = document.getElementById('studioGalleryStage');
+    if (!stage) return;
+    const items = (studioGuidesCache || []).filter(article => article.category === studioGuideCategory);
+    if (!items.length) {
+        stage.innerHTML = `<div class="studio-guide-empty">
+            <strong>${studioGuideCategory === 'faq' ? '暂无常见问题' : '暂无上手指南'}</strong>
+            <span>管理员发布内容后会显示在这里</span>
+        </div>`;
+        return;
+    }
+    stage.innerHTML = `<div class="studio-guide-grid">${items.map((article, index) => {
+        const title = studioGuideEsc(article.title || '未命名文章');
+        const subtitle = studioGuideEsc(article.subtitle || (article.category === 'faq' ? '常见问题说明' : '快速了解使用流程'));
+        const cover = article.cover?.url
+            ? `<img src="${studioGuideEsc(article.cover.url)}" alt="" loading="lazy">`
+            : `<div class="studio-guide-cover-placeholder"><span>${article.category === 'faq' ? 'FAQ' : String(index + 1).padStart(2, '0')}</span></div>`;
+        return `<button type="button" class="studio-guide-card sf-fade-in" data-studio-guide-id="${studioGuideEsc(article.id)}">
+            <div class="studio-guide-cover">${cover}<span>${article.category === 'faq' ? '常见问题' : '上手指南'}</span></div>
+            <div class="studio-guide-card-copy"><strong>${title}</strong><small>${subtitle}</small></div>
+        </button>`;
+    }).join('')}</div>`;
+    stage.querySelectorAll('[data-studio-guide-id]').forEach(button => {
+        button.addEventListener('click', () => openStudioGuide(button.dataset.studioGuideId));
+    });
+}
+
+function openStudioGuide(id) {
+    const article = (studioGuidesCache || []).find(item => item.id === id);
+    const stage = document.getElementById('studioGalleryStage');
+    if (!article || !stage) return;
+    const categoryName = article.category === 'faq' ? '常见问题' : '上手指南';
+    const updatedDate = article.updatedAt ? new Date(article.updatedAt).toLocaleDateString('zh-CN') : '';
+    stage.innerHTML = `<article class="studio-guide-article">
+        <button type="button" class="studio-guide-back" id="studioGuideBack">← 返回${categoryName}</button>
+        <div class="studio-guide-breadcrumb">使用帮助 / ${categoryName}</div>
+        <h1>${studioGuideEsc(article.title || '未命名文章')}</h1>
+        ${article.subtitle ? `<p class="studio-guide-article-subtitle">${studioGuideEsc(article.subtitle)}</p>` : ''}
+        ${updatedDate ? `<div class="studio-guide-date">更新于 ${studioGuideEsc(updatedDate)}</div>` : ''}
+        <div class="studio-guide-content">${(article.blocks || []).map(renderStudioGuideBlock).join('')}</div>
+    </article>`;
+    stage.querySelector('#studioGuideBack')?.addEventListener('click', renderStudioGuideCards);
+    stage.scrollTop = 0;
+}
+
+function renderStudioGuideBlock(block) {
+    if (block?.type === 'image' && block.url) {
+        return `<figure class="studio-guide-content-image"><img src="${studioGuideEsc(block.url)}" alt="${studioGuideEsc(block.alt || block.name || '')}" loading="lazy">${block.alt ? `<figcaption>${studioGuideEsc(block.alt)}</figcaption>` : ''}</figure>`;
+    }
+    if (!['heading', 'subheading', 'paragraph'].includes(block?.type) || !block.text) return '';
+    const tag = block.type === 'heading' ? 'h2' : block.type === 'subheading' ? 'h3' : 'p';
+    const fontSize = Math.min(48, Math.max(12, Number(block.fontSize) || (block.type === 'heading' ? 30 : block.type === 'subheading' ? 22 : 16)));
+    return `<${tag} class="studio-guide-content-${block.type}" style="font-size:${fontSize}px">${studioGuideEsc(block.text)}</${tag}>`;
+}
+
+function studioGuideEsc(value) {
+    return String(value || '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 }
 
 function appendStudioGalleryPage() {

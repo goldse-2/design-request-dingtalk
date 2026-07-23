@@ -231,7 +231,7 @@ function renderTask(task) {
     if ((task.status === 'done' || task.mode === 'sheet_self') && task.resultKeys && task.resultKeys.length) {
         const label = document.createElement('div');
         label.style.cssText = 'font-size:0.82rem;color:#16a34a;font-weight:600;margin:14px 0 6px';
-        label.textContent = task.status === 'done' ? '✓ 成品图（点击下载）' : `✓ 已完成 ${task.resultKeys.length} 张（点击下载）`;
+        label.textContent = task.status === 'done' ? '✓ 成品文件（点击下载）' : `✓ 已完成 ${task.resultKeys.length} 个文件（点击下载）`;
         card.appendChild(label);
         card.appendChild(buildThumbRow(task.resultKeys, true));
     }
@@ -245,10 +245,13 @@ function buildThumbRow(keys, downloadable) {
     keys.forEach(k => {
         const cell = document.createElement('div');
         cell.className = 'lib-card';
-        const dl = downloadable ? `?dl=1` : '';
+        const isAi = /\.ai$/i.test(String(k.name || k.key || ''));
+        const preview = isAi
+            ? '<div style="width:100%;height:100%;display:grid;place-items:center;background:#fff7ed;color:#9a3412;font-size:1.1rem;font-weight:900">AI</div>'
+            : `<img src="/api/library-file/${encodeURIComponent(k.key)}" alt="${esc(k.name)}" loading="lazy">`;
         cell.innerHTML = `
             <div class="lib-card-img-wrap">
-                <img src="/api/library-file/${encodeURIComponent(k.key)}" alt="${esc(k.name)}" loading="lazy">
+                ${preview}
             </div>
             <div class="lib-card-body">
                 <div class="lib-card-name">${esc(k.name)}</div>

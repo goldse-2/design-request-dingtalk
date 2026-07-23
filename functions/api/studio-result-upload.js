@@ -32,7 +32,8 @@ export async function onRequestPut(context) {
         mode: taskResult.task.mode || '',
         cutoutMode: taskResult.task.cutoutMode === 'vector' ? 'vector' : 'normal',
         outputFormat: cutoutOutputFormat(taskResult.task),
-        aPlusDouble: taskResult.task.aPlusDouble === true
+        aPlusDouble: taskResult.task.aPlusDouble === true,
+        libraryReplacement: Boolean(ensureSilentLibraryReplacement(taskResult.task))
     }, {
         headers: { 'Cache-Control': 'no-store' }
     });
@@ -79,9 +80,26 @@ export async function onRequestPost(context) {
         return Response.json({ ok: false, error: 'A+ 连续双图需要上传拆分后的上下两张图片' }, { status: 400 });
     }
 
+    const libraryReplacement = ensureSilentLibraryReplacement(task);
     const preparedFiles = [];
     const outputFormat = cutoutOutputFormat(task);
     for (const file of files) {
+        const sourceExtension = resultExtension(file);
+        if (!sourceExtension) {
+            return Response.json({ ok: false, error: `不支持的成品格式：${file.name || '未命名文件'}` }, { status: 400 });
+        }
+        if (task.aPlusDouble === true && sourceExtension === 'ai') {
+            return Response.json({ ok: false, error: 'A+ 连续双图需要上传可拆分的图片，不能上传 AI 文件' }, { status: 400 });
+        }
+        if (libraryReplacement && sourceExtension === 'ai') {
+            return Response.json({ ok: false, error: '资料库替换任务需要上传图片，不能上传 AI 文件' }, { status: 400 });
+        }
+        if (task.mode === 'cutout' && task.cutoutMode === 'vector' && sourceExtension !== 'ai') {
+            return Response.json({ ok: false, error: '矢量图白底任务需要上传 Adobe Illustrator（.ai）文件' }, { status: 400 });
+        }
+        if (task.mode === 'cutout' && task.cutoutMode !== 'vector' && sourceExtension === 'ai') {
+            return Response.json({ ok: false, error: '普通白底抠图任务需要上传 PNG 或 JPG 图片' }, { status: 400 });
+        }
         const bytes = await file.arrayBuffer();
         if (task.mode === 'cutout' && outputFormat === 'png' && !hasPngSignature(bytes)) {
             return Response.json({ ok: false, error: '当前白底抠图任务需要上传 PNG 文件' }, { status: 400 });
@@ -89,10 +107,9 @@ export async function onRequestPost(context) {
         if (task.mode === 'cutout' && outputFormat === 'jpg' && !hasJpegSignature(bytes)) {
             return Response.json({ ok: false, error: '当前白底抠图任务需要上传 JPG 文件' }, { status: 400 });
         }
-        preparedFiles.push({ file, bytes });
+        preparedFiles.push({ file, bytes, sourceExtension });
     }
 
-    const libraryReplacement = ensureSilentLibraryReplacement(task);
     if (libraryReplacement && preparedFiles.length !== 1) {
         return Response.json({ ok: false, error: '资料库替换任务只能上传一张成品图' }, { status: 400 });
     }
@@ -108,8 +125,8 @@ export async function onRequestPost(context) {
     } else {
         const baseName = resultBaseName(task);
         for (let i = 0; i < preparedFiles.length; i++) {
-            const { file, bytes } = preparedFiles[i];
-            const ext = task.mode === 'cutout' ? outputFormat : resultExtension(file);
+            const { file, bytes, sourceExtension } = preparedFiles[i];
+            const ext = task.mode === 'cutout' ? outputFormat : sourceExtension;
             const suffix = task.aPlusDouble === true
                 ? (i === 0 ? '-上半部分' : '-下半部分')
                 : (preparedFiles.length > 1 ? `-${i + 1}` : '');
@@ -117,7 +134,7 @@ export async function onRequestPost(context) {
             const key = `studio-results/${taskId}/upload-${uploadId}-${i + 1}-${name}`;
             try {
                 await putResultWithRetry(env.SUBMISSION_FILES, key, bytes, {
-                    httpMetadata: { contentType: task.mode === 'cutout' ? (outputFormat === 'jpg' ? 'image/jpeg' : 'image/png') : (file.type || guessContentType(name)) }
+                    httpMetadata: { contentType: task.mode === 'cutout' ? guessContentType(name) : (file.type || guessContentType(name)) }
                 });
             } catch (error) {
                 console.error('Studio result R2 upload failed:', taskId, error.message);
@@ -264,6 +281,7 @@ function hasJpegSignature(bytes) {
 
 function cutoutOutputFormat(task) {
     if (task?.mode !== 'cutout') return '';
+    if (task.cutoutMode === 'vector') return 'ai';
     return task.cutoutOutputFormat === 'jpg' ? 'jpg' : 'png';
 }
 
@@ -283,14 +301,17 @@ function resultBaseName(task) {
 function resultExtension(file) {
     const fromName = String(file?.name || '').match(/\.([a-z0-9]{2,5})$/i)?.[1]?.toLowerCase();
     if (fromName === 'jpeg') return 'jpg';
-    if (['jpg', 'png', 'webp', 'gif'].includes(fromName)) return fromName;
-    const mimeMap = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' };
-    return mimeMap[file?.type] || 'jpg';
+    if (['jpg', 'png', 'webp', 'gif', 'ai'].includes(fromName)) return fromName;
+    const mimeMap = {
+        'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif',
+        'application/postscript': 'ai', 'application/illustrator': 'ai', 'application/vnd.adobe.illustrator': 'ai'
+    };
+    return mimeMap[String(file?.type || '').toLowerCase()] || '';
 }
 
 function guessContentType(name) {
     const ext = name.split('.').pop().toLowerCase();
-    const map = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif' };
+    const map = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', ai: 'application/postscript' };
     return map[ext] || 'application/octet-stream';
 }
 
@@ -298,7 +319,7 @@ async function notifyUserDone(env, task, origin) {
     const token = await getAccessToken(env);
     const staffId = await getStaffId(token, task.submitter.unionId);
     if (!staffId) throw new Error('No staff id');
-    const content = `图片制作完成 ✓\n\n请到网站查看下载：${origin}/studio-tasks.html`;
+    const content = `成品制作完成 ✓\n\n请到网站查看下载：${origin}/studio-tasks.html`;
     const response = await fetch('https://api.dingtalk.com/v1.0/robot/oToMessages/batchSend', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-acs-dingtalk-access-token': token },
