@@ -43,29 +43,26 @@ const DEFAULT_ARTICLES = [
         ]
     },
     {
-        id: 'guide-default-queue-time', category: 'faq', title: '为什么任务显示排队中？',
-        subtitle: '了解处理顺序、预计时间和任务状态。', published: true, cover: null,
+        id: 'guide-default-simple-prompt-case', category: 'faq', title: '错误案例：提示词过于简单',
+        subtitle: '提示词描述过于简单，容易导致生成结果与预期不符。', published: true,
+        cover: {
+            key: 'studio-guides/d497086a-9f23-4915-adb3-f8586655b08a.png',
+            url: '/api/library-file/studio-guides%2Fd497086a-9f23-4915-adb3-f8586655b08a.png',
+            name: '错误案例教学说明图.png'
+        },
         createdAt: '2026-07-23T00:00:00.000Z', updatedAt: '2026-07-23T00:00:00.000Z',
         blocks: [
-            { type: 'heading', text: '同一时间只处理一个任务', fontSize: 30 },
-            { type: 'paragraph', text: 'RPA 电脑会按队列逐个执行任务。页面显示“排队中”表示任务已经提交成功，正在等待前面的任务完成，并不是提交失败。', fontSize: 16 },
-            { type: 'subheading', text: '大致处理时间', fontSize: 22 },
-            { type: 'paragraph', text: '自由模式通常每个任务约 8 分钟，图生图约 15 分钟，精修图片约 20 分钟。实际时间会受图片数量和任务复杂度影响。', fontSize: 16 },
-            { type: 'subheading', text: '什么时候需要联系管理员', fontSize: 22 },
-            { type: 'paragraph', text: '如果任务长时间停在同一个环节，或页面明确显示连续处理失败，可以通过“问题反馈/协助”提交任务 ID 和截图。', fontSize: 16 }
-        ]
-    },
-    {
-        id: 'guide-default-upload-failed', category: 'faq', title: '图片或成品上传失败怎么办？',
-        subtitle: '按顺序检查格式、大小、网络和任务状态。', published: true, cover: null,
-        createdAt: '2026-07-23T00:00:00.000Z', updatedAt: '2026-07-23T00:00:00.000Z',
-        blocks: [
-            { type: 'heading', text: '先不要重复提交任务', fontSize: 30 },
-            { type: 'paragraph', text: '看到上传失败时先保留当前页面，确认网络稳定后重新上传同一个文件。系统会识别同一批上传，避免网络重试造成重复成品。', fontSize: 16 },
-            { type: 'subheading', text: '检查文件要求', fontSize: 22 },
-            { type: 'paragraph', text: '前台图片请遵守页面显示的单张大小限制。成品上传平台支持常见图片格式和 Adobe Illustrator 的 AI 文件；A+ 拆分和普通白底抠图等需要读取像素的任务仍应上传图片文件，矢量图白底任务则上传 AI 文件。', fontSize: 16 },
-            { type: 'subheading', text: '仍然失败时', fontSize: 22 },
-            { type: 'paragraph', text: '请在问题反馈中选择“需要协助”，上传失败截图并填写任务 ID。不要新建相同任务，管理员可以从原任务继续处理。', fontSize: 16 }
+            { type: 'heading', text: '图片修改前先明确修改要求', fontSize: 30 },
+            { type: 'paragraph', text: '不要只写“把这个图矫正”这类过于简单、模糊的提示词。图片 AI 无法准确判断需要调整的角度、透视关系和最终效果，容易生成错误结果。', fontSize: 16 },
+            {
+                type: 'image',
+                key: 'studio-guides/d497086a-9f23-4915-adb3-f8586655b08a.png',
+                url: '/api/library-file/studio-guides%2Fd497086a-9f23-4915-adb3-f8586655b08a.png',
+                name: '错误案例教学说明图.png',
+                alt: '提示词过于简单的错误案例与正确效果对比'
+            },
+            { type: 'subheading', text: '正确做法', fontSize: 22 },
+            { type: 'paragraph', text: '先梳理清楚需要修改的内容，明确角度、透视关系、最终效果和必须保留的细节，再提交给图片 AI。也可以先使用网站提供的 AI 优化功能完善提示词。', fontSize: 16 }
         ]
     }
 ];
