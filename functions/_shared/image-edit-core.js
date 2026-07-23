@@ -175,9 +175,6 @@ async function callResponsesApi({ apiBase, apiKey, model, actorAuthorization, pr
         };
         if (toolMode === 'high') {
             imageTool.quality = 'high';
-            imageTool.input_fidelity = 'high';
-            imageTool.output_compression = 100;
-            imageTool.size = 'auto';
         }
         body.tools = [imageTool];
     }
