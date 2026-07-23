@@ -2189,7 +2189,7 @@ function renderBackgroundImageProgress(task) {
     const stateText = task.status === 'done'
         ? '处理完成'
         : modelUnavailable
-            ? '图片 API 未开通 gpt-image-2，需更换密钥后继续'
+            ? '图片 API 当前模型不可用，请检查模型或密钥后继续'
         : failed
             ? 'AI 服务暂时连接失败，等待自动重试' + retryText
             : progress.completed > 0

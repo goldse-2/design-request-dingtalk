@@ -461,8 +461,8 @@ const PROGRAM_FORM = `
                 </div>
             </div>
             <div class="sf-section" id="progProductSection">
-                <div class="sf-label">白底产品图 <span class="sf-req">*</span> <span class="sf-sub">(2张)</span></div>
-                <div class="program-product-hint">有不同角度时，请上传两个不同角度；没有其他角度时，请将同一张图片上传两次。</div>
+                <div class="sf-label">白底产品图 <span class="sf-sub">(最多2张，可不上传)</span></div>
+                <div class="program-product-hint">请上传多个角度参考图</div>
                 <div class="sf-upload-row">
                     <div class="sf-upload-box" id="progProductDrop" tabindex="-1">
                         <input type="file" id="progProductInput" accept="image/*" multiple hidden>
@@ -2323,7 +2323,7 @@ function renderSheetSelfSlot(slot, slotIndex) {
     const reference = renderSheetSelfImage(slot.referenceKey, slotIndex, 'reference', 0, isAPlus ? 'A+ 上下双图参考' : '竞品图片', isAPlus ? 'a_plus' : 'reference');
     const products = slot.photographer || noProductImage
         ? ''
-        : [0, 1].map(index => renderSheetSelfImage(slot.productKeys[index], slotIndex, 'product', index, `白底产品图 ${index + 1}`)).join('');
+        : renderSheetSelfProductImages(slot, slotIndex);
     const uploadDisabled = slot.uploading ? ' disabled' : '';
     const copyDisabled = !slot.referenceKey?.key || slot.copyAiBusy ? ' disabled' : '';
     const copyStatus = slot.copyAiStatus || (slot.referenceKey?.key ? '竞品图片已上传，可以生成' : '请先上传竞品图片');
@@ -2355,7 +2355,7 @@ function renderSheetSelfSlot(slot, slotIndex) {
             <div class="sheet-self-field"><label>其他文案 <span class="sheet-self-field-note">可选，中文自动翻译成英语</span></label><textarea data-sheet-field="otherText" data-slot-index="${slotIndex}" maxlength="300" placeholder="可选，多个卖点可用分号分隔">${sheetSelfEsc(slot.otherText)}</textarea></div>
         </div>
         <div class="sheet-self-media">
-            <div class="sheet-self-images${noProductImage ? ' is-no-product' : (slot.photographer ? ' is-photographer' : '')}">
+            <div class="sheet-self-images${noProductImage ? ' is-no-product' : (slot.photographer ? ' is-photographer' : ' is-product-upload')}">
                 ${products}
                 ${!noProductImage && slot.photographer ? renderSheetSelfPhotographyBrief(slot, slotIndex) : ''}
             </div>
@@ -2366,7 +2366,7 @@ function renderSheetSelfSlot(slot, slotIndex) {
         </div>
         <div class="sheet-self-setting">
             <div class="sheet-self-photo-row">
-                <div class="sheet-self-photo-copy"><strong>由设计师添加图片</strong><small>开启后，此图片位暂时不需要用户上传两张白底图</small></div>
+                <div class="sheet-self-photo-copy"><strong>由设计师添加图片</strong><small>开启后，此图片位暂时不需要用户上传白底图</small></div>
                 <label class="sheet-self-switch" title="由摄影师提供两张拍摄原图"><input type="checkbox" data-sheet-photographer data-slot-index="${slotIndex}"${slot.photographer ? ' checked' : ''}><span></span></label>
             </div>
             <div class="sheet-self-photo-row">
@@ -2379,6 +2379,20 @@ function renderSheetSelfSlot(slot, slotIndex) {
             ${slotStatus}
         </div>
     </section>`;
+}
+
+function renderSheetSelfProductImages(slot, slotIndex) {
+    const productKeys = Array.isArray(slot.productKeys) ? slot.productKeys.slice(0, 2) : [];
+    const previews = productKeys.map((file, index) =>
+        renderSheetSelfImage(file, slotIndex, 'product', index, `白底产品图 ${index + 1}`)
+    ).join('');
+    const uploadEntry = productKeys.length < 2
+        ? renderSheetSelfImage(null, slotIndex, 'product', productKeys.length, productKeys.length ? '继续添加角度图' : '上传白底产品图')
+        : '';
+    return `<div class="sheet-self-product-upload">
+        <div class="sheet-self-product-hint">请上传多个角度参考图</div>
+        <div class="sheet-self-product-list${productKeys.length ? '' : ' is-empty'}">${previews}${uploadEntry}</div>
+    </div>`;
 }
 
 function renderSheetSelfPhotographyBrief(slot, slotIndex) {
@@ -3004,13 +3018,13 @@ async function submitSheetSelf() {
         return;
     }
     const invalidSlot = activeSlots.find(slot => !slot.referenceKey?.key
-        || (!slot.noProductImage && !slot.photographer && slot.productKeys.length !== 2));
+        || (!slot.noProductImage && !slot.photographer && slot.productKeys.length < 1));
     if (invalidSlot) {
         const invalidIndex = invalidSlot.index;
         const slot = invalidSlot;
         const message = !slot.referenceKey?.key
                 ? (slot.aPlusDouble ? `第 ${invalidIndex + 1} 张请上传 A+ 上下两张 1464 × 600 图片` : `第 ${invalidIndex + 1} 张请上传竞品图片`)
-                : `第 ${invalidIndex + 1} 张请上传两张白底产品图，或开启“无需上传产品”/“由设计师添加图片”`;
+                : `第 ${invalidIndex + 1} 张请至少上传一张白底产品图，或开启“无需上传产品”/“由设计师添加图片”`;
         showStudioFieldError(status, message, document.querySelector(`[data-sheet-slot="${invalidIndex}"]`));
         return;
     }
@@ -5522,6 +5536,7 @@ async function submitTask(mode, payload, statusEl, btn, onSuccess) {
         if (payload.cutoutMode) submitPayload.cutoutMode = payload.cutoutMode;
         if (payload.aPlusDouble !== undefined) submitPayload.aPlusDouble = payload.aPlusDouble === true;
         if (payload.photographerDecision !== undefined) submitPayload.photographerDecision = payload.photographerDecision === true;
+        if (payload.noProductImage !== undefined) submitPayload.noProductImage = payload.noProductImage === true;
         if (payload.photographyNote !== undefined) submitPayload.photographyNote = payload.photographyNote;
         if (photographyExampleKeys.length) submitPayload.photographyExampleKey = photographyExampleKeys[0];
 
@@ -6074,12 +6089,12 @@ function submitProgram() {
     const size = aPlusDouble ? A_PLUS_DOUBLE_SIZE : (sizeEl ? sizeEl.value : '');
     const status = document.getElementById('progStatus');
     const photographerDecision = inlineShootRequestState.program.enabled === true;
+    const noProductImage = !photographerDecision && uploads.progProduct.length === 0;
     const photographyNote = document.getElementById('programPhotographerNote')?.value.trim() || '';
-    if (!productName) { showStudioFieldError(status, '请填写产品名称', document.getElementById('progProductName')); return; }
+    if (!noProductImage && !productName) { showStudioFieldError(status, '请填写产品名称', document.getElementById('progProductName')); return; }
     if (!size) { showStudioFieldError(status, '请选择或填写尺寸', document.getElementById('progSizeSelectPicker')); return; }
     if (uploads.progRef.length !== 1) { showStudioFieldError(status, '请上传1张竞品图片', document.getElementById('progRefDrop')); return; }
-    if (!photographerDecision && uploads.progProduct.length !== 2) { showStudioFieldError(status, '请上传2张白底产品图（当前' + uploads.progProduct.length + '张）', document.getElementById('progProductDrop')); return; }
-    submitTask('program', { productName, title, subtitle, otherText, size, aPlusDouble, analyzePrompt: ANALYZE_PROMPT, photographerDecision, photographyNote, photographyExampleImage: inlineShootRequestState.program.image, refImages: uploads.progRef, productImages: photographerDecision ? [] : uploads.progProduct }, status, document.getElementById('progSubmit'), showSuccessModal);
+    submitTask('program', { productName: noProductImage ? '-' : productName, title, subtitle, otherText, size, aPlusDouble, analyzePrompt: ANALYZE_PROMPT, photographerDecision, noProductImage, photographyNote, photographyExampleImage: inlineShootRequestState.program.image, refImages: uploads.progRef, productImages: photographerDecision ? [] : uploads.progProduct }, status, document.getElementById('progSubmit'), showSuccessModal);
 }
 
 function submitRetouch() {

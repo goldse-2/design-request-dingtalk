@@ -1,5 +1,5 @@
 const DEFAULT_API_BASE = 'https://api.apikey.fun/v1';
-const DEFAULT_MODEL = 'gpt-image-2';
+const DEFAULT_MODEL = 'gpt-5.6-sol';
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
 
 export async function recolorImage({ env, scope, colorName, colorHex, mimeType, base64 }) {

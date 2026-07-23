@@ -1,6 +1,6 @@
 const DEFAULT_API_BASE = 'https://api.apikey.fun/v1';
 const DEFAULT_FALLBACK_API_BASE = 'https://jojocode.com';
-const DEFAULT_MODEL = 'gpt-image-2';
+const DEFAULT_MODEL = 'gpt-5.6-sol';
 const modelAvailabilityCache = new Map();
 
 export async function editImageWithPrompt({ env, prompt, mimeType, base64, maxBytes = 20 * 1024 * 1024 }) {

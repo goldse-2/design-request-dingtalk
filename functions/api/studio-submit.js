@@ -65,6 +65,10 @@ export async function onRequestPost(context) {
     const taskId = clientRequestId ? `studio-${clientRequestId}` : 'studio-' + crypto.randomUUID();
     const timestamp = Date.now();
     const waitingPhotography = photographerDecision === true;
+    const normalizedProductKeys = Array.isArray(productKeys)
+        ? (mode === 'program' ? productKeys.slice(0, 2) : productKeys)
+        : [];
+    const noProductImage = mode === 'program' && !waitingPhotography && normalizedProductKeys.length === 0;
 
     if (clientRequestId) {
         const existingRaw = await env.SUBMISSIONS.get(taskId).catch(() => null);
@@ -128,13 +132,14 @@ export async function onRequestPost(context) {
         cutoutMode: mode === 'cutout' && cutoutMode === 'vector' ? 'vector' : (mode === 'cutout' ? 'normal' : ''),
         cutoutOutputFormat: mode === 'cutout' && cutoutOutputFormat === 'jpg' ? 'jpg' : (mode === 'cutout' ? 'png' : ''),
         aPlusDouble: aPlusDouble === true,
+        noProductImage,
         photographerDecision: waitingPhotography,
         photographyExampleKey: waitingPhotography ? normalizePhotographyExample(photographyExampleKey) : null,
         photographyNote: waitingPhotography ? String(photographyNote || '').trim().slice(0, 300) : '',
         photographyRequestedAt: waitingPhotography ? new Date(timestamp).toISOString() : '',
         variantNextIndex: 0,
         translationNextIndex: 0,
-        productKeys: productKeys || [],
+        productKeys: normalizedProductKeys,
         refKeys: refKeys || [],
         modelKeys: modelKeys || [],
         resultKeys: [],

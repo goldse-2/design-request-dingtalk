@@ -432,6 +432,11 @@
         .sheet-self-media { display:flex; flex-direction:column; min-width:0; }
         .sheet-self-images { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; }
         .sheet-self-images.is-photographer { grid-template-columns:minmax(0,1fr); }
+        .sheet-self-images.is-product-upload { display:block; }
+        .sheet-self-product-upload { display:grid; gap:6px; min-width:0; }
+        .sheet-self-product-hint { color:#6b7280; font-size:.65rem; line-height:1.4; }
+        .sheet-self-product-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; min-width:0; }
+        .sheet-self-product-list.is-empty { grid-template-columns:minmax(0,1fr); }
         .sheet-self-a-plus-note { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:7px; color:#047857; font-size:.65rem; line-height:1.4; }
         .sheet-self-a-plus-note button { flex-shrink:0; padding:3px 6px; border:1px solid #a7f3d0; border-radius:5px; background:#ecfdf5; color:#047857; font-size:.63rem; font-weight:800; cursor:pointer; }
         .sheet-self-image-slot { position:relative; min-width:0; height:112px; border:1px dashed #cbd5e1; border-radius:6px; overflow:hidden; background:#f8fafc; }
@@ -781,6 +786,6 @@
     帮助中心
 </button>
 
-    <script src="studio.js?v=20260723-designer-image-order"></script>
+    <script src="studio.js?v=20260723-product-image-entry"></script>
 </body>
 </html>
