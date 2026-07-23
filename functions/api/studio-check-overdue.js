@@ -865,7 +865,12 @@ async function storeTranslationResult(env, task, image, sourceName, index, targe
     await env.SUBMISSION_FILES.put(key, image.bytes, {
         httpMetadata: { contentType: 'image/jpeg' }
     });
-    return { key, name: `${safeName}-${language}-${index + 1}-${target.width}x${target.height}.jpg` };
+    return {
+        key,
+        name: `${safeName}-${language}-${index + 1}-${target.width}x${target.height}.jpg`,
+        width: target.width,
+        height: target.height
+    };
 }
 
 async function storeWatermarkResult(env, task, result, sourceName) {

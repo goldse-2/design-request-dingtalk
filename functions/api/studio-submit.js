@@ -296,7 +296,13 @@ function isValidTranslationDimensions(value, expectedLength) {
 }
 
 function normalizeTranslationDimensions(value) {
-    return value.map(item => ({ width: Number(item.width), height: Number(item.height) }));
+    return value.map(item => {
+        const width = Number(item.width);
+        const height = Number(item.height);
+        return width === 1472 && height === 608
+            ? { width: 1464, height: 600 }
+            : { width, height };
+    });
 }
 
 function translationLanguageName(value) {

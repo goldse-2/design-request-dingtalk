@@ -12,7 +12,7 @@
     const storedName = decodeURIComponent(key.split('/').pop());
     const fileName = sanitizeFileName(url.searchParams.get('name') || storedName);
     const ext = storedName.split('.').pop().toLowerCase();
-    const mimeMap = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', pdf: 'application/pdf', zip: 'application/zip', ai: 'application/postscript' };
+    const mimeMap = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', svg: 'image/svg+xml', pdf: 'application/pdf', zip: 'application/zip', ai: 'application/postscript' };
     const contentType = stored.contentType || mimeMap[ext] || 'application/octet-stream';
 
     const headers = {
@@ -20,6 +20,7 @@
         'Cache-Control': 'public, max-age=3600',
         'X-Content-Type-Options': 'nosniff'
     };
+    if (ext === 'svg') headers['Content-Security-Policy'] = "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:";
     if (isDownload) {
         // RFC 5987: filename*=UTF-8''<percent-encoded> for non-ASCII filenames
         const asciiName = fileName.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');

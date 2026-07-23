@@ -19,17 +19,21 @@ export async function onRequestGet(context) {
     const fileName = sanitizeFileName(requestedName || storedName);
     const dispositionType = url.searchParams.get('download') === '1' ? 'attachment' : 'inline';
     const ext = fileName.split('.').pop().toLowerCase();
-    const mimeMap = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif' };
+    const mimeMap = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', svg: 'image/svg+xml' };
     const contentType = obj.httpMetadata?.contentType || mimeMap[ext] || 'image/jpeg';
 
-    return new Response(obj.body, {
-        headers: {
+    const headers = {
             'Content-Type': contentType,
             'Cache-Control': 'public, max-age=86400',
             'Access-Control-Allow-Origin': '*',
             'Content-Disposition': contentDisposition(dispositionType, fileName)
-        }
-    });
+    };
+    if (ext === 'svg') {
+        headers['X-Content-Type-Options'] = 'nosniff';
+        headers['Content-Security-Policy'] = "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:";
+    }
+
+    return new Response(obj.body, { headers });
 }
 
 function sanitizeFileName(name) {

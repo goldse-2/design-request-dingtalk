@@ -25,9 +25,9 @@ function renderUploadProgress(title, percent, detail = '', countText = '', state
 }
 
 function addFiles(files) {
-    const accepted = Array.from(files).filter(file => file.type.startsWith('image/') || isAdobeAiFile(file));
+    const accepted = Array.from(files).filter(file => file.type.startsWith('image/') || isVectorFile(file));
     if (!accepted.length) {
-        setStatus('请选择图片或 Adobe Illustrator（.ai）文件', false);
+        setStatus('请选择图片、SVG 或 Adobe Illustrator（.ai）文件', false);
         return;
     }
     pendingFiles.push(...accepted);
@@ -41,11 +41,13 @@ function renderPreview() {
         const item = document.createElement('div');
         item.className = 'rpa-preview-item';
         const isAi = isAdobeAiFile(file);
+        const isSvg = isSvgFile(file);
         const url = isAi ? '' : URL.createObjectURL(file);
         const preview = isAi
             ? '<div aria-hidden="true" style="width:58px;height:58px;border-radius:9px;background:#fff7ed;color:#9a3412;display:grid;place-items:center;font-weight:900;font-size:1rem;border:1px solid #fed7aa">AI</div>'
             : `<img src="${url}" alt="">`;
-        item.innerHTML = `${preview}<div><strong>${escapeHtml(file.name)}</strong><small>${isAi ? 'Adobe Illustrator · ' : ''}${formatSize(file.size)}</small></div><button type="button">×</button>`;
+        const formatLabel = isAi ? 'Adobe Illustrator · ' : isSvg ? 'SVG 矢量图 · ' : '';
+        item.innerHTML = `${preview}<div><strong>${escapeHtml(file.name)}</strong><small>${formatLabel}${formatSize(file.size)}</small></div><button type="button">×</button>`;
         item.querySelector('button').onclick = () => {
             pendingFiles.splice(idx, 1);
             if (url) URL.revokeObjectURL(url);
@@ -156,6 +158,14 @@ function isAdobeAiFile(file) {
     return /\.ai$/i.test(file?.name || '') || ['application/postscript', 'application/illustrator', 'application/vnd.adobe.illustrator'].includes(type);
 }
 
+function isSvgFile(file) {
+    return /\.svg$/i.test(file?.name || '') || String(file?.type || '').toLowerCase() === 'image/svg+xml';
+}
+
+function isVectorFile(file) {
+    return isAdobeAiFile(file) || isSvgFile(file);
+}
+
 async function convertImageFile(file, mimeType, extension, fillWhite) {
     const dataUrl = await readFileAsDataUrl(file);
     const image = await loadImage(dataUrl);
@@ -175,15 +185,47 @@ async function convertImageFile(file, mimeType, extension, fillWhite) {
 }
 
 async function normalizeUploadFile(file, taskInfo) {
-    if (isAdobeAiFile(file)) return file;
+    if (isVectorFile(file)) return file;
+    let normalized = file;
     if (taskInfo.mode === 'cutout') {
         if (taskInfo.outputFormat === 'jpg') {
-            return isJpegFile(file) ? file : convertImageFile(file, 'image/jpeg', 'jpg', true);
+            normalized = isJpegFile(file) ? file : await convertImageFile(file, 'image/jpeg', 'jpg', true);
+        } else {
+            normalized = isPngFile(file) ? file : await convertImageFile(file, 'image/png', 'png', false);
         }
-        return isPngFile(file) ? file : convertImageFile(file, 'image/png', 'png', false);
+    } else if (isPngFile(file)) {
+        normalized = await convertImageFile(file, 'image/jpeg', 'jpg', true);
     }
-    if (!isPngFile(file)) return file;
-    return convertImageFile(file, 'image/jpeg', 'jpg', true);
+    return resizeLegacyAPlusFile(normalized);
+}
+
+async function resizeLegacyAPlusFile(file) {
+    if (/\.gif$/i.test(file.name || '') || file.type === 'image/gif') return file;
+    const dataUrl = await readFileAsDataUrl(file);
+    const image = await loadImage(dataUrl);
+    const width = image.naturalWidth || image.width;
+    const height = image.naturalHeight || image.height;
+    if (width !== 1472 || height !== 608) return file;
+
+    const mimeType = isPngFile(file)
+        ? 'image/png'
+        : file.type === 'image/webp' || /\.webp$/i.test(file.name || '') ? 'image/webp' : 'image/jpeg';
+    const extension = mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg';
+    const canvas = document.createElement('canvas');
+    canvas.width = 1464;
+    canvas.height = 600;
+    const context = canvas.getContext('2d');
+    if (mimeType === 'image/jpeg') {
+        context.fillStyle = '#ffffff';
+        context.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = 'high';
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, mimeType, mimeType === 'image/jpeg' ? 0.94 : undefined));
+    if (!blob) throw new Error(`图片转为 1464 × 600 失败：${file.name}`);
+    const baseName = String(file.name || 'result').replace(/\.[^.]+$/, '') || 'result';
+    return new File([blob], `${baseName}.${extension}`, { type: mimeType, lastModified: Date.now() });
 }
 
 async function splitAPlusDoubleFile(file) {
@@ -270,20 +312,20 @@ uploadBtn.addEventListener('click', async () => {
 
     try {
         const taskInfo = await getUploadTaskMode(taskId, password);
-        const containsAi = pendingFiles.some(isAdobeAiFile);
-        if (taskInfo.aPlusDouble && containsAi) throw new Error('A+ 连续双图需要上传可拆分的图片，不能上传 AI 文件');
-        if (taskInfo.libraryReplacement && containsAi) throw new Error('资料库替换任务需要上传图片，不能上传 AI 文件');
-        if (taskInfo.mode === 'cutout' && taskInfo.cutoutMode === 'vector' && pendingFiles.some(file => !isAdobeAiFile(file))) {
-            throw new Error('矢量图白底任务请上传 Adobe Illustrator（.ai）文件');
+        const containsVector = pendingFiles.some(isVectorFile);
+        if (taskInfo.aPlusDouble && containsVector) throw new Error('A+ 连续双图需要上传可拆分的位图，不能上传 AI 或 SVG 文件');
+        if (taskInfo.libraryReplacement && containsVector) throw new Error('资料库替换任务需要上传位图，不能上传 AI 或 SVG 文件');
+        if (taskInfo.mode === 'cutout' && taskInfo.cutoutMode === 'vector' && pendingFiles.some(file => !isVectorFile(file))) {
+            throw new Error('矢量图白底任务请上传 Adobe Illustrator（.ai）或 SVG 文件');
         }
-        if (taskInfo.mode === 'cutout' && taskInfo.cutoutMode !== 'vector' && containsAi) {
-            throw new Error('普通白底抠图任务需要上传 PNG 或 JPG 图片');
+        if (taskInfo.mode === 'cutout' && taskInfo.cutoutMode !== 'vector' && containsVector) {
+            throw new Error('普通白底抠图任务需要上传 PNG 或 JPG 位图');
         }
         if (taskInfo.aPlusDouble) {
             if (pendingFiles.length !== 1) throw new Error('A+ 连续双图任务请只上传一张完整成品图');
             renderUploadProgress('正在处理成品图片', 16, '自动拆分为上下两张 1464 × 600 JPG', '处理 1/1');
         } else if (taskInfo.mode === 'cutout' && taskInfo.cutoutMode === 'vector') {
-            renderUploadProgress('正在检查矢量图文件', 16, '确认 Adobe Illustrator 文件可以上传', `处理 0/${pendingFiles.length}`);
+            renderUploadProgress('正在检查矢量图文件', 16, '确认 AI 或 SVG 文件可以上传', `处理 0/${pendingFiles.length}`);
         } else if (taskInfo.mode === 'cutout') {
             renderUploadProgress('正在处理成品图片', 16, `白底抠图任务将导出 ${taskInfo.outputFormat.toUpperCase()}`, `处理 0/${pendingFiles.length}`);
         } else {

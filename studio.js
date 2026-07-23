@@ -841,7 +841,7 @@ const TRANSLATION_FORM = `
                     </div>
                     <div class="sf-preview-list" id="translationPreviewList"></div>
                 </div>
-                <div class="translation-note">只转换图片中的文案，产品、背景、构图和排版保持不变；每张成品会恢复为对应原图的精确宽高。</div>
+                <div class="translation-note">只转换图片中的文案，产品、背景、构图和排版保持不变；其他尺寸保持原图宽高，1472 × 608 会自动输出为 1464 × 600。</div>
             </div>
             <button class="sf-submit" id="translationSubmit">开始转换</button>
             <div id="translationStatus" class="studio-status" style="margin-top:10px" aria-live="polite"></div>
@@ -3874,7 +3874,10 @@ function renderTranslationPreview() {
         thumbnail.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block';
         const dimension = document.createElement('span');
         dimension.className = 'translation-dimension';
-        dimension.textContent = `${image.width} × ${image.height}`;
+        const target = translationOutputDimensions(image);
+        dimension.textContent = target.width === image.width && target.height === image.height
+            ? `${image.width} × ${image.height}`
+            : `${image.width} × ${image.height} → ${target.width} × ${target.height}`;
         const remove = document.createElement('button');
         remove.type = 'button';
         remove.textContent = '\u00d7';
@@ -3885,6 +3888,14 @@ function renderTranslationPreview() {
         item.append(thumbnail, dimension, remove);
         list.appendChild(item);
     });
+}
+
+function translationOutputDimensions(image) {
+    const width = Number(image?.width);
+    const height = Number(image?.height);
+    return width === 1472 && height === 608
+        ? { width: 1464, height: 600 }
+        : { width, height };
 }
 
 function initWatermarkMode() {
@@ -6358,7 +6369,7 @@ async function submitTranslation() {
         desc: `将图片文案转换为${languageNames[language]}`,
         size: '保持原图尺寸',
         translationLanguage: language,
-        translationDimensions: images.map(image => ({ width: image.width, height: image.height })),
+        translationDimensions: images.map(translationOutputDimensions),
         refImages: images
     }, status, btn, task => showSuccessModal(task, `语言转换任务已提交，共 ${images.length} 张；完成后会通过钉钉通知`));
 }

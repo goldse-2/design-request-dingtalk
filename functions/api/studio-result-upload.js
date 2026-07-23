@@ -88,17 +88,17 @@ export async function onRequestPost(context) {
         if (!sourceExtension) {
             return Response.json({ ok: false, error: `不支持的成品格式：${file.name || '未命名文件'}` }, { status: 400 });
         }
-        if (task.aPlusDouble === true && sourceExtension === 'ai') {
-            return Response.json({ ok: false, error: 'A+ 连续双图需要上传可拆分的图片，不能上传 AI 文件' }, { status: 400 });
+        if (task.aPlusDouble === true && isVectorExtension(sourceExtension)) {
+            return Response.json({ ok: false, error: 'A+ 连续双图需要上传可拆分的位图，不能上传 AI 或 SVG 文件' }, { status: 400 });
         }
-        if (libraryReplacement && sourceExtension === 'ai') {
-            return Response.json({ ok: false, error: '资料库替换任务需要上传图片，不能上传 AI 文件' }, { status: 400 });
+        if (libraryReplacement && isVectorExtension(sourceExtension)) {
+            return Response.json({ ok: false, error: '资料库替换任务需要上传位图，不能上传 AI 或 SVG 文件' }, { status: 400 });
         }
-        if (task.mode === 'cutout' && task.cutoutMode === 'vector' && sourceExtension !== 'ai') {
-            return Response.json({ ok: false, error: '矢量图白底任务需要上传 Adobe Illustrator（.ai）文件' }, { status: 400 });
+        if (task.mode === 'cutout' && task.cutoutMode === 'vector' && !isVectorExtension(sourceExtension)) {
+            return Response.json({ ok: false, error: '矢量图白底任务需要上传 Adobe Illustrator（.ai）或 SVG 文件' }, { status: 400 });
         }
-        if (task.mode === 'cutout' && task.cutoutMode !== 'vector' && sourceExtension === 'ai') {
-            return Response.json({ ok: false, error: '普通白底抠图任务需要上传 PNG 或 JPG 图片' }, { status: 400 });
+        if (task.mode === 'cutout' && task.cutoutMode !== 'vector' && isVectorExtension(sourceExtension)) {
+            return Response.json({ ok: false, error: '普通白底抠图任务需要上传 PNG 或 JPG 位图' }, { status: 400 });
         }
         const bytes = await file.arrayBuffer();
         if (task.mode === 'cutout' && outputFormat === 'png' && !hasPngSignature(bytes)) {
@@ -126,7 +126,7 @@ export async function onRequestPost(context) {
         const baseName = resultBaseName(task);
         for (let i = 0; i < preparedFiles.length; i++) {
             const { file, bytes, sourceExtension } = preparedFiles[i];
-            const ext = task.mode === 'cutout' ? outputFormat : sourceExtension;
+            const ext = task.mode === 'cutout' && task.cutoutMode !== 'vector' ? outputFormat : sourceExtension;
             const suffix = task.aPlusDouble === true
                 ? (i === 0 ? '-上半部分' : '-下半部分')
                 : (preparedFiles.length > 1 ? `-${i + 1}` : '');
@@ -301,9 +301,9 @@ function resultBaseName(task) {
 function resultExtension(file) {
     const fromName = String(file?.name || '').match(/\.([a-z0-9]{2,5})$/i)?.[1]?.toLowerCase();
     if (fromName === 'jpeg') return 'jpg';
-    if (['jpg', 'png', 'webp', 'gif', 'ai'].includes(fromName)) return fromName;
+    if (['jpg', 'png', 'webp', 'gif', 'ai', 'svg'].includes(fromName)) return fromName;
     const mimeMap = {
-        'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif',
+        'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'image/svg+xml': 'svg',
         'application/postscript': 'ai', 'application/illustrator': 'ai', 'application/vnd.adobe.illustrator': 'ai'
     };
     return mimeMap[String(file?.type || '').toLowerCase()] || '';
@@ -311,8 +311,12 @@ function resultExtension(file) {
 
 function guessContentType(name) {
     const ext = name.split('.').pop().toLowerCase();
-    const map = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', ai: 'application/postscript' };
+    const map = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', svg: 'image/svg+xml', ai: 'application/postscript' };
     return map[ext] || 'application/octet-stream';
+}
+
+function isVectorExtension(extension) {
+    return extension === 'ai' || extension === 'svg';
 }
 
 async function notifyUserDone(env, task, origin) {

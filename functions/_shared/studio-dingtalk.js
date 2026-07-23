@@ -13,13 +13,20 @@ export async function sendStudioResultImages(env, accessToken, staffId, task, or
         const fileName = safeDisplayName(item.name || `成品图-${index + 1}.jpg`);
         const imageResult = isImageResult(item, fileName);
         const imageUrl = `${origin}/api/public-image/${encodeKeyToken(item.key)}`;
-        const downloadUrl = task.mode === 'resize_ai' || !imageResult
+        const downloadUrl = task.mode === 'resize_ai' || task.mode === 'translate_image' || !imageResult
             ? `${origin}/api/library-file/${encodeURIComponent(item.key)}?dl=1&name=${encodeURIComponent(fileName)}`
             : `${imageUrl}?download=1&name=${encodeURIComponent(fileName)}`;
         const position = `${index + 1}/${resultKeys.length}`;
+        const translationSize = task.mode === 'translate_image'
+            ? normalizeDimensions(item, task.translationDimensions?.[index])
+            : null;
+        const imageDownloadLabel = translationSize
+            ? `下载原尺寸文件（${translationSize.width}×${translationSize.height}）`
+            : '按原文件名下载';
+        const vectorLabel = /\.svg(?:\s|$|[?#])/i.test(`${fileName} ${item?.key || ''}`) ? 'SVG 矢量图' : 'Adobe Illustrator';
         const resultMarkdown = imageResult
-            ? `**${fileName}**\n\n![${fileName}](${imageUrl})\n\n[按原文件名下载](${downloadUrl})`
-            : `**${fileName}**\n\nAdobe Illustrator 文件无法在钉钉内直接预览。\n\n[下载 AI 文件](${downloadUrl})`;
+            ? `**${fileName}**\n\n![${fileName}](${imageUrl})\n\n[${imageDownloadLabel}](${downloadUrl})`
+            : `**${fileName}**\n\n${vectorLabel}文件无法在钉钉内直接预览。\n\n[下载${vectorLabel}文件](${downloadUrl})`;
         try {
             await sendDingTalkMessage(accessToken, {
                 robotCode: env.DINGTALK_APPKEY,
@@ -73,6 +80,14 @@ function safeDisplayName(name) {
 function isImageResult(item, fileName) {
     const source = `${fileName} ${item?.key || ''}`.toLowerCase();
     return /\.(?:jpe?g|png|webp|gif)(?:\s|$|[?#])/.test(source);
+}
+
+function normalizeDimensions(item, fallback) {
+    const width = Number(item?.width || fallback?.width);
+    const height = Number(item?.height || fallback?.height);
+    return Number.isInteger(width) && width > 0 && Number.isInteger(height) && height > 0
+        ? { width, height }
+        : null;
 }
 
 export async function markStudioNotificationSent(env, taskId, field = 'dingtalkNotified') {

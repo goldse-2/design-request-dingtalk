@@ -232,7 +232,9 @@ function renderTask(task) {
     if ((task.status === 'done' || task.mode === 'sheet_self') && task.resultKeys && task.resultKeys.length) {
         const label = document.createElement('div');
         label.style.cssText = 'font-size:0.82rem;color:#16a34a;font-weight:600;margin:14px 0 6px';
-        label.textContent = task.status === 'done' ? '✓ 成品文件（点击下载）' : `✓ 已完成 ${task.resultKeys.length} 个文件（点击下载）`;
+        label.textContent = task.mode === 'translate_image'
+            ? '✓ 成品文件（请点击下载，获取原尺寸文件）'
+            : task.status === 'done' ? '✓ 成品文件（点击下载）' : `✓ 已完成 ${task.resultKeys.length} 个文件（点击下载）`;
         card.appendChild(label);
         card.appendChild(buildThumbRow(task.resultKeys, true));
     }
