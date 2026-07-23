@@ -25,6 +25,16 @@
         .program-copy-ai-buttons { display:flex; align-items:center; gap:7px; }
         .program-copy-extract-btn { border-color:#cbd5e1; background:#fff; color:#334155; }
         .program-copy-extract-btn:hover:not(:disabled) { border-color:#64748b; background:#f8fafc; color:#0f172a; }
+        .program-copy-fields { position:relative; }
+        .program-copy-loading-overlay { display:none; position:absolute; z-index:60; inset:0; align-items:center; justify-content:center; padding:18px; border:1px solid rgba(255,255,255,.72); border-radius:8px; background:rgba(248,250,252,.62); -webkit-backdrop-filter:blur(7px) saturate(1.1); backdrop-filter:blur(7px) saturate(1.1); }
+        .program-copy-fields.is-ai-loading .program-copy-loading-overlay { display:flex; }
+        .program-copy-fields.is-ai-loading .program-ai-popover { display:none; }
+        .program-copy-loading-content { width:min(280px,88%); padding:16px 18px; border:1px solid rgba(255,255,255,.9); border-radius:8px; background:rgba(255,255,255,.78); box-shadow:0 10px 28px rgba(15,23,42,.12); text-align:left; }
+        .program-copy-loading-title { color:#0f172a; font-size:.86rem; font-weight:800; }
+        .program-copy-loading-subtitle { margin-top:4px; color:#64748b; font-size:.7rem; }
+        .program-copy-progress-track { position:relative; height:6px; margin-top:13px; overflow:hidden; border-radius:3px; background:rgba(148,163,184,.24); }
+        .program-copy-progress-track span { position:absolute; inset:0 auto 0 0; width:42%; border-radius:3px; background:#10b981; animation:programCopyProgress 1.45s ease-in-out infinite; }
+        @keyframes programCopyProgress { 0% { transform:translateX(-105%); } 55% { transform:translateX(92%); } 100% { transform:translateX(240%); } }
         .program-copy-ai-btn { border-color:#86efac; background:#ecfdf5; color:#047857; }
         .program-copy-ai-btn:hover:not(:disabled) { border-color:#22c55e; background:#dcfce7; color:#166534; }
         .program-copy-ai-btn.loading { border-color:#86efac; background:#dcfce7; color:#166534; }
@@ -713,6 +723,6 @@
     帮助中心
 </button>
 
-    <script src="studio.js?v=20260723-extract-copy"></script>
+    <script src="studio.js?v=20260723-copy-glass"></script>
 </body>
 </html>

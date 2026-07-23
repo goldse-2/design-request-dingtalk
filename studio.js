@@ -479,6 +479,7 @@ ${renderShootRequestLauncher('program')}
                 <input class="sf-input" id="progProductName" type="text" maxlength="100" placeholder="例如：蓝牙耳机">
                 <div class="program-ai-status" id="progProductAiStatus">上传白底产品图后自动识别</div>
             </div>
+            <div class="program-copy-fields" id="programCopyFields">
             <div class="sf-section">
                 <div class="program-ai-label-row program-title-ai-row">
                     <div class="sf-label">标题 <span class="sf-sub">会自动翻译英语</span></div>
@@ -486,7 +487,7 @@ ${renderShootRequestLauncher('program')}
                         <div class="program-copy-ai-buttons">
                             <button type="button" class="program-ai-btn program-copy-extract-btn" id="progExtractCopyBtn" aria-describedby="progCopyAiStatus">
                                 <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>
-                                <span>提取原图文案</span>
+                                <span>修改原图文案</span>
                             </button>
                             <button type="button" class="program-ai-btn program-copy-ai-btn" id="progGenerateCopyBtn" aria-describedby="progCopyAiStatus">
                                 <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l1.3 4.2L17.5 8.5l-4.2 1.3L12 14l-1.3-4.2-4.2-1.3 4.2-1.3L12 3Z"/><path d="M5 15l.8 2.7 2.7.8-2.7.8L5 22l-.8-2.7-2.7-.8 2.7-.8L5 15Z"/></svg>
@@ -505,6 +506,14 @@ ${renderShootRequestLauncher('program')}
             <div class="sf-section">
                 <div class="sf-label">其他文案 <span class="sf-sub">会自动翻译英语</span></div>
                 <textarea class="sf-textarea" id="progOtherText" rows="3" maxlength="300" placeholder="例如：降噪技术；续航持久；蓝牙5.0"></textarea>
+            </div>
+            <div class="program-copy-loading-overlay" aria-hidden="true">
+                <div class="program-copy-loading-content">
+                    <div class="program-copy-loading-title">正在修改原图文案</div>
+                    <div class="program-copy-loading-subtitle">识别图片文字并转换为中文</div>
+                    <div class="program-copy-progress-track"><span></span></div>
+                </div>
+            </div>
             </div>
             <div class="sf-section" id="progSizeSection">
                 <div class="sf-label">尺寸 <span class="sf-req">*</span></div>
@@ -4537,10 +4546,11 @@ async function runProgramCopyExtraction() {
     return runProgramCopyAction({
         action: 'extract_copy',
         buttonId: 'progExtractCopyBtn',
-        busyText: '正在提取...',
-        progressText: '正在识别原图文案...',
-        successText: '原图文案已提取',
-        idleText: '提取原图文案'
+        busyText: '正在修改...',
+        progressText: '正在识别并转换为中文...',
+        successText: '原图文案已转换为中文',
+        idleText: '修改原图文案',
+        showLoadingOverlay: true
     });
 }
 
@@ -4559,6 +4569,11 @@ async function runProgramCopyAction(options) {
     programCopyAiBusy = true;
     button.classList.add('loading');
     button.querySelector('span').textContent = options.busyText;
+    const copyFields = document.getElementById('programCopyFields');
+    if (options.showLoadingOverlay && copyFields) {
+        copyFields.classList.add('is-ai-loading');
+        copyFields.setAttribute('aria-busy', 'true');
+    }
     setProgramAiStatus(status, options.progressText, '');
     updateProgramAiControls();
     try {
@@ -4577,6 +4592,10 @@ async function runProgramCopyAction(options) {
         programCopyAiBusy = false;
         button.classList.remove('loading');
         button.querySelector('span').textContent = options.idleText;
+        if (options.showLoadingOverlay && copyFields) {
+            copyFields.classList.remove('is-ai-loading');
+            copyFields.removeAttribute('aria-busy');
+        }
         updateProgramAiControls();
     }
 }
