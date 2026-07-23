@@ -2180,6 +2180,7 @@ function renderBackgroundImageProgress(task) {
     const wrap = document.createElement('div');
     wrap.style.cssText = 'margin:10px 0 2px;padding:11px 12px;border:1px solid #e5e7eb;border-radius:8px;background:#fafafa';
     const failed = Boolean(task.backgroundLastError);
+    const modelUnavailable = /image model is unavailable/i.test(String(task.backgroundLastError || ''));
     const nextNumber = Math.min(progress.total, progress.completed + 1);
     const retryAt = Date.parse(task.backgroundNextAttemptAt || '');
     const retryText = Number.isFinite(retryAt) && retryAt > Date.now()
@@ -2187,6 +2188,8 @@ function renderBackgroundImageProgress(task) {
         : '';
     const stateText = task.status === 'done'
         ? '处理完成'
+        : modelUnavailable
+            ? '图片 API 未开通 gpt-image-2，需更换密钥后继续'
         : failed
             ? 'AI 服务暂时连接失败，等待自动重试' + retryText
             : progress.completed > 0

@@ -157,7 +157,10 @@ export async function onRequestGet(context) {
                         task.backgroundFailureCount = failureCount;
                         task.backgroundLastError = errMsg;
                         task.backgroundLastAttemptAt = new Date().toISOString();
-                        task.backgroundNextAttemptAt = new Date(now + imageRetryDelayMs(failureCount)).toISOString();
+                        const retryDelay = /image model is unavailable/i.test(errMsg)
+                            ? 60 * 60 * 1000
+                            : imageRetryDelayMs(failureCount);
+                        task.backgroundNextAttemptAt = new Date(now + retryDelay).toISOString();
                         await env.SUBMISSIONS.put(task.id, JSON.stringify(task), studioTaskPutOptions(task));
                         console.error('Background image task failed:', task.id, e.message);
                         nextAutoQueue.push(task.id);
