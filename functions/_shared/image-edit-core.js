@@ -52,7 +52,7 @@ export async function editImageWithPrompt({ env, prompt, mimeType, base64, maxBy
         }
         if (!response.ok) {
             const error = data?.error?.message || data?.message || `AI HTTP ${response.status}`;
-            throw new Error(normalizeUpstreamError(error));
+            throw new Error(normalizeUpstreamError(error, response.status));
         }
         const result = extractImageResult(data);
         if (!result) throw new Error('AI did not return an image');
@@ -167,9 +167,18 @@ function estimateBase64Bytes(value) {
     return Math.floor(clean.length * 3 / 4);
 }
 
-function normalizeUpstreamError(message) {
+function normalizeUpstreamError(message, status) {
     const text = String(message || '');
     if (/quota|balance|credit|insufficient/i.test(text)) return 'AI image quota or balance is insufficient';
     if (/model|permission|not found/i.test(text)) return 'AI image model is unavailable';
-    return 'AI image edit request failed';
+    const safeDetail = text
+        .replace(/sk-[a-z0-9_-]+/gi, '[redacted]')
+        .replace(/https?:\/\/\S+/gi, '[url]')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 180);
+    const statusText = Number.isInteger(status) ? ` (HTTP ${status})` : '';
+    return safeDetail && !/^AI HTTP \d+$/i.test(safeDetail)
+        ? `AI image edit request failed${statusText}: ${safeDetail}`
+        : `AI image edit request failed${statusText}`;
 }

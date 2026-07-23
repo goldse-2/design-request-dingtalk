@@ -117,6 +117,11 @@ export async function onRequestGet(context) {
                 if (!imageOnly && task.pausedAuto) continue;
 
                 if (isImageTask) {
+                    const nextAttemptAt = Date.parse(task.backgroundNextAttemptAt || '');
+                    if (Number.isFinite(nextAttemptAt) && nextAttemptAt > now) {
+                        nextAutoQueue.push(task.id);
+                        continue;
+                    }
                     try {
                         const result = task.mode === 'resize_ai'
                             ? await processResizeAiTask(env, task)
@@ -125,6 +130,15 @@ export async function onRequestGet(context) {
                                 : task.mode === 'translate_image'
                                     ? await processTranslationTaskStep(env, task)
                                 : await processVariantTaskStep(env, task, origin);
+                        const recoveredFromFailure = Number(task.backgroundFailureCount || 0) > 0
+                            || Boolean(task.backgroundLastError)
+                            || Boolean(task.backgroundNextAttemptAt);
+                        task.backgroundFailureCount = 0;
+                        task.backgroundLastError = '';
+                        task.backgroundNextAttemptAt = '';
+                        if (recoveredFromFailure) {
+                            await env.SUBMISSIONS.put(task.id, JSON.stringify(task), studioTaskPutOptions(task));
+                        }
                         autoSent.push(task.id);
                         const needsNotify = result.done && task.submitter?.unionId && !task.dingtalkNotified && !task.r2AutoNotified;
                         let notifyOk = !needsNotify;
@@ -140,9 +154,12 @@ export async function onRequestGet(context) {
                         if (!result.done || !notifyOk) nextAutoQueue.push(task.id);
                     } catch (e) {
                         const errMsg = String(e.message || e).slice(0, 300);
+                        const failureCount = Math.max(0, Number(task.backgroundFailureCount || 0)) + 1;
                         autoErrors.push({ id: task.id, error: errMsg });
+                        task.backgroundFailureCount = failureCount;
                         task.backgroundLastError = errMsg;
                         task.backgroundLastAttemptAt = new Date().toISOString();
+                        task.backgroundNextAttemptAt = new Date(now + imageRetryDelayMs(failureCount)).toISOString();
                         await env.SUBMISSIONS.put(task.id, JSON.stringify(task), studioTaskPutOptions(task));
                         console.error('Background image task failed:', task.id, e.message);
                         nextAutoQueue.push(task.id);
@@ -341,7 +358,11 @@ export async function onRequestGet(context) {
             (result.settled ? deferredProcessingQueue : nextProcessingQueue).push(task.id);
         }
 
-        const finalAutoQueue = unique([...nextAutoQueue, ...deferredAutoQueue]);
+        // Rotate background image work after every step. A failed or multi-image task
+        // must not keep the queue head and block every task submitted behind it.
+        const finalAutoQueue = imageOnly
+            ? unique([...deferredAutoQueue, ...nextAutoQueue])
+            : unique([...nextAutoQueue, ...deferredAutoQueue]);
         const finalProcessingQueue = unique([...nextProcessingQueue, ...deferredProcessingQueue]);
         if (!queuesEqual(initialAutoQueue, finalAutoQueue)) {
             await writeQueue(env.SUBMISSIONS, selectedQueueKey, finalAutoQueue);
@@ -381,6 +402,13 @@ function isAutoSendWindow(timestamp) {
     const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
     const minutes = Number(values.hour) * 60 + Number(values.minute);
     return minutes >= 8 * 60 && minutes < 19 * 60 + 30;
+}
+
+function imageRetryDelayMs(failureCount) {
+    if (failureCount <= 1) return 3 * 60 * 1000;
+    if (failureCount === 2) return 10 * 60 * 1000;
+    if (failureCount === 3) return 30 * 60 * 1000;
+    return 60 * 60 * 1000;
 }
 
 async function safeKvGet(kv, key) {
