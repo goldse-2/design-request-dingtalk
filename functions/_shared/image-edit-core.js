@@ -1,17 +1,39 @@
 const DEFAULT_API_BASE = 'https://api.apikey.fun/v1';
+const DEFAULT_FALLBACK_API_BASE = 'https://jojocode.com';
 const DEFAULT_MODEL = 'gpt-image-2';
+const modelAvailabilityCache = new Map();
 
 export async function editImageWithPrompt({ env, prompt, mimeType, base64, maxBytes = 20 * 1024 * 1024 }) {
-    const apiKey = env.APIKEYFUN_API_KEY || env.AI_IMAGE_API_KEY;
-    if (!apiKey) throw new Error('AI image service is not configured');
+    const providers = imageProviders(env);
+    if (!providers.length) throw new Error('AI image service is not configured');
 
     const safeMimeType = String(mimeType || 'image/png');
     const safeBase64 = String(base64 || '');
     if (!safeBase64 || !safeMimeType.startsWith('image/')) throw new Error('Image file is required');
     if (estimateBase64Bytes(safeBase64) > maxBytes) throw new Error('Image is too large');
 
-    const apiBase = String(env.APIKEYFUN_API_BASE || DEFAULT_API_BASE).replace(/\/+$/, '');
-    const model = String(env.APIKEYFUN_IMAGE_MODEL || DEFAULT_MODEL);
+    let lastError = new Error('AI image model is unavailable');
+    for (const provider of providers) {
+        const available = await providerHasModel(provider);
+        if (available === false) {
+            lastError = new Error('AI image model is unavailable');
+            continue;
+        }
+        try {
+            return await editImageWithProvider({
+                ...provider,
+                prompt,
+                mimeType: safeMimeType,
+                base64: safeBase64
+            });
+        } catch (error) {
+            lastError = error;
+        }
+    }
+    throw lastError;
+}
+
+async function editImageWithProvider({ apiBase, apiKey, model, actorAuthorization, prompt, mimeType, base64 }) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 120000);
 
@@ -21,9 +43,10 @@ export async function editImageWithPrompt({ env, prompt, mimeType, base64, maxBy
             apiKey,
             model,
             prompt,
-            mimeType: safeMimeType,
-            base64: safeBase64,
+            mimeType,
+            base64,
             signal: controller.signal,
+            actorAuthorization,
             toolMode: 'high'
         });
         if (!response.ok && shouldRetryWithBasicImageTool(response.status)) {
@@ -32,9 +55,10 @@ export async function editImageWithPrompt({ env, prompt, mimeType, base64, maxBy
                 apiKey,
                 model,
                 prompt,
-                mimeType: safeMimeType,
-                base64: safeBase64,
+                mimeType,
+                base64,
                 signal: controller.signal,
+                actorAuthorization,
                 toolMode: 'basic'
             }));
         }
@@ -44,9 +68,10 @@ export async function editImageWithPrompt({ env, prompt, mimeType, base64, maxBy
                 apiKey,
                 model,
                 prompt,
-                mimeType: safeMimeType,
-                base64: safeBase64,
+                mimeType,
+                base64,
                 signal: controller.signal,
+                actorAuthorization,
                 toolMode: 'none'
             }));
         }
@@ -66,10 +91,69 @@ export async function editImageWithPrompt({ env, prompt, mimeType, base64, maxBy
 }
 
 function shouldRetryWithBasicImageTool(status) {
-    return [400, 422, 500, 502, 503, 504].includes(Number(status));
+    return [400, 422].includes(Number(status));
 }
 
-async function callResponsesApi({ apiBase, apiKey, model, prompt, mimeType, base64, signal, toolMode }) {
+function imageProviders(env) {
+    const providers = [];
+    const primaryKey = env.APIKEYFUN_API_KEY || env.AI_IMAGE_API_KEY;
+    if (primaryKey) {
+        providers.push({
+            apiKey: String(primaryKey),
+            apiBase: String(env.APIKEYFUN_API_BASE || DEFAULT_API_BASE).replace(/\/+$/, ''),
+            model: String(env.APIKEYFUN_IMAGE_MODEL || DEFAULT_MODEL),
+            actorAuthorization: ''
+        });
+    }
+    const fallbackKey = env.AI_IMAGE_FALLBACK_API_KEY || env.AI_API_KEY;
+    if (fallbackKey) {
+        const fallback = {
+            apiKey: String(fallbackKey),
+            apiBase: String(env.AI_IMAGE_FALLBACK_API_BASE || env.AI_API_BASE || DEFAULT_FALLBACK_API_BASE).replace(/\/+$/, ''),
+            model: String(env.AI_IMAGE_FALLBACK_MODEL || DEFAULT_MODEL),
+            actorAuthorization: String(env.AI_API_ACTOR_AUTHORIZATION || '')
+        };
+        if (!providers.some(provider => provider.apiKey === fallback.apiKey && provider.apiBase === fallback.apiBase)) {
+            providers.push(fallback);
+        }
+    }
+    return providers;
+}
+
+async function providerHasModel(provider) {
+    const cacheKey = `${provider.apiBase}\n${provider.apiKey}\n${provider.model}`;
+    const cached = modelAvailabilityCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) return cached.available;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    try {
+        const response = await fetch(buildEndpoint(provider.apiBase, 'models'), {
+            headers: providerHeaders(provider),
+            signal: controller.signal
+        });
+        if (!response.ok) return null;
+        const data = await response.json().catch(() => ({}));
+        const modelIds = Array.isArray(data?.data) ? data.data.map(item => String(item?.id || '')) : [];
+        if (!modelIds.length) return null;
+        const available = modelIds.includes(provider.model);
+        modelAvailabilityCache.set(cacheKey, { available, expiresAt: Date.now() + 5 * 60 * 1000 });
+        return available;
+    } catch {
+        return null;
+    } finally {
+        clearTimeout(timeout);
+    }
+}
+
+function providerHeaders(provider, includeContentType = false) {
+    const headers = { 'Authorization': `Bearer ${provider.apiKey}` };
+    if (includeContentType) headers['Content-Type'] = 'application/json';
+    if (provider.actorAuthorization) headers['x-openai-actor-authorization'] = provider.actorAuthorization;
+    return headers;
+}
+
+async function callResponsesApi({ apiBase, apiKey, model, actorAuthorization, prompt, mimeType, base64, signal, toolMode }) {
     const body = {
         model,
         input: [{
@@ -98,10 +182,7 @@ async function callResponsesApi({ apiBase, apiKey, model, prompt, mimeType, base
 
     const response = await fetch(buildEndpoint(apiBase, 'responses'), {
         method: 'POST',
-        headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json'
-        },
+        headers: providerHeaders({ apiKey, actorAuthorization }, true),
         body: JSON.stringify(body),
         signal
     });
