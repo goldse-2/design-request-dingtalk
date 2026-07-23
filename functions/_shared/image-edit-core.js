@@ -26,7 +26,7 @@ export async function editImageWithPrompt({ env, prompt, mimeType, base64, maxBy
             signal: controller.signal,
             toolMode: 'high'
         });
-        if (!response.ok && response.status === 400) {
+        if (!response.ok && shouldRetryWithBasicImageTool(response.status)) {
             ({ response, data } = await callResponsesApi({
                 apiBase,
                 apiKey,
@@ -38,7 +38,7 @@ export async function editImageWithPrompt({ env, prompt, mimeType, base64, maxBy
                 toolMode: 'basic'
             }));
         }
-        if (!response.ok && response.status === 400) {
+        if (!response.ok && (response.status === 400 || response.status === 422)) {
             ({ response, data } = await callResponsesApi({
                 apiBase,
                 apiKey,
@@ -63,6 +63,10 @@ export async function editImageWithPrompt({ env, prompt, mimeType, base64, maxBy
     } finally {
         clearTimeout(timeout);
     }
+}
+
+function shouldRetryWithBasicImageTool(status) {
+    return [400, 422, 500, 502, 503, 504].includes(Number(status));
 }
 
 async function callResponsesApi({ apiBase, apiKey, model, prompt, mimeType, base64, signal, toolMode }) {

@@ -2154,6 +2154,56 @@ function renderStudioTasks(allTasks, category) {
     filtered.forEach(task => container.appendChild(renderStudioTask(task)));
 }
 
+function getBackgroundImageProgress(task) {
+    let completed = 0;
+    let total = 0;
+    if (task.mode === 'translate_image') {
+        total = Array.isArray(task.refKeys) ? task.refKeys.length : 0;
+        completed = Number(task.translationNextIndex || 0);
+    } else if (task.mode === 'variant') {
+        total = Array.isArray(task.refKeys) ? task.refKeys.length : 0;
+        completed = Number(task.variantNextIndex || 0);
+    } else if (task.mode === 'resize_ai' || task.mode === 'watermark') {
+        total = 1;
+        completed = task.status === 'done' ? 1 : 0;
+    } else {
+        return null;
+    }
+    total = Math.max(1, total);
+    completed = Math.max(0, Math.min(total, completed));
+    return { completed, total, percent: Math.round((completed / total) * 100) };
+}
+
+function renderBackgroundImageProgress(task) {
+    const progress = getBackgroundImageProgress(task);
+    if (!progress) return null;
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'margin:10px 0 2px;padding:11px 12px;border:1px solid #e5e7eb;border-radius:8px;background:#fafafa';
+    const failed = Boolean(task.backgroundLastError);
+    const nextNumber = Math.min(progress.total, progress.completed + 1);
+    const retryAt = Date.parse(task.backgroundNextAttemptAt || '');
+    const retryText = Number.isFinite(retryAt) && retryAt > Date.now()
+        ? '，预计 ' + new Date(retryAt).toLocaleTimeString('zh-CN', { timeZone:'Asia/Shanghai', hour:'2-digit', minute:'2-digit' }) + ' 重试'
+        : '';
+    const stateText = task.status === 'done'
+        ? '处理完成'
+        : failed
+            ? 'AI 服务暂时连接失败，等待自动重试' + retryText
+            : progress.completed > 0
+                ? '下一步处理第 ' + nextNumber + ' 张'
+                : '等待 AI 开始处理第 1 张';
+    wrap.title = failed ? String(task.backgroundLastError || '') : '';
+    wrap.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:7px;font-size:.78rem">'
+        + '<strong style="color:#111827">图片处理进度</strong>'
+        + '<span style="color:#475569;font-weight:700">已完成 ' + progress.completed + ' / ' + progress.total + '</span>'
+        + '</div>'
+        + '<div role="progressbar" aria-label="图片处理进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + progress.percent + '" style="height:7px;overflow:hidden;border-radius:4px;background:#e5e7eb">'
+        + '<span style="display:block;width:' + progress.percent + '%;height:100%;border-radius:4px;background:#4f46e5;transition:width .25s ease"></span>'
+        + '</div>'
+        + '<div style="margin-top:7px;color:' + (failed ? '#b45309' : '#64748b') + ';font-size:.73rem">' + esc(stateText) + '</div>';
+    return wrap;
+}
+
 function renderStudioTask(task) {
     if (task.mode === 'sheet_self') return renderSheetSelfAdminTask(task);
     const requiresApproval = studioApprovalModes.has(task.mode);
@@ -2279,6 +2329,9 @@ function renderStudioTask(task) {
         });
         card.appendChild(row);
     }
+
+    const backgroundProgress = renderBackgroundImageProgress(task);
+    if (backgroundProgress) card.appendChild(backgroundProgress);
 
     // Action bar: only 反馈 and 发送给RPA
     const actions = document.createElement('div');
