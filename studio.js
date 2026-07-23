@@ -244,6 +244,7 @@ function renderSizePicker(inputId) {
                         <button type="button" data-size-mode="aplus">A+</button>
                         <button type="button" data-size-mode="default" data-size-value="2K 自动识别">默认</button>
                     </div>
+                    <div class="size-auto-detection" id="${inputId}AutoStatus" data-size-auto-status-for="${inputId}">自动识别：上传${inputId === 'progSizeSelect' ? '竞品图片' : '参考图'}后显示结果，当前按 1600 × 1600</div>
                     <div class="size-a-plus-options" data-size-options="aplus" hidden>
                         <div class="size-picker-title">Size</div>
                         <div class="size-card-grid">
@@ -384,7 +385,6 @@ const FREE_FORM = `
                     </div>
                     <div class="sf-preview-list" id="freePreviewList"></div>
                 </div>
-                <div class="size-auto-detection" id="freeAutoSizeStatus" data-size-auto-status-for="freeSizeSelect">自动识别：上传参考图后显示结果，当前按 1600 × 1600</div>
 ${renderShootRequestLauncher('free')}
                 <button type="button" class="sf-lib-btn" style="margin-top:10px" onclick="openLibPicker()">📦 从白底素材库选</button>
                 <button type="button" class="sf-lib-btn" style="margin-top:10px" onclick="openModelPicker()">🧍 选择模特</button>
@@ -451,7 +451,6 @@ const PROGRAM_FORM = `
                     </div>
                     <div class="sf-preview-list" id="progRefThumbs"></div>
                 </div>
-                <div class="size-auto-detection" id="progAutoSizeStatus" data-size-auto-status-for="progSizeSelect">自动识别：上传竞品图片后显示结果，当前按 1600 × 1600</div>
             </div>
             <div class="sf-section" id="progProductSection">
                 <div class="sf-label">白底产品图 <span class="sf-req">*</span> <span class="sf-sub">(2张)</span></div>
