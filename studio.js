@@ -5092,8 +5092,12 @@ function handleFiles(files, thumbsId, bucket) {
         const reader = new FileReader();
         reader.onload = ev => {
             const base64 = ev.target.result.split(',')[1];
-            uploads[bucket].push({ name: file.name, base64, mimeType: file.type, dataUrl: ev.target.result });
+            const image = { file, name: file.name, base64, mimeType: file.type, dataUrl: ev.target.result };
+            uploads[bucket].push(image);
             renderThumbs(thumbsId, bucket);
+            if (bucket === 'progRef' || bucket === 'progProduct') {
+                startProgramImageUpload(image, bucket, thumbsId);
+            }
             if (bucket === 'progProduct') queueProgramProductRecognition();
         };
         reader.readAsDataURL(file);
@@ -5103,13 +5107,74 @@ function handleFiles(files, thumbsId, bucket) {
     }
 }
 
+function startProgramImageUpload(image, bucket, thumbsId) {
+    const prefix = bucket === 'progProduct' ? 'studio/product' : 'studio/ref';
+    image.preUploadPrefix = prefix;
+    image.preUploadState = 'uploading';
+    image.preUploadProgress = 0;
+    image.preUploadRenderedProgress = 0;
+    renderThumbs(thumbsId, bucket);
+
+    const uploadId = image.uploadId || (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    image.uploadId = uploadId;
+    const promise = uploadStudioImageWithRetry({
+        blob: image.file,
+        name: image.name,
+        prefix,
+        uploadId,
+        onProgress: ratio => {
+            image.preUploadProgress = ratio;
+            const progress = Math.round(ratio * 100);
+            if (progress === 100 || progress - image.preUploadRenderedProgress >= 5) {
+                image.preUploadRenderedProgress = progress;
+                if (uploads[bucket].includes(image)) renderThumbs(thumbsId, bucket);
+            }
+        },
+        onRetry: ({ attempt, maxAttempts }) => {
+            image.preUploadState = 'retrying';
+            image.preUploadRetryText = `${attempt}/${maxAttempts}`;
+            if (uploads[bucket].includes(image)) renderThumbs(thumbsId, bucket);
+        }
+    }).then(result => {
+        image.uploadedKey = { key: result.key, name: result.name };
+        image.uploadedPrefix = prefix;
+        image.preUploadState = 'done';
+        image.preUploadProgress = 1;
+        if (uploads[bucket].includes(image)) renderThumbs(thumbsId, bucket);
+        return image.uploadedKey;
+    }).catch(error => {
+        image.preUploadState = 'error';
+        image.preUploadError = error.message;
+        if (uploads[bucket].includes(image)) renderThumbs(thumbsId, bucket);
+        throw error;
+    }).finally(() => {
+        if (image.preUploadPromise === promise) image.preUploadPromise = null;
+    });
+    image.preUploadPromise = promise;
+    promise.catch(() => {});
+}
+
 function renderThumbs(thumbsId, bucket) {
     const wrap = document.getElementById(thumbsId);
     wrap.innerHTML = '';
     uploads[bucket].forEach((f, i) => {
         const div = document.createElement('div');
         div.className = 'sf-preview-item';
-        div.innerHTML = `<img src="${f.dataUrl}" alt="" style="width:100%;height:100%;object-fit:cover;display:block"><button data-i="${i}">×</button>`;
+        const uploadLabel = f.preUploadState === 'done'
+            ? '已上传'
+            : f.preUploadState === 'retrying'
+                ? `重试 ${f.preUploadRetryText || ''}`
+                : f.preUploadState === 'error'
+                    ? '提交时重试'
+                    : f.preUploadState === 'uploading'
+                        ? `上传中 ${Math.round((f.preUploadProgress || 0) * 100)}%`
+                        : '';
+        const uploadColor = f.preUploadState === 'done'
+            ? '#059669'
+            : f.preUploadState === 'error'
+                ? '#b45309'
+                : '#111827';
+        div.innerHTML = `<img src="${f.dataUrl}" alt="" style="width:100%;height:100%;object-fit:cover;display:block"><button data-i="${i}">×</button>${uploadLabel ? `<span style="position:absolute;left:4px;right:4px;bottom:4px;padding:2px 4px;border-radius:4px;background:${uploadColor};color:#fff;font-size:10px;font-weight:700;line-height:1.35;text-align:center;pointer-events:none">${uploadLabel}</span>` : ''}`;
         div.querySelector('button').addEventListener('click', () => {
             uploads[bucket].splice(i, 1); renderThumbs(thumbsId, bucket);
         });
@@ -5382,6 +5447,22 @@ async function uploadImages(files, prefix, options = {}) {
     const keys = [];
     for (let index = 0; index < files.length; index += 1) {
         const f = files[index];
+        if (f.uploadedKey && f.uploadedPrefix === prefix) {
+            options.onProgress?.({ index, total: files.length, ratio: 1 });
+            keys.push(f.uploadedKey);
+            continue;
+        }
+        if (f.preUploadPromise && f.preUploadPrefix === prefix) {
+            options.onProgress?.({ index, total: files.length, ratio: f.preUploadProgress || 0 });
+            try {
+                const uploaded = await f.preUploadPromise;
+                options.onProgress?.({ index, total: files.length, ratio: 1 });
+                keys.push(uploaded);
+                continue;
+            } catch {
+                // The normal submit upload below retries a failed background upload.
+            }
+        }
         const blob = f.file || await fetch('data:' + f.mimeType + ';base64,' + f.base64).then(r => r.blob());
         const uploadId = f.uploadId || f.batchId || (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
         f.uploadId = uploadId;
@@ -5393,7 +5474,10 @@ async function uploadImages(files, prefix, options = {}) {
             onProgress: ratio => options.onProgress?.({ index, total: files.length, ratio }),
             onRetry: retry => options.onRetry?.({ index, total: files.length, ...retry })
         });
-        keys.push({ key: json.key, name: json.name });
+        const uploaded = { key: json.key, name: json.name };
+        f.uploadedKey = uploaded;
+        f.uploadedPrefix = prefix;
+        keys.push(uploaded);
     }
     return keys;
 }
