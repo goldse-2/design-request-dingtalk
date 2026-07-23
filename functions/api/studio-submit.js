@@ -1,6 +1,7 @@
 import { studioTaskPutOptions } from '../_shared/studio-task-storage.js';
 import { normalizeLibraryReplacement } from '../_shared/studio-library-replacement.js';
 import { getStudioRpaQueueInfo, queueStudioRpaTask, studioRpaModeMinutes } from '../_shared/studio-rpa-slot.js';
+import { wakeStudioRpaQueue } from '../_shared/studio-rpa-wakeup.js';
 
 export async function onRequestPost(context) {
     const { request, env, waitUntil, internalTaskOptions } = context;
@@ -165,6 +166,16 @@ export async function onRequestPost(context) {
     const queueInfo = rpaQueueResult && !task.silent
         ? await getStudioRpaQueueInfo(env, task, rpaQueueResult.queueIds).catch(() => defaultQueueInfo(mode))
         : null;
+
+    // Cutout tasks require no approval. Dispatch the first queued task now;
+    // completion callbacks wake each following task, and cron remains the fallback.
+    const shouldWakeCutout = !waitingPhotography
+        && mode === 'cutout'
+        && rpaQueueResult
+        && (task.silent ? rpaQueueResult.position === 1 : queueInfo?.aheadCount === 0);
+    if (shouldWakeCutout) {
+        await wakeStudioRpaQueue(request);
+    }
 
     // 发送钉钉通知给管理员
     if (['free', 'program', 'retouch'].includes(mode)
