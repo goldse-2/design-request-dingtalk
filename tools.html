@@ -66,7 +66,9 @@
         .catalog-empty { margin:0 20px 20px; padding:16px; border-top:1px solid #eef2f7; color:#94a3b8; font-size:.76rem; }
         .tool-panel[hidden] { display:none !important; }
         .tools-workspace.pdf-active { grid-template-columns:470px minmax(0, 1fr); gap:28px; }
-        .pdf-upload-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+        .pdf-upload-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; align-items:start; }
+        .pdf-upload-grid[hidden], .pdf-send-row[hidden] { display:none !important; }
+        .pdf-upload-column { display:grid; min-width:0; gap:8px; }
         .pdf-upload-box { position:relative; display:flex; align-items:center; gap:10px; min-width:0; min-height:82px; padding:13px; border:1px dashed #94a3b8; border-radius:7px; background:#f8fafc; cursor:pointer; }
         .pdf-upload-box:hover { border-color:#0f766e; background:#f0fdfa; }
         .pdf-upload-box.ready { border-style:solid; border-color:#10b981; background:#f0fdf4; }
@@ -76,6 +78,22 @@
         .pdf-upload-copy { min-width:0; }
         .pdf-upload-copy strong { display:block; color:#1f2937; font-size:.78rem; }
         .pdf-upload-copy span { display:block; margin-top:4px; overflow:hidden; color:#94a3b8; font-size:.68rem; text-overflow:ellipsis; white-space:nowrap; }
+        .pdf-designer-request { display:grid; grid-template-columns:minmax(0, 1fr) auto; gap:7px; }
+        .pdf-designer-request[hidden] { display:none; }
+        .pdf-designer-request input { min-width:0; height:38px; padding:0 10px; border:1px solid #cbd5e1; border-radius:6px; outline:none; color:#1f2937; font-size:.72rem; }
+        .pdf-designer-request input:focus { border-color:#0f766e; box-shadow:0 0 0 3px rgba(15,118,110,.1); }
+        .pdf-designer-request button { min-height:38px; padding:0 11px; border:1px solid #0f766e; border-radius:6px; background:#0f766e; color:#fff; font-size:.72rem; font-weight:800; cursor:pointer; white-space:nowrap; }
+        .pdf-designer-request button:disabled, .pdf-designer-request input:disabled { cursor:not-allowed; opacity:.5; }
+        .pdf-waiting { margin-top:14px; padding:16px; border:1px solid #cbd5e1; border-radius:7px; background:#f8fafc; }
+        .pdf-waiting[hidden] { display:none; }
+        .pdf-waiting-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+        .pdf-waiting-head strong { display:block; color:#111827; font-size:.86rem; }
+        .pdf-waiting-head span { display:block; margin-top:4px; color:#64748b; font-size:.72rem; line-height:1.55; }
+        .pdf-waiting-badge { flex:none; margin-top:1px; padding:4px 8px; border-radius:999px; background:#fef3c7; color:#92400e; font-size:.68rem; font-weight:800; }
+        .pdf-waiting-note { margin-top:12px; padding:10px 11px; border-left:3px solid #0f766e; background:#fff; color:#334155; font-size:.74rem; line-height:1.55; overflow-wrap:anywhere; }
+        .pdf-waiting-actions { display:flex; justify-content:flex-end; gap:7px; margin-top:12px; }
+        .pdf-waiting-actions button { min-height:34px; padding:0 11px; border:1px solid #cbd5e1; border-radius:6px; background:#fff; color:#475569; font-size:.72rem; font-weight:750; cursor:pointer; }
+        .pdf-waiting-actions button:disabled { cursor:wait; opacity:.55; }
         .pdf-editor { margin-top:14px; }
         .pdf-editor[hidden], .pdf-empty-preview[hidden] { display:none !important; }
         .pdf-toolbar { display:grid; grid-template-columns:auto minmax(0, 1fr) auto; align-items:center; gap:8px; margin-bottom:9px; }
@@ -141,6 +159,7 @@
             .tool-operations, .tool-catalog { width:100%; min-width:0; min-height:0; }
             .tool-grid { grid-template-columns:1fr; }
             .pdf-upload-grid, .pdf-controls { grid-template-columns:1fr; }
+            .pdf-designer-request { grid-template-columns:1fr; }
             .pdf-preview-shell { width:100%; min-width:0; min-height:300px; max-height:62vh; padding:10px; }
             .pdf-toolbar { grid-template-columns:1fr auto; }
             .pdf-page-target { grid-column:1 / -1; grid-row:2; justify-content:flex-start; }
@@ -238,17 +257,32 @@
                         <div><strong>图片添加到 PDF / Word 文件</strong><span>Document Image Editor</span></div>
                     </div>
 
-                    <div class="pdf-upload-grid">
+                    <div class="pdf-upload-grid" id="pdfUploadGrid">
                         <label class="pdf-upload-box" id="pdfFileBox">
                             <input id="pdfFileInput" type="file" accept="application/pdf,.pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx,.doc">
                             <span class="pdf-upload-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 18v-6M9 15l3-3 3 3"/></svg></span>
                             <span class="pdf-upload-copy"><strong>上传 PDF / Word 文件</strong><span id="pdfFileName">支持 PDF、Word（.docx）</span></span>
                         </label>
-                        <label class="pdf-upload-box" id="pdfImageBox">
-                            <input id="pdfImageInput" type="file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp">
-                            <span class="pdf-upload-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg></span>
-                            <span class="pdf-upload-copy"><strong>上传要添加的图片</strong><span id="pdfImageName">PNG、JPG 或 WebP</span></span>
-                        </label>
+                        <div class="pdf-upload-column">
+                            <label class="pdf-upload-box" id="pdfImageBox">
+                                <input id="pdfImageInput" type="file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp">
+                                <span class="pdf-upload-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg></span>
+                                <span class="pdf-upload-copy"><strong>上传要添加的图片</strong><span id="pdfImageName">PNG、JPG 或 WebP</span></span>
+                            </label>
+                            <div class="pdf-designer-request" id="pdfDesignerRequest">
+                                <input id="pdfDesignerNote" type="text" maxlength="300" placeholder="填写需要设计师添加的图片内容" aria-label="需要设计师添加的图片内容">
+                                <button id="pdfDesignerSubmit" type="button" disabled>提交给设计师</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="pdf-waiting" id="pdfDesignerWaiting" hidden>
+                        <div class="pdf-waiting-head">
+                            <div><strong>等待设计师添加图片</strong><span>任务已保存，可以关闭页面。图片上传后会通过钉钉通知你回来继续操作。</span></div>
+                            <div class="pdf-waiting-badge">等待中</div>
+                        </div>
+                        <div class="pdf-waiting-note" id="pdfDesignerWaitingNote"></div>
+                        <div class="pdf-waiting-actions"><button id="pdfDesignerCancel" type="button">取消等待</button><button id="pdfDesignerRefresh" type="button">检查状态</button></div>
                     </div>
 
                     <div class="pdf-editor" id="pdfEditor" hidden>
@@ -301,7 +335,7 @@
 
                     <div class="pdf-empty-preview" id="pdfEmptyPreview">上传 PDF 或 Word 文件后即可预览，再添加图片并调整位置和大小。</div>
 
-                    <div class="pdf-send-row">
+                    <div class="pdf-send-row" id="pdfSendRow">
                         <button class="pdf-send-btn" type="button" id="pdfSendButton" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>发送</button>
                         <button class="pdf-clear-btn" type="button" id="pdfClearButton">清空</button>
                     </div>
@@ -465,6 +499,6 @@ renderPatentHistory();
 <script src="/assets/vendor/jszip.min.js"></script>
 <script src="/assets/vendor/docx-preview.min.js"></script>
 <script src="/assets/vendor/html2canvas.min.js"></script>
-<script type="module" src="/tools-pdf.js"></script>
+<script type="module" src="/tools-pdf.js?v=20260724-designer-image"></script>
 </body>
 </html>

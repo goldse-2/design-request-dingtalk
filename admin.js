@@ -174,6 +174,7 @@ function showAdmin() {
     });
 
     loadSubmissions();
+    loadToolImageRequests();
     initLibrary();
     document.getElementById('examplesAdminSection').hidden = false;
     initStudioGuidesToggle();
@@ -247,6 +248,123 @@ async function loadSubmissions() {
         loadingState.innerHTML = `<p style="color:#ef4444">加载失败：${err.message}</p>`;
         const shootContainer = document.getElementById('shootAdminContent');
         if (shootContainer) shootContainer.innerHTML = '<div class="shoot-admin-panel"><div class="shoot-admin-empty">拍摄需求加载失败，请稍后刷新</div></div>';
+    }
+}
+
+async function loadToolImageRequests() {
+    const container = document.getElementById('toolImageRequestAdminContent');
+    if (!container) return;
+    container.hidden = false;
+    container.innerHTML = '<section class="shoot-admin-panel"><div class="shoot-admin-empty">正在加载 PDF / Word 图片需求...</div></section>';
+    try {
+        const response = await fetch('/api/admin-tools-image-request?limit=50', { cache: 'no-store' });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.ok) throw new Error(result.error || `加载失败 (${response.status})`);
+        renderToolImageRequests(result.tasks || []);
+    } catch (error) {
+        container.innerHTML = `<section class="shoot-admin-panel"><div class="shoot-admin-empty" style="color:#b91c1c">PDF / Word 图片需求加载失败：${esc(error.message)}</div></section>`;
+    }
+}
+
+function renderToolImageRequests(tasks) {
+    const container = document.getElementById('toolImageRequestAdminContent');
+    if (!container) return;
+    if (!tasks.length) {
+        container.hidden = true;
+        container.innerHTML = '';
+        return;
+    }
+    container.hidden = false;
+    const cards = tasks.map(task => {
+        const submitter = task.submitter || {};
+        const created = task.createdAt
+            ? new Date(task.createdAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+            : '';
+        const readyButNotNotified = task.status === 'ready' && !task.dingtalkNotified;
+        return `<article class="shoot-admin-card tool-image-request-card" id="tool-image-request-${esc(task.id)}">
+            <div class="shoot-admin-person">
+                ${submitter.avatar ? `<img class="shoot-admin-avatar" src="${esc(submitter.avatar)}" alt="">` : '<span class="shoot-admin-avatar"></span>'}
+                <div style="min-width:0"><strong>${esc(submitter.name || '钉钉用户')}</strong><small>${esc(created)} 提交</small></div>
+            </div>
+            <div class="shoot-admin-details">
+                <strong class="shoot-admin-product">${esc(task.documentName || 'PDF / Word 文件')}</strong>
+                <div class="shoot-admin-remark">${esc(task.note || '未填写图片要求')}</div>
+                ${task.documentUrl ? `<a class="tool-image-request-file" href="${esc(task.documentUrl)}">下载原文档</a>` : ''}
+            </div>
+            <div class="tool-image-request-upload">
+                ${readyButNotNotified
+                    ? `<div class="tool-image-request-warning">图片“${esc(task.imageName || '设计师图片')}”已保存，但钉钉通知未成功。</div>
+                       <button type="button" class="shoot-admin-btn shoot-admin-btn--primary" onclick="retryToolImageRequestNotification('${esc(task.id)}', this)">重新通知用户</button>`
+                    : `<div class="tool-image-request-picker"><input type="file" id="tool-image-file-${esc(task.id)}" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"></div>
+                       <button type="button" class="shoot-admin-btn shoot-admin-btn--primary" onclick="uploadToolImageRequest('${esc(task.id)}', this)">上传并通知用户</button>`}
+                <div id="tool-image-progress-${esc(task.id)}"></div>
+            </div>
+        </article>`;
+    }).join('');
+    container.innerHTML = `<section class="shoot-admin-panel">
+        <div class="shoot-admin-panel-head"><div class="shoot-admin-panel-title">PDF / Word 待添加图片</div><div class="shoot-admin-panel-count">${tasks.length} 个待处理</div></div>
+        <div class="shoot-admin-list">${cards}</div>
+    </section>`;
+}
+
+async function uploadToolImageRequest(id, button) {
+    const input = document.getElementById(`tool-image-file-${id}`);
+    const file = input?.files?.[0];
+    const progress = document.getElementById(`tool-image-progress-${id}`);
+    if (!file) {
+        input?.click();
+        return;
+    }
+    if (!/^image\/(png|jpeg|webp)$/i.test(file.type)) {
+        renderAdminProgress(progress, { title: '图片格式不支持', percent: 0, detail: '请选择 PNG、JPG 或 WebP 图片', state: 'error' });
+        return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+        renderAdminProgress(progress, { title: '图片超过 8MB', percent: 0, detail: '请压缩后重新上传', state: 'error' });
+        return;
+    }
+    button.disabled = true;
+    const formData = new FormData();
+    formData.append('id', id);
+    formData.append('file', file, file.name);
+    renderAdminProgress(progress, { title: '正在上传设计师图片', percent: 2, detail: file.name, countText: '已完成 0/1' });
+    try {
+        const response = await adminXhrJson('/api/admin-tools-image-request', {
+            body: formData,
+            onProgress: fraction => renderAdminProgress(progress, { title: '正在上传设计师图片', percent: fraction * 88, detail: file.name, countText: '已完成 0/1' }),
+            onRetry: () => renderAdminProgress(progress, { title: '正在自动重试', percent: 0, detail: '网络中断，正在重试一次', countText: '已完成 0/1', state: 'retrying' })
+        });
+        const result = response.result || {};
+        if (!response.ok || !result.ok) throw new Error(result.error || `上传失败 (${response.status})`);
+        if (result.notified) {
+            renderAdminProgress(progress, { title: '图片已上传', percent: 100, detail: '钉钉通知已发送', countText: '已完成 1/1', state: 'success' });
+        } else {
+            renderAdminProgress(progress, { title: '图片已保存', percent: 100, detail: result.warning || '钉钉通知失败，可重新通知', countText: '已完成 1/1', state: 'error' });
+        }
+        setTimeout(loadToolImageRequests, 700);
+    } catch (error) {
+        renderAdminProgress(progress, { title: '上传失败', percent: 0, detail: error.message, countText: '可重新上传', state: 'error' });
+        button.disabled = false;
+    }
+}
+
+async function retryToolImageRequestNotification(id, button) {
+    const progress = document.getElementById(`tool-image-progress-${id}`);
+    button.disabled = true;
+    renderAdminProgress(progress, { title: '正在通知用户', percent: 55, detail: '图片已经保存，无需重新上传' });
+    try {
+        const response = await fetch('/api/admin-tools-image-request', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, action: 'notify' })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.ok || !result.notified) throw new Error(result.warning || result.error || `通知失败 (${response.status})`);
+        renderAdminProgress(progress, { title: '通知成功', percent: 100, detail: '用户已收到钉钉消息', state: 'success' });
+        setTimeout(loadToolImageRequests, 700);
+    } catch (error) {
+        renderAdminProgress(progress, { title: '通知失败', percent: 0, detail: error.message, countText: '可再次重试', state: 'error' });
+        button.disabled = false;
     }
 }
 

@@ -16,6 +16,7 @@ const ADMIN_PATHS = new Set([
     '/api/admin-optimize-prompt',
     '/api/admin-library-cutout',
     '/api/admin-retouch-library-review',
+    '/api/admin-tools-image-request',
     '/api/sheet-self-photo',
     '/api/studio-photography-photo',
     '/api/retention-cleanup'

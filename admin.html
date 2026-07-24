@@ -98,8 +98,14 @@
 .admin-submit-progress.is-error { border-color:#fecaca; background:#fef2f2; }
 .admin-submit-progress.is-error .admin-submit-progress-bar { background:#dc2626; }
 .admin-inline-progress { grid-column:1 / -1; width:100%; margin-top:8px; }
+.tool-image-request-card { grid-template-columns:minmax(170px,.8fr) minmax(240px,1.35fr) minmax(250px,1fr); align-items:start; }
+.tool-image-request-file { display:inline-flex; align-items:center; gap:6px; margin-top:7px; color:#0f766e; font-size:.74rem; font-weight:750; text-decoration:none; }
+.tool-image-request-upload { display:grid; gap:8px; min-width:0; }
+.tool-image-request-picker { display:flex; align-items:center; gap:8px; min-width:0; }
+.tool-image-request-picker input { min-width:0; width:100%; color:#475569; font-size:.72rem; }
+.tool-image-request-warning { color:#b45309; font-size:.72rem; line-height:1.45; }
 @media (max-width: 820px) {
-    .shoot-admin-card { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+    .shoot-admin-card, .tool-image-request-card { grid-template-columns: minmax(0, 1fr); gap: 12px; }
     .shoot-admin-actions { justify-content: flex-start; }
     .shoot-complete-foot { align-items: stretch; flex-direction: column; }
 }
@@ -257,6 +263,7 @@
             <button type="button" id="studioBatchSendBtn" style="font-size:0.84rem;color:#fff;background:#4f46e5;border:1px solid #4f46e5;border-radius:7px;padding:8px 14px;cursor:pointer;font-weight:600">一键发送</button>
         </div>
     </div>
+    <div id="toolImageRequestAdminContent"></div>
     <div id="shootAdminContent"></div>
     <div id="studioAdminContent"></div>
     <div style="margin-top:28px;border-top:1px solid #e5e7eb;padding-top:18px">
@@ -480,7 +487,7 @@ function setLibAdminTab(btn, tabKey) {
     });
 }
 </script>
-<script src="admin.js?v=20260723-direct-image-retry"></script>
+<script src="admin.js?v=20260724-tool-image-request"></script>
 </div>
 </body>
 </html>

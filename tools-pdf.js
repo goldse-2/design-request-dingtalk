@@ -6,6 +6,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = '/assets/vendor/pdf.worker.min.mjs';
 const MAX_DOCUMENT_BYTES = 20 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const MAX_RESULT_BYTES = 20 * 1024 * 1024;
+const IMAGE_REQUEST_STORAGE_KEY = 'tools_image_request';
 
 const elements = {
     card: document.getElementById('pdfToolCard'),
@@ -15,6 +16,14 @@ const elements = {
     imageBox: document.getElementById('pdfImageBox'),
     fileName: document.getElementById('pdfFileName'),
     imageName: document.getElementById('pdfImageName'),
+    uploadGrid: document.getElementById('pdfUploadGrid'),
+    designerRequest: document.getElementById('pdfDesignerRequest'),
+    designerNote: document.getElementById('pdfDesignerNote'),
+    designerSubmit: document.getElementById('pdfDesignerSubmit'),
+    designerWaiting: document.getElementById('pdfDesignerWaiting'),
+    designerWaitingNote: document.getElementById('pdfDesignerWaitingNote'),
+    designerRefresh: document.getElementById('pdfDesignerRefresh'),
+    designerCancel: document.getElementById('pdfDesignerCancel'),
     editor: document.getElementById('pdfEditor'),
     empty: document.getElementById('pdfEmptyPreview'),
     shell: document.getElementById('pdfPreviewShell'),
@@ -38,6 +47,7 @@ const elements = {
     centerImage: document.getElementById('pdfCenterImage'),
     removeImage: document.getElementById('pdfRemoveImage'),
     sendButton: document.getElementById('pdfSendButton'),
+    sendRow: document.getElementById('pdfSendRow'),
     clearButton: document.getElementById('pdfClearButton'),
     progress: document.getElementById('pdfProgress'),
     progressText: document.getElementById('pdfProgressText'),
@@ -62,7 +72,9 @@ const state = {
     renderTask: null,
     overlay: null,
     blendMode: 'normal',
-    sending: false
+    sending: false,
+    requestingDesigner: false,
+    imageRequest: null
 };
 
 elements.card.addEventListener('click', () => {
@@ -97,8 +109,12 @@ elements.blendToggle.addEventListener('change', () => {
 });
 elements.centerImage.addEventListener('click', centerOverlay);
 elements.removeImage.addEventListener('click', removeImage);
-elements.clearButton.addEventListener('click', () => resetPdfTool());
+elements.clearButton.addEventListener('click', clearPdfTool);
 elements.sendButton.addEventListener('click', sendFileToDingTalk);
+elements.designerNote.addEventListener('input', updateReadyState);
+elements.designerSubmit.addEventListener('click', submitDesignerImageRequest);
+elements.designerRefresh.addEventListener('click', () => refreshDesignerImageRequest(true));
+elements.designerCancel.addEventListener('click', clearPdfTool);
 
 bindOverlayPointerEvents();
 window.addEventListener('resize', debounce(() => {
@@ -490,6 +506,8 @@ async function sendFileToDingTalk() {
         const result = await response.json().catch(() => ({}));
         if (!response.ok || !result.ok) throw new Error(result.error || `发送失败（HTTP ${response.status}）`);
 
+        const completedRequest = state.imageRequest;
+        if (completedRequest) await deleteDesignerImageRequest(completedRequest).catch(() => {});
         resetPdfTool({ keepProgress: true });
         showProgress('已发送到你的钉钉', 100, 'success');
     } catch (error) {
@@ -498,6 +516,201 @@ async function sendFileToDingTalk() {
         state.sending = false;
         updateReadyState();
     }
+}
+
+async function submitDesignerImageRequest() {
+    if (state.requestingDesigner || state.sending) return;
+    const note = elements.designerNote.value.trim();
+    if (!state.sourceFile) {
+        showProgress('请先上传 PDF 或 Word 文件', 100, 'error');
+        elements.fileInput.focus({ preventScroll: true });
+        return;
+    }
+    if (!note) {
+        showProgress('请填写需要设计师添加的图片内容', 100, 'error');
+        elements.designerNote.focus({ preventScroll: true });
+        return;
+    }
+    const user = readCurrentUser();
+    if (!user?.unionId) {
+        showProgress('请先在钉钉中登录网站', 100, 'error');
+        return;
+    }
+
+    const requestRef = {
+        id: `tool-image-request-${crypto.randomUUID()}`,
+        token: createRequestToken(),
+        note,
+        documentName: state.sourceFile.name
+    };
+    const formData = new FormData();
+    formData.append('file', state.sourceFile, state.sourceFile.name);
+    formData.append('requestId', requestRef.id);
+    formData.append('requestToken', requestRef.token);
+    formData.append('note', note);
+    formData.append('unionId', user.unionId);
+    formData.append('submitter', JSON.stringify(user));
+    formData.append('targetPage', String(state.targetPage || 1));
+    formData.append('blendMode', state.blendMode);
+    formData.append('exportFormat', selectedExportFormat());
+
+    state.requestingDesigner = true;
+    updateReadyState();
+    showProgress('正在保存文档', 3);
+    try {
+        const result = await uploadDesignerImageRequest(formData, fraction => {
+            showProgress('正在保存文档', 3 + fraction * 90);
+        });
+        if (!result.ok) throw new Error(result.error || '提交失败，请重试');
+        state.imageRequest = requestRef;
+        saveImageRequestRef(requestRef);
+        setImageRequestUrl(requestRef);
+        showDesignerWaiting(requestRef);
+        showProgress('已提交给设计师', 100, 'success');
+    } catch (error) {
+        showProgress(error.message || '提交失败，请重试', 100, 'error');
+    } finally {
+        state.requestingDesigner = false;
+        updateReadyState();
+    }
+}
+
+function uploadDesignerImageRequest(formData, onProgress) {
+    return new Promise((resolve, reject) => {
+        const request = new XMLHttpRequest();
+        request.open('POST', '/api/tools-image-request', true);
+        request.upload.onprogress = event => {
+            if (event.lengthComputable) onProgress?.(event.loaded / event.total);
+        };
+        request.onload = () => {
+            let result = {};
+            try { result = JSON.parse(request.responseText || '{}'); } catch {}
+            if (request.status >= 200 && request.status < 300) resolve(result);
+            else reject(new Error(result.error || `提交失败（HTTP ${request.status}）`));
+        };
+        request.onerror = () => reject(new Error('网络连接中断，请重新提交'));
+        request.send(formData);
+    });
+}
+
+async function refreshDesignerImageRequest(manual = false) {
+    const requestRef = state.imageRequest || readImageRequestRef();
+    if (!requestRef?.id || !requestRef?.token) return;
+    state.imageRequest = requestRef;
+    elements.designerRefresh.disabled = true;
+    if (manual) showProgress('正在检查设计师上传状态', 35);
+    try {
+        const response = await fetch(`/api/tools-image-request?id=${encodeURIComponent(requestRef.id)}&token=${encodeURIComponent(requestRef.token)}`, { cache: 'no-store' });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.ok) throw new Error(result.error || '等待任务不存在或已过期');
+        const task = result.task || {};
+        requestRef.note = task.note || requestRef.note;
+        requestRef.documentName = task.documentName || requestRef.documentName;
+        saveImageRequestRef(requestRef);
+        if (task.status !== 'ready' || !task.documentUrl || !task.imageUrl) {
+            showDesignerWaiting(requestRef);
+            if (manual) showProgress('设计师暂未上传图片', 100);
+            return;
+        }
+
+        showProgress('图片已上传，正在恢复文件', 55);
+        const [documentResponse, imageResponse] = await Promise.all([fetch(task.documentUrl), fetch(task.imageUrl)]);
+        if (!documentResponse.ok || !imageResponse.ok) throw new Error('文件恢复失败，请重新检查状态');
+        const [documentBlob, imageBlob] = await Promise.all([documentResponse.blob(), imageResponse.blob()]);
+        const documentFile = new File([documentBlob], task.documentName || requestRef.documentName || '待处理文档.pdf', {
+            type: task.documentMimeType || documentBlob.type
+        });
+        const imageFile = new File([imageBlob], task.imageName || '设计师图片.png', {
+            type: task.imageMimeType || imageBlob.type
+        });
+
+        setDesignerWaiting(false);
+        window.selectToolsPanel?.('pdf');
+        await loadDocument(documentFile);
+        const targetPage = clamp(Number(task.editor?.targetPage) || 1, 1, state.pageCount || 1);
+        state.pageNumber = targetPage;
+        state.targetPage = targetPage;
+        await renderCurrentPage();
+        await loadImage(imageFile);
+        state.blendMode = task.editor?.blendMode === 'multiply' ? 'multiply' : 'normal';
+        elements.blendToggle.checked = state.blendMode === 'multiply';
+        elements.blendOutput.textContent = state.blendMode === 'multiply' ? '正片叠底' : '无叠加';
+        const exportFormat = task.editor?.exportFormat === 'jpg' ? 'jpg' : 'pdf';
+        elements.exportFormats.forEach(input => { input.checked = input.value === exportFormat; });
+        updateOverlayElement();
+        updateReadyState();
+        showProgress('设计师图片已载入，可以调整位置并发送', 100, 'success');
+    } catch (error) {
+        showProgress(error.message || '状态检查失败，请重试', 100, 'error');
+        if (!state.sourceFile || !state.imageFile) showDesignerWaiting(requestRef);
+    } finally {
+        elements.designerRefresh.disabled = false;
+    }
+}
+
+function showDesignerWaiting(requestRef) {
+    state.imageRequest = requestRef;
+    elements.designerWaitingNote.textContent = `${requestRef.documentName || 'PDF / Word 文件'}：${requestRef.note || ''}`;
+    setDesignerWaiting(true);
+    updateReadyState();
+}
+
+function setDesignerWaiting(waiting) {
+    elements.designerWaiting.hidden = !waiting;
+    elements.uploadGrid.hidden = waiting;
+    elements.editor.hidden = waiting || !state.sourceFile;
+    elements.empty.hidden = waiting || Boolean(state.sourceFile);
+    elements.sendRow.hidden = waiting;
+}
+
+function createRequestToken() {
+    const bytes = crypto.getRandomValues(new Uint8Array(32));
+    return btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+function saveImageRequestRef(requestRef) {
+    localStorage.setItem(IMAGE_REQUEST_STORAGE_KEY, JSON.stringify(requestRef));
+}
+
+function readImageRequestRef() {
+    const params = new URLSearchParams(location.search);
+    const id = params.get('imageRequest');
+    const token = params.get('token');
+    if (id && token) return { id, token };
+    try { return JSON.parse(localStorage.getItem(IMAGE_REQUEST_STORAGE_KEY) || 'null'); }
+    catch { return null; }
+}
+
+function setImageRequestUrl(requestRef) {
+    const url = new URL(location.href);
+    url.searchParams.set('imageRequest', requestRef.id);
+    url.searchParams.set('token', requestRef.token);
+    history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+}
+
+function clearImageRequestRef() {
+    localStorage.removeItem(IMAGE_REQUEST_STORAGE_KEY);
+    const url = new URL(location.href);
+    url.searchParams.delete('imageRequest');
+    url.searchParams.delete('token');
+    history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+}
+
+async function deleteDesignerImageRequest(requestRef) {
+    if (!requestRef?.id || !requestRef?.token) return;
+    const response = await fetch('/api/tools-image-request', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestRef)
+    });
+    if (!response.ok) throw new Error('等待任务清理失败');
+}
+
+async function clearPdfTool() {
+    if (state.sending || state.requestingDesigner) return;
+    const requestRef = state.imageRequest;
+    resetPdfTool();
+    if (requestRef) await deleteDesignerImageRequest(requestRef).catch(() => {});
 }
 
 async function createOutputFile(format) {
@@ -637,10 +850,14 @@ function resetPdfTool(options = {}) {
         imageFile: null,
         imageUrl: '',
         overlay: null,
-        blendMode: 'normal'
+        blendMode: 'normal',
+        requestingDesigner: false,
+        imageRequest: null
     });
+    clearImageRequestRef();
     elements.fileInput.value = '';
     elements.imageInput.value = '';
+    elements.designerNote.value = '';
     elements.fileName.textContent = '支持 PDF、Word（.docx）';
     elements.imageName.textContent = 'PNG、JPG 或 WebP';
     elements.fileBox.classList.remove('ready');
@@ -658,6 +875,9 @@ function resetPdfTool(options = {}) {
     elements.blendToggle.checked = false;
     elements.blendOutput.textContent = '无叠加';
     elements.exportFormats.forEach(input => { input.checked = input.value === 'pdf'; });
+    elements.designerWaiting.hidden = true;
+    elements.uploadGrid.hidden = false;
+    elements.sendRow.hidden = false;
     const context = elements.canvas.getContext('2d');
     context.clearRect(0, 0, elements.canvas.width, elements.canvas.height);
     if (!options.keepProgress) clearProgress();
@@ -665,12 +885,17 @@ function resetPdfTool(options = {}) {
 }
 
 function updateReadyState() {
-    elements.sendButton.disabled = state.sending || !state.sourceFile || !state.imageFile || !state.overlay;
-    elements.clearButton.disabled = state.sending;
-    elements.fileInput.disabled = state.sending;
-    elements.imageInput.disabled = state.sending;
-    elements.blendToggle.disabled = state.sending;
-    elements.exportFormats.forEach(input => { input.disabled = state.sending; });
+    const waiting = Boolean(state.imageRequest && !state.imageFile);
+    const busy = state.sending || state.requestingDesigner;
+    elements.designerRequest.hidden = Boolean(state.imageRequest);
+    elements.sendButton.disabled = busy || !state.sourceFile || !state.imageFile || !state.overlay;
+    elements.clearButton.disabled = busy;
+    elements.fileInput.disabled = busy || waiting;
+    elements.imageInput.disabled = busy || waiting;
+    elements.designerNote.disabled = busy || Boolean(state.imageRequest);
+    elements.designerSubmit.disabled = busy || Boolean(state.imageRequest) || !state.sourceFile || !elements.designerNote.value.trim();
+    elements.blendToggle.disabled = busy;
+    elements.exportFormats.forEach(input => { input.disabled = busy; });
     elements.sendButton.innerHTML = state.sending
         ? '<span>正在发送...</span>'
         : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>发送';
@@ -789,4 +1014,12 @@ function debounce(callback, delay) {
     };
 }
 
-updateReadyState();
+const initialImageRequest = readImageRequestRef();
+if (initialImageRequest?.id && initialImageRequest?.token) {
+    state.imageRequest = initialImageRequest;
+    window.selectToolsPanel?.('pdf');
+    showDesignerWaiting(initialImageRequest);
+    refreshDesignerImageRequest(false);
+} else {
+    updateReadyState();
+}
