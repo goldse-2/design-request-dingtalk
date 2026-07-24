@@ -1,5 +1,5 @@
 import { taskNeedsRpaTranslation, translateForRpa, translateProgramFieldsForRpa } from '../_shared/ai-translate.js';
-import { markStudioNotificationFailed, markStudioNotificationSent, sendStudioResultImages, studioNotificationLeaseActive } from '../_shared/studio-dingtalk.js';
+import { claimStudioNotification, markStudioNotificationFailed, markStudioNotificationSent, sendStudioResultImages, studioNotificationLeaseActive } from '../_shared/studio-dingtalk.js';
 import { isAdminLibraryCutoutTask } from '../_shared/studio-library-replacement.js';
 import { recolorImage } from '../_shared/variant-recolor-core.js';
 import { editImageWithPrompt } from '../_shared/image-edit-core.js';
@@ -9,6 +9,8 @@ import { acquireStudioRpaSlot, ensureStudioRpaSlot, releaseStudioRpaSlot } from 
 import { advanceStudioPhotographyWorkflow, markStudioPhotographyRetouchTimedOut } from '../_shared/studio-photography-workflow.js';
 import { processDueEtaReminders, shouldRunEtaReminderCheck } from '../_shared/eta-reminders.js';
 import { createProgramRpaParams } from '../_shared/studio-no-product.js';
+
+const DIRECT_IMAGE_PROCESSING_LEASE_MS = 20 * 60 * 1000;
 
 export async function onRequestGet(context) {
     const { env, request, waitUntil } = context;
@@ -119,51 +121,82 @@ export async function onRequestGet(context) {
                 if (!imageOnly && task.pausedAuto) continue;
 
                 if (isImageTask) {
+                    if (directImageProcessingLeaseActive(task, now)) {
+                        nextAutoQueue.push(task.id);
+                        continue;
+                    }
+                    let activeTask = task;
+                    let ownsProcessingLease = false;
                     const nextAttemptAt = Date.parse(task.backgroundNextAttemptAt || '');
                     if (Number.isFinite(nextAttemptAt) && nextAttemptAt > now) {
                         nextAutoQueue.push(task.id);
                         continue;
                     }
                     try {
-                        const result = task.mode === 'resize_ai'
-                            ? await processResizeAiTask(env, task)
-                            : task.mode === 'watermark'
-                                ? await processWatermarkTask(env, task)
-                                : task.mode === 'translate_image'
-                                    ? await processTranslationTaskStep(env, task)
-                                : await processVariantTaskStep(env, task, origin);
-                        task.backgroundFailureCount = 0;
-                        task.backgroundLastError = '';
-                        task.backgroundNextAttemptAt = '';
-                        task.backgroundLastAttemptAt = new Date().toISOString();
-                        await env.SUBMISSIONS.put(task.id, JSON.stringify(task), studioTaskPutOptions(task));
-                        autoSent.push(task.id);
-                        const needsNotify = result.done && task.submitter?.unionId && !task.dingtalkNotified && !task.r2AutoNotified;
+                        const processingClaim = await claimDirectImageProcessing(env, task.id, now);
+                        if (!processingClaim.claimed) {
+                            nextAutoQueue.push(task.id);
+                            continue;
+                        }
+                        activeTask = processingClaim.task;
+                        ownsProcessingLease = true;
+                        const result = activeTask.mode === 'resize_ai'
+                            ? await processResizeAiTask(env, activeTask)
+                            : activeTask.mode === 'watermark'
+                                ? await processWatermarkTask(env, activeTask)
+                                : activeTask.mode === 'translate_image'
+                                    ? await processTranslationTaskStep(env, activeTask)
+                                : await processVariantTaskStep(env, activeTask, origin);
+                        activeTask.backgroundProcessingLeaseToken = '';
+                        activeTask.backgroundProcessingLeaseUntil = '';
+                        activeTask.backgroundFailureCount = 0;
+                        activeTask.backgroundLastError = '';
+                        activeTask.backgroundNextAttemptAt = '';
+                        activeTask.backgroundLastAttemptAt = new Date().toISOString();
+                        await env.SUBMISSIONS.put(activeTask.id, JSON.stringify(activeTask), studioTaskPutOptions(activeTask));
+                        autoSent.push(activeTask.id);
+                        const needsNotify = result.done && activeTask.submitter?.unionId && !activeTask.dingtalkNotified && !activeTask.r2AutoNotified;
                         let notifyOk = !needsNotify;
                         if (needsNotify && env.DINGTALK_APPKEY && env.DINGTALK_APPSECRET) {
+                            let notificationClaim;
                             try {
-                                await notifyUserDone(env, task, origin);
-                                await markStudioNotificationSent(env, task.id);
+                                notificationClaim = await claimStudioNotification(env, activeTask.id);
+                                if (notificationClaim.claimed) {
+                                    await notifyUserDone(env, notificationClaim.task, origin);
+                                    await markStudioNotificationSent(env, activeTask.id);
+                                }
                                 notifyOk = true;
                             } catch (e) {
                                 console.error('Notify background image task done failed:', e.message);
+                                if (notificationClaim?.claimed) {
+                                    await markStudioNotificationFailed(env, activeTask.id, e).catch(markError => {
+                                        console.error('Mark background image notification failure failed:', activeTask.id, markError.message);
+                                    });
+                                }
                             }
                         }
-                        if (!result.done || !notifyOk) nextAutoQueue.push(task.id);
+                        if (!result.done || !notifyOk) nextAutoQueue.push(activeTask.id);
                     } catch (e) {
+                        if (!ownsProcessingLease) {
+                            console.error('Direct image processing claim failed:', task.id, e.message);
+                            nextAutoQueue.push(task.id);
+                            continue;
+                        }
                         const errMsg = String(e.message || e).slice(0, 300);
-                        const failureCount = Math.max(0, Number(task.backgroundFailureCount || 0)) + 1;
-                        autoErrors.push({ id: task.id, error: errMsg });
-                        task.backgroundFailureCount = failureCount;
-                        task.backgroundLastError = errMsg;
-                        task.backgroundLastAttemptAt = new Date().toISOString();
+                        const failureCount = Math.max(0, Number(activeTask.backgroundFailureCount || 0)) + 1;
+                        autoErrors.push({ id: activeTask.id, error: errMsg });
+                        activeTask.backgroundProcessingLeaseToken = '';
+                        activeTask.backgroundProcessingLeaseUntil = '';
+                        activeTask.backgroundFailureCount = failureCount;
+                        activeTask.backgroundLastError = errMsg;
+                        activeTask.backgroundLastAttemptAt = new Date().toISOString();
                         const retryDelay = /image model is unavailable/i.test(errMsg)
                             ? 60 * 60 * 1000
                             : imageRetryDelayMs(failureCount);
-                        task.backgroundNextAttemptAt = new Date(now + retryDelay).toISOString();
-                        await env.SUBMISSIONS.put(task.id, JSON.stringify(task), studioTaskPutOptions(task));
-                        console.error('Background image task failed:', task.id, e.message);
-                        nextAutoQueue.push(task.id);
+                        activeTask.backgroundNextAttemptAt = new Date(now + retryDelay).toISOString();
+                        await env.SUBMISSIONS.put(activeTask.id, JSON.stringify(activeTask), studioTaskPutOptions(activeTask));
+                        console.error('Background image task failed:', activeTask.id, e.message);
+                        nextAutoQueue.push(activeTask.id);
                     }
                     continue;
                 }
@@ -457,6 +490,8 @@ async function listDueImageTaskIds(kv, now) {
                 || metadata.status === 'processing'
                 || (metadata.status === 'done' && !metadata.dingtalkNotified && !metadata.r2AutoNotified);
             if (!active) return false;
+            const processingLeaseUntil = Date.parse(metadata.backgroundProcessingLeaseUntil || '');
+            if (Number.isFinite(processingLeaseUntil) && processingLeaseUntil > now) return false;
             const nextAttemptAt = Date.parse(metadata.backgroundNextAttemptAt || '');
             return !Number.isFinite(nextAttemptAt) || nextAttemptAt <= now;
         })
@@ -505,7 +540,10 @@ async function migrateQueues(env) {
             const isBackgroundTask = isDirectImageTask(mode);
 
             if (isBackgroundTask) {
-                if (['pending', 'processing', 'done'].includes(status) && !meta.dingtalkNotified && !meta.r2AutoNotified) {
+                if (['pending', 'processing', 'done'].includes(status)
+                    && !meta.dingtalkNotified
+                    && !meta.r2AutoNotified
+                    && !directImageProcessingLeaseActive(meta)) {
                     imageQueueIds.push(key.name);
                 }
                 continue;
@@ -547,6 +585,38 @@ async function readStudioTasks(env, keys) {
         }
     }
     return tasks;
+}
+
+export function directImageProcessingLeaseActive(task, now = Date.now()) {
+    const leaseUntil = Date.parse(task?.backgroundProcessingLeaseUntil || '');
+    return Number.isFinite(leaseUntil) && leaseUntil > now;
+}
+
+export async function claimDirectImageProcessing(env, taskId, now = Date.now()) {
+    const raw = await env.SUBMISSIONS.get(taskId);
+    if (!raw) throw new Error('Direct image task not found while claiming processing');
+    const task = JSON.parse(raw);
+    if (task.dingtalkNotified || task.r2AutoNotified) {
+        return { claimed: false, reason: 'completed', task };
+    }
+    if (directImageProcessingLeaseActive(task, now)) {
+        return { claimed: false, reason: 'processing', task };
+    }
+
+    const token = crypto.randomUUID();
+    task.backgroundProcessingLeaseToken = token;
+    task.backgroundProcessingLeaseUntil = new Date(now + DIRECT_IMAGE_PROCESSING_LEASE_MS).toISOString();
+    await env.SUBMISSIONS.put(taskId, JSON.stringify(task), studioTaskPutOptions(task));
+
+    // Concurrent monitors may start together; only the final confirmed lease owner can continue.
+    await new Promise(resolve => setTimeout(resolve, 100));
+    const confirmedRaw = await env.SUBMISSIONS.get(taskId);
+    if (!confirmedRaw) throw new Error('Direct image task disappeared while claiming processing');
+    const confirmed = JSON.parse(confirmedRaw);
+    if (confirmed.backgroundProcessingLeaseToken !== token) {
+        return { claimed: false, reason: 'claimed_elsewhere', task: confirmed };
+    }
+    return { claimed: true, reason: 'claimed', task: confirmed };
 }
 
 async function processVariantTaskStep(env, task, origin) {

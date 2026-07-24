@@ -97,6 +97,7 @@ export async function markStudioNotificationSent(env, taskId, field = 'dingtalkN
         latestTask[field === 'r2AutoNotified' ? 'r2AutoNotifiedAt' : 'dingtalkNotifiedAt'] = notifiedAt;
         latestTask.dingtalkNotificationState = 'sent';
         latestTask.dingtalkNotificationStartedAt = '';
+        latestTask.dingtalkNotificationToken = '';
         return latestTask;
     }, 'Studio task not found while marking notification');
 }
@@ -106,6 +107,7 @@ export async function markStudioNotificationFailed(env, taskId, cause) {
         if (latestTask.dingtalkNotified || latestTask.r2AutoNotified) return null;
         latestTask.dingtalkNotificationState = 'pending';
         latestTask.dingtalkNotificationStartedAt = '';
+        latestTask.dingtalkNotificationToken = '';
         latestTask.dingtalkNotificationLastError = String(cause?.message || cause || '').slice(0, 300);
         latestTask.dingtalkNotificationLastAttemptAt = new Date().toISOString();
         return latestTask;
@@ -116,6 +118,37 @@ export function studioNotificationLeaseActive(task, now = Date.now()) {
     if (task?.dingtalkNotificationState !== 'sending') return false;
     const startedAt = Date.parse(task.dingtalkNotificationStartedAt || '');
     return Number.isFinite(startedAt) && now - startedAt < 5 * 60 * 1000;
+}
+
+export async function claimStudioNotification(env, taskId, now = Date.now()) {
+    const raw = await env.SUBMISSIONS.get(taskId);
+    if (!raw) throw new Error('Studio task not found while claiming notification');
+    const task = JSON.parse(raw);
+    if (task.dingtalkNotified || task.r2AutoNotified) {
+        return { claimed: false, reason: 'sent', task };
+    }
+    if (studioNotificationLeaseActive(task, now)) {
+        return { claimed: false, reason: 'sending', task };
+    }
+
+    const token = crypto.randomUUID();
+    task.dingtalkNotificationState = 'sending';
+    task.dingtalkNotificationStartedAt = new Date(now).toISOString();
+    task.dingtalkNotificationToken = token;
+    await env.SUBMISSIONS.put(taskId, JSON.stringify(task), studioTaskPutOptions(task));
+
+    // Let concurrent workers finish writing their claim, then only the last owner proceeds.
+    await new Promise(resolve => setTimeout(resolve, 100));
+    const confirmedRaw = await env.SUBMISSIONS.get(taskId);
+    if (!confirmedRaw) throw new Error('Studio task disappeared while claiming notification');
+    const confirmed = JSON.parse(confirmedRaw);
+    if (confirmed.dingtalkNotified || confirmed.r2AutoNotified) {
+        return { claimed: false, reason: 'sent', task: confirmed };
+    }
+    if (confirmed.dingtalkNotificationToken !== token) {
+        return { claimed: false, reason: 'claimed_elsewhere', task: confirmed };
+    }
+    return { claimed: true, reason: 'claimed', task: confirmed };
 }
 
 async function updateStudioNotificationWithRetry(env, taskId, update, notFoundMessage) {

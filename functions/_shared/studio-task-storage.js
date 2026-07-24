@@ -36,6 +36,7 @@ export function studioTaskMetadata(task) {
         r2AutoNotified: Boolean(task.r2AutoNotified),
         dingtalkNotificationState: task.dingtalkNotificationState || '',
         dingtalkNotificationStartedAt: task.dingtalkNotificationStartedAt || '',
+        backgroundProcessingLeaseUntil: task.backgroundProcessingLeaseUntil || '',
         backgroundLastAttemptAt: task.backgroundLastAttemptAt || '',
         backgroundNextAttemptAt: task.backgroundNextAttemptAt || '',
         backgroundFailureCount: Math.max(0, Number(task.backgroundFailureCount || 0)),
