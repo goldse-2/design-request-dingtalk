@@ -13,7 +13,7 @@
         .tools-header h1 { font-size:1.45rem; line-height:1.25; color:#111827; }
         .tools-header p { margin-top:5px; color:#64748b; font-size:.84rem; }
         .tools-count { flex:none; color:#64748b; font-size:.76rem; font-weight:700; }
-        .tools-workspace { display:grid; grid-template-columns:minmax(330px, 390px) minmax(0, 1fr); gap:20px; align-items:start; }
+        .tools-workspace { display:grid; grid-template-columns:470px minmax(0, 1fr); gap:28px; align-items:start; }
         .tool-operations { min-height:calc(100vh - 120px); padding:20px; border:1px solid #e2e8f0; border-radius:8px; background:#fff; }
         .tool-panel-title { display:flex; align-items:center; gap:10px; margin-bottom:18px; }
         .tool-panel-icon { display:grid; place-items:center; width:34px; height:34px; border-radius:7px; background:#0f766e; color:#fff; }
@@ -161,8 +161,7 @@
         .pdf-card-icon { background:#334155; }
         @media (max-width:1050px) {
             .tools-container { padding-left:28px; }
-            .tools-workspace { grid-template-columns:minmax(300px, 360px) minmax(0, 1fr); }
-            .tools-workspace.pdf-active { grid-template-columns:400px minmax(0, 1fr); gap:18px; }
+            .tools-workspace, .tools-workspace.pdf-active { grid-template-columns:400px minmax(0, 1fr); gap:18px; }
             .tool-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); }
         }
         @media (max-width:760px) {
