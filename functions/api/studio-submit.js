@@ -84,6 +84,7 @@ export async function onRequestPost(context) {
                 const isBackgroundImageTask = isDirectImageTask(existingTask.mode);
                 if (!isBackgroundImageTask) {
                     existingQueueResult = await queueStudioRpaTask(env, taskId);
+                    wakeStudioRpaQueue(request, waitUntil);
                 }
             }
             const existingQueueInfo = existingQueueResult && !existingTask.silent
@@ -169,15 +170,9 @@ export async function onRequestPost(context) {
         ? await getStudioRpaQueueInfo(env, task, rpaQueueResult.queueIds).catch(() => defaultQueueInfo(mode))
         : null;
 
-    // Cutout tasks require no approval. Dispatch the first queued task now;
-    // completion callbacks wake each following task, and cron remains the fallback.
-    const shouldWakeCutout = !waitingPhotography
-        && mode === 'cutout'
-        && rpaQueueResult
-        && (task.silent ? rpaQueueResult.position === 1 : queueInfo?.aheadCount === 0);
-    if (shouldWakeCutout) {
-        await wakeStudioRpaQueue(request);
-    }
+    // Every RPA task is automatic after the two-minute buffer. Waking here keeps
+    // the queue responsive; the periodic monitor remains the fallback.
+    if (!waitingPhotography && rpaQueueResult) wakeStudioRpaQueue(request, waitUntil);
 
     // 发送钉钉通知给管理员
     if (['free', 'program', 'retouch'].includes(mode)

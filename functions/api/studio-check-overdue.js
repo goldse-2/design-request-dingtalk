@@ -5,7 +5,7 @@ import { recolorImage } from '../_shared/variant-recolor-core.js';
 import { editImageWithPrompt } from '../_shared/image-edit-core.js';
 import { studioTaskPutOptions } from '../_shared/studio-task-storage.js';
 import { advanceSheetSelfWorkflow, retrySheetSelfChildAfterTimeout } from '../_shared/sheet-self-workflow.js';
-import { acquireStudioRpaSlot, ensureStudioRpaSlot, releaseStudioRpaSlot } from '../_shared/studio-rpa-slot.js';
+import { acquireStudioRpaSlot, claimStudioRpaRetrySlot, ensureStudioRpaSlot, getStudioRpaGlobalPause, releaseStudioRpaSlot, studioRpaTimeoutMinutes } from '../_shared/studio-rpa-slot.js';
 import { advanceStudioPhotographyWorkflow, markStudioPhotographyRetouchTimedOut } from '../_shared/studio-photography-workflow.js';
 import { processDueEtaReminders, shouldRunEtaReminderCheck } from '../_shared/eta-reminders.js';
 import { createProgramRpaParams } from '../_shared/studio-no-product.js';
@@ -33,8 +33,6 @@ export async function onRequestGet(context) {
             }
         }
         const autoSendThreshold = 2 * 60 * 1000;
-        const resultTimeoutThreshold = 10 * 60 * 1000;
-        const retouchTimeoutThreshold = 30 * 60 * 1000;
         const autoSent = [];
         const autoErrors = [];
         const notified = [];
@@ -42,23 +40,6 @@ export async function onRequestGet(context) {
         const IMAGE_QUEUE_KEY = 'studio:imageQueue:v2';
         const PROCESSING_QUEUE_KEY = 'studio:processingQueue:v2';
         const selectedQueueKey = imageOnly ? IMAGE_QUEUE_KEY : RPA_QUEUE_KEY;
-
-        // RPA auto-send follows business hours. Image tasks do not require approval and can run anytime.
-        if (!imageOnly && !isAutoSendWindow(now)) {
-            return Response.json({
-                ok: true,
-                suspended: true,
-                schedule: '08:00-19:30 Asia/Shanghai',
-                checked: 0,
-                autoChecked: 0,
-                autoSent: 0,
-                autoSentTasks: [],
-                autoErrors: [],
-                notified: 0,
-                tasks: [],
-                etaReminders
-            });
-        }
 
         let autoQueueIds = imageOnly
             ? await listDueImageTaskIds(env.SUBMISSIONS, now)
@@ -78,8 +59,11 @@ export async function onRequestGet(context) {
         let rpaSlot = imageOnly
             ? { busy: false, taskId: '' }
             : await ensureStudioRpaSlot(env, processingQueueIds);
+        const globalPause = imageOnly
+            ? { paused: false, updatedAt: '' }
+            : await getStudioRpaGlobalPause(env);
 
-        const autoBatchIds = autoQueueIds.slice(0, 1);
+        const autoBatchIds = globalPause.paused ? [] : autoQueueIds.slice(0, 1);
         const processingBatchIds = imageOnly
             ? []
             : unique([rpaSlot.taskId, ...processingQueueIds.slice(0, 10)].filter(Boolean));
@@ -325,14 +309,26 @@ export async function onRequestGet(context) {
             const sentAt = task.sentToRpaAt ? new Date(task.sentToRpaAt).getTime() : 0;
             const isRetouchStage = task.mode === 'retouch'
                 || (task.workflow?.type === 'sheet_self' && task.workflow.stage === 'retouch');
-            const timeoutThreshold = isRetouchStage ? retouchTimeoutThreshold : resultTimeoutThreshold;
+            const timeoutThreshold = studioRpaTimeoutMinutes(task) * 60 * 1000;
             if (!sentAt || (now - sentAt) < timeoutThreshold) {
+                nextProcessingQueue.push(task.id);
+                continue;
+            }
+            if (globalPause.paused) {
                 nextProcessingQueue.push(task.id);
                 continue;
             }
 
             if (task.workflow?.type === 'sheet_self') {
-                const retryResult = await retrySheetSelfChildAfterTimeout(env, task, new URL(request.url).origin);
+                const retries = Math.max(0, Number(task.workflowTimeoutRetries || 0));
+                if (retries < 1) {
+                    const retryClaim = await claimStudioRpaRetrySlot(env, task.id);
+                    if (!retryClaim.claimed) {
+                        nextProcessingQueue.push(task.id);
+                        continue;
+                    }
+                }
+                const retryResult = await retrySheetSelfChildAfterTimeout(env, task, new URL(request.url).origin, retries < 1);
                 if (retryResult.retried) nextProcessingQueue.push(task.id);
                 if (retryResult.retried) autoSent.push(task.id);
                 if (retryResult.error) autoErrors.push({ id: task.id, error: retryResult.error });
@@ -363,6 +359,11 @@ export async function onRequestGet(context) {
 
             const timeoutRetries = Math.max(0, Number(task.resultTimeoutRetryCount || 0));
             if (timeoutRetries < 1) {
+                const retryClaim = await claimStudioRpaRetrySlot(env, task.id);
+                if (!retryClaim.claimed) {
+                    nextProcessingQueue.push(task.id);
+                    continue;
+                }
                 task.resultTimeoutRetryCount = 1;
                 task.resultTimeoutFirstAt = new Date().toISOString();
                 try {
@@ -419,23 +420,13 @@ export async function onRequestGet(context) {
             queueType: imageOnly ? 'image' : 'rpa',
             queueRemaining: finalAutoQueue.length,
             processingQueueRemaining: imageOnly ? null : finalProcessingQueue.length,
+            globalPaused: globalPause.paused,
+            globalPauseUpdatedAt: globalPause.updatedAt,
             etaReminders
         });
     } catch (err) {
         return Response.json({ ok: false, error: err.message }, { status: 500 });
     }
-}
-
-function isAutoSendWindow(timestamp) {
-    const parts = new Intl.DateTimeFormat('en-US', {
-        timeZone: 'Asia/Shanghai',
-        hour: '2-digit',
-        minute: '2-digit',
-        hourCycle: 'h23'
-    }).formatToParts(new Date(timestamp));
-    const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
-    const minutes = Number(values.hour) * 60 + Number(values.minute);
-    return minutes >= 8 * 60 && minutes < 19 * 60 + 30;
 }
 
 function imageRetryDelayMs(failureCount) {
@@ -1321,11 +1312,12 @@ async function notifyAutoSent(env, task) {
 async function notifyOverdue(env, task, reason = 'twice') {
     const token = await getAccessToken(env);
     const modeText = studioModeText(task.mode);
+    const timeoutMinutes = studioRpaTimeoutMinutes(task);
     const detail = reason === 'retouch'
         ? '精修任务已等待 30 分钟仍未收到成品图。系统没有自动重发，任务继续保留在处理队列。'
         : reason === 'retry_failed'
-            ? '首次发送 10 分钟未收到成品图，自动重发时又发生错误。系统已停止继续自动重发，任务继续保留在处理队列。'
-            : '首次发送和自动重发后，连续两次各等待 10 分钟仍未收到成品图。系统已停止继续自动重发，任务继续保留在处理队列。';
+            ? `首次发送 ${timeoutMinutes} 分钟未收到成品图，自动重发时又发生错误。系统已停止继续自动重发，任务继续保留在处理队列。`
+            : `首次发送和自动重发后，连续两次各等待 ${timeoutMinutes} 分钟仍未收到成品图。系统已停止继续自动重发，任务继续保留在处理队列。`;
     const content = `⏰ RPA 任务超时提醒\n\n任务 ID：${task.id}\n模式：${modeText}\n提交人：${task.submitter?.name || '匿名'}\n${detail}\n\n请检查 RPA 执行情况，必要时在管理台手动重新发送。`;
     const response = await fetch('https://api.dingtalk.com/v1.0/robot/oToMessages/batchSend', {
         method: 'POST',

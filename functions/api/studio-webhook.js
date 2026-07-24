@@ -24,6 +24,9 @@ export async function onRequestPost(context) {
         const task = JSON.parse(raw);
         const origin = new URL(request.url).origin;
         acquiredSlot = await acquireStudioRpaSlot(env, taskId);
+        if (acquiredSlot.globallyPaused) {
+            return Response.json({ ok: false, error: '自动发送已全局挂起，请先恢复后再重试' }, { status: 409 });
+        }
         if (!acquiredSlot.acquired) {
             task.status = 'pending';
             task.sentToRpa = false;

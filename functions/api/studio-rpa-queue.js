@@ -1,7 +1,10 @@
 import {
+    getStudioRpaGlobalPause,
+    setStudioRpaGlobalPause,
     STUDIO_RPA_ACTIVE_KEY,
     STUDIO_RPA_QUEUE_KEY,
-    studioRpaModeMinutes
+    studioRpaModeMinutes,
+    studioRpaTimeoutMinutes
 } from '../_shared/studio-rpa-slot.js';
 import { wakeStudioRpaQueue } from '../_shared/studio-rpa-wakeup.js';
 import { studioTaskPutOptions } from '../_shared/studio-task-storage.js';
@@ -17,6 +20,15 @@ export async function onRequestGet(context) {
     }
 
     try {
+        const url = new URL(context.request.url);
+        const globalPause = await getStudioRpaGlobalPause(env);
+        if (url.searchParams.get('stateOnly') === '1') {
+            return Response.json({
+                ok: true,
+                globalPaused: globalPause.paused,
+                globalPauseUpdatedAt: globalPause.updatedAt
+            }, { headers: { 'Cache-Control': 'no-store' } });
+        }
         const [slotRaw, queueRaw, pausedRaw] = await Promise.all([
             env.SUBMISSIONS.get(STUDIO_RPA_ACTIVE_KEY).catch(() => null),
             env.SUBMISSIONS.get(STUDIO_RPA_QUEUE_KEY).catch(() => null),
@@ -57,6 +69,8 @@ export async function onRequestGet(context) {
             waiting,
             paused,
             counts: { active: active ? 1 : 0, waiting: waiting.length, paused: paused.length },
+            globalPaused: globalPause.paused,
+            globalPauseUpdatedAt: globalPause.updatedAt,
             truncated: unique([slot?.taskId, ...queueIds, ...pausedIds].filter(Boolean)).length > MAX_VISIBLE_TASKS,
             fetchedAt: new Date().toISOString()
         }, { headers: { 'Cache-Control': 'no-store' } });
@@ -77,6 +91,20 @@ export async function onRequestPatch(context) {
 
     const taskId = String(body.taskId || '').trim();
     const action = String(body.action || '').trim();
+    if (['global_pause', 'global_resume'].includes(action)) {
+        try {
+            const state = await setStudioRpaGlobalPause(env, action === 'global_pause');
+            if (!state.paused) wakeStudioRpaQueue(request, waitUntil);
+            return Response.json({
+                ok: true,
+                action,
+                globalPaused: state.paused,
+                globalPauseUpdatedAt: state.updatedAt
+            });
+        } catch (error) {
+            return Response.json({ ok: false, error: error.message }, { status: 500 });
+        }
+    }
     if (!taskId || !['pause', 'resume', 'prioritize'].includes(action)) {
         return Response.json({ ok: false, error: 'Missing taskId or unsupported action' }, { status: 400 });
     }
@@ -184,7 +212,7 @@ function studioModeText(mode) {
 function taskPossiblyStuck(task) {
     if (task.status !== 'processing' || task.sentToRpa !== true || !task.sentToRpaAt) return false;
     const elapsed = Date.now() - new Date(task.sentToRpaAt).getTime();
-    const threshold = task.mode === 'retouch' ? 30 * 60 * 1000 : 10 * 60 * 1000;
+    const threshold = studioRpaTimeoutMinutes(task) * 60 * 1000;
     return Number.isFinite(elapsed) && elapsed >= threshold;
 }
 

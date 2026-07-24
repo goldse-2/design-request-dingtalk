@@ -299,20 +299,13 @@ export async function retrySheetSelfSlot(env, parent, slot, origin) {
     return { stage: 'program' };
 }
 
-export async function retrySheetSelfChildAfterTimeout(env, task, origin) {
+export async function retrySheetSelfChildAfterTimeout(env, task, origin, retrySlotClaimed = false) {
     if (task?.workflow?.type !== 'sheet_self') return { handled: false };
     const slot = await getSheetSelfSlot(env, task.workflow.parentId, task.workflow.slotIndex);
     if (!slot) return { handled: false };
-    if (task.workflow.stage === 'retouch' || task.mode === 'retouch') {
-        await markSlotError(env, slot, 'retouch', new Error('精修环节等待 30 分钟仍未收到结果，未自动重发'), origin);
-        task.overdueNotified = true;
-        task.overdueNotifiedAt = new Date().toISOString();
-        await env.SUBMISSIONS.put(task.id, JSON.stringify(task), studioTaskPutOptions(task));
-        return { handled: true, exhausted: true, retrySkipped: true };
-    }
     const retries = Number(task.workflowTimeoutRetries || 0);
     if (retries >= 1) {
-        await markSlotError(env, slot, task.workflow.stage, new Error('首次发送和自动重发后，连续两次各等待 10 分钟仍未收到结果'), origin);
+        await markSlotError(env, slot, task.workflow.stage, new Error('首次发送和自动重发后，连续两次各等待 20 分钟仍未收到结果'), origin);
         task.overdueNotified = true;
         task.overdueNotifiedAt = new Date().toISOString();
         await env.SUBMISSIONS.put(task.id, JSON.stringify(task), studioTaskPutOptions(task));
@@ -324,7 +317,7 @@ export async function retrySheetSelfChildAfterTimeout(env, task, origin) {
     task.sentToRpaAt = '';
     await env.SUBMISSIONS.put(task.id, JSON.stringify(task), studioTaskPutOptions(task));
     try {
-        await createAndDispatchChild(env, task, origin, true);
+        await createAndDispatchChild(env, task, origin, true, retrySlotClaimed);
         slot.stage = task.workflow.stage;
         slot.error = '';
         slot.failedStage = '';
@@ -466,7 +459,7 @@ function makeChildTask(parent, slot, options) {
     };
 }
 
-async function createAndDispatchChild(env, task, origin, force = false) {
+async function createAndDispatchChild(env, task, origin, force = false, retrySlotClaimed = false) {
     const existingRaw = await env.SUBMISSIONS.get(task.id).catch(() => null);
     if (existingRaw) {
         const existing = JSON.parse(existingRaw);
@@ -484,7 +477,9 @@ async function createAndDispatchChild(env, task, origin, force = false) {
         return task;
     }
 
-    const slot = await acquireStudioRpaSlot(env, task.id);
+    const slot = retrySlotClaimed
+        ? { acquired: true, alreadyOwned: true }
+        : await acquireStudioRpaSlot(env, task.id);
     if (!slot.acquired) {
         task.status = 'pending';
         task.sentToRpa = false;

@@ -1,7 +1,37 @@
 export const STUDIO_RPA_ACTIVE_KEY = 'studio:rpaActive:v1';
 export const STUDIO_RPA_QUEUE_KEY = 'studio:rpaQueue:v2';
 export const STUDIO_PROCESSING_QUEUE_KEY = 'studio:processingQueue:v2';
+export const STUDIO_RPA_GLOBAL_PAUSE_KEY = 'studio:rpaGlobalPause:v1';
 const STUDIO_RPA_DISPATCH_LEASE_MS = 30 * 1000;
+
+export async function getStudioRpaGlobalPause(env) {
+    const kv = env?.SUBMISSIONS;
+    if (!kv) throw new Error('KV not configured');
+
+    const raw = await kv.get(STUDIO_RPA_GLOBAL_PAUSE_KEY).catch(() => null);
+    if (!raw) return { paused: false, updatedAt: '' };
+    try {
+        const state = JSON.parse(raw);
+        return {
+            paused: state?.paused === true,
+            updatedAt: String(state?.updatedAt || '')
+        };
+    } catch {
+        return { paused: raw === 'true', updatedAt: '' };
+    }
+}
+
+export async function setStudioRpaGlobalPause(env, paused) {
+    const kv = env?.SUBMISSIONS;
+    if (!kv) throw new Error('KV not configured');
+
+    const state = {
+        paused: paused === true,
+        updatedAt: new Date().toISOString()
+    };
+    await kv.put(STUDIO_RPA_GLOBAL_PAUSE_KEY, JSON.stringify(state));
+    return state;
+}
 
 export async function ensureStudioRpaSlot(env, processingQueueIds = null) {
     const kv = env?.SUBMISSIONS;
@@ -45,6 +75,16 @@ export async function acquireStudioRpaSlot(env, taskId, processingQueueIds = nul
     const id = String(taskId || '').trim();
     if (!id) throw new Error('Missing task ID');
 
+    const globalPause = await getStudioRpaGlobalPause(env);
+    if (globalPause.paused) {
+        return {
+            acquired: false,
+            alreadyOwned: false,
+            busyTaskId: '',
+            globallyPaused: true
+        };
+    }
+
     const current = await ensureStudioRpaSlot(env, processingQueueIds);
     if (current.busy) {
         return {
@@ -67,6 +107,34 @@ export async function acquireStudioRpaSlot(env, taskId, processingQueueIds = nul
         };
     }
     return { acquired: true, alreadyOwned: false, busyTaskId: '', slot: confirmed };
+}
+
+export async function claimStudioRpaRetrySlot(env, taskId) {
+    const kv = env?.SUBMISSIONS;
+    if (!kv) throw new Error('KV not configured');
+
+    const id = String(taskId || '').trim();
+    if (!id) throw new Error('Missing task ID');
+    const globalPause = await getStudioRpaGlobalPause(env);
+    if (globalPause.paused) return { claimed: false, globallyPaused: true };
+
+    const current = parseSlot(await kv.get(STUDIO_RPA_ACTIVE_KEY).catch(() => null));
+    if (current?.taskId !== id) {
+        return { claimed: false, busyTaskId: current?.taskId || '' };
+    }
+    if (dispatchLeaseActive(current)) {
+        return { claimed: false, busyTaskId: current.taskId, retryInProgress: true };
+    }
+
+    const claimToken = crypto.randomUUID();
+    const slot = makeBusySlot(id, 'retry', claimToken);
+    await kv.put(STUDIO_RPA_ACTIVE_KEY, JSON.stringify(slot));
+    await new Promise(resolve => setTimeout(resolve, 100));
+    const confirmed = parseSlot(await kv.get(STUDIO_RPA_ACTIVE_KEY).catch(() => null));
+    if (confirmed?.claimToken !== claimToken) {
+        return { claimed: false, busyTaskId: confirmed?.taskId || '' };
+    }
+    return { claimed: true, slot: confirmed };
 }
 
 export async function releaseStudioRpaSlot(env, taskId) {
@@ -148,6 +216,14 @@ export function studioRpaModeMinutes(mode) {
     return 10;
 }
 
+export function studioRpaTimeoutMinutes(task) {
+    if (task?.workflow?.type === 'sheet_self') return 20;
+    if (task?.mode === 'free') return 15;
+    if (task?.mode === 'program') return 20;
+    if (task?.mode === 'retouch') return 30;
+    return 10;
+}
+
 function taskHoldsRpaSlot(task) {
     return Boolean(task
         && task.kind === 'studio'
@@ -183,12 +259,12 @@ function makeBusySlot(taskId, source, claimToken = '') {
         updatedAt: now,
         source,
         claimToken,
-        leaseUntil: source === 'dispatch' ? new Date(Date.now() + STUDIO_RPA_DISPATCH_LEASE_MS).toISOString() : ''
+        leaseUntil: ['dispatch', 'retry'].includes(source) ? new Date(Date.now() + STUDIO_RPA_DISPATCH_LEASE_MS).toISOString() : ''
     };
 }
 
 function dispatchLeaseActive(slot, now = Date.now()) {
-    if (slot?.source !== 'dispatch') return false;
+    if (!['dispatch', 'retry'].includes(slot?.source)) return false;
     const leaseUntil = Date.parse(slot.leaseUntil || '');
     return Number.isFinite(leaseUntil) && leaseUntil > now;
 }

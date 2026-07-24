@@ -2195,6 +2195,7 @@ let studioAdminTasks = [];
 let studioNotifyRefreshTimer = null;
 let studioNotifyRefreshAttempts = 0;
 const studioApprovalModes = new Set(['free', 'program', 'retouch']);
+let studioRpaGlobalPaused = false;
 
 async function loadStudioAdmin() {
     const container = document.getElementById('studioAdminContent');
@@ -2212,6 +2213,7 @@ async function loadStudioAdmin() {
         });
         studioAdminTasks = tasks;
         bindStudioBatchActions();
+        syncStudioRpaGlobalPause();
         scheduleStudioNotificationRefresh(tasks);
         
         // 统计分类
@@ -2366,13 +2368,13 @@ function renderStudioTask(task) {
         const createdAt = typeof task.timestamp === 'number' ? task.timestamp : new Date(task.createdAt || task.timestamp || 0).getTime();
         const elapsed = Date.now() - createdAt;
         const autoSendThreshold = 2 * 60 * 1000;
-        if (!isStudioAutoSendWindow()) {
-            html += '<span id="countdown-' + task.id + '" style="font-size:0.72rem;background:#f3f4f6;color:#6b7280;padding:2px 10px;border-radius:10px">非自动发送时段，08:00恢复</span>';
-        } else if (elapsed < autoSendThreshold) {
+        if (elapsed < autoSendThreshold) {
             const remaining = Math.max(0, Math.floor((autoSendThreshold - elapsed) / 1000));
             const mins = Math.floor(remaining / 60);
             const secs = remaining % 60;
             html += '<span id="countdown-' + task.id + '" style="font-size:0.72rem;background:#fef3c7;color:#f59e0b;padding:2px 10px;border-radius:10px">⏱ ' + mins + '分' + secs + '秒后自动发送</span>';
+        } else {
+            html += '<span style="font-size:0.72rem;background:#ecfdf5;color:#047857;padding:2px 10px;border-radius:10px">等待队列自动发送</span>';
         }
     }
     html += '</div>'
@@ -2504,7 +2506,17 @@ function renderStudioTask(task) {
         retouchingLabel.style.cssText = 'font-size:.82rem;color:#1d4ed8;background:#eff6ff;border:1px solid #bfdbfe;border-radius:7px;padding:7px 12px;font-weight:700';
         actions.append(retouchingLabel);
     } else if (requiresApproval) {
-        actions.append(feedbackBtn, rpaBtn, viewCodeBtn, uploadBtn);
+        actions.append(feedbackBtn);
+        if (task.sentToRpa && task.status !== 'done') {
+            actions.append(rpaBtn);
+        } else if (!task.sentToRpa && task.status === 'pending') {
+            const automaticLabel = document.createElement('span');
+            automaticLabel.dataset.rpaAutoLabel = '1';
+            automaticLabel.textContent = studioRpaGlobalPaused ? '自动发送已挂起' : '2 分钟后自动发送，无需审批';
+            automaticLabel.style.cssText = 'font-size:0.82rem;color:#047857;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:7px;padding:7px 12px;font-weight:600';
+            actions.append(automaticLabel);
+        }
+        actions.append(viewCodeBtn, uploadBtn);
     } else {
         const automaticLabel = document.createElement('span');
         automaticLabel.textContent = task.mode === 'cutout' ? 'RPA 自动处理，无需审批' : 'AI 自动处理，无需审批';
@@ -2688,10 +2700,6 @@ function startCountdownTimer(taskId, createdAt) {
     if (!countdownEl) return;
     const autoSendThreshold = 2 * 60 * 1000;
     const interval = setInterval(() => {
-        if (!isStudioAutoSendWindow()) {
-            countdownEl.textContent = '非自动发送时段，08:00恢复';
-            return;
-        }
         const elapsed = Date.now() - createdAt;
         const remaining = Math.max(0, Math.floor((autoSendThreshold - elapsed) / 1000));
         if (remaining <= 0) {
@@ -3360,18 +3368,6 @@ function spreadsheetBaseName(value) {
     return name.replace(/\.(xlsx|xls)$/i, '').trim();
 }
 
-function isStudioAutoSendWindow(date = new Date()) {
-    const parts = new Intl.DateTimeFormat('en-US', {
-        timeZone: 'Asia/Shanghai',
-        hour: '2-digit',
-        minute: '2-digit',
-        hourCycle: 'h23'
-    }).formatToParts(date);
-    const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
-    const minutes = Number(values.hour) * 60 + Number(values.minute);
-    return minutes >= 8 * 60 && minutes < 19 * 60 + 30;
-}
-
 async function saveStudioDesc(taskId, btn) {
     const el = document.getElementById('studioDesc-' + taskId);
     if (!el) return;
@@ -3590,54 +3586,41 @@ async function optimizeStudioDesc(task, editWrap, editBtn, btn) {
 }
 
 function bindStudioBatchActions() {
-    const sendBtn = document.getElementById('studioBatchSendBtn');
     const pauseBtn = document.getElementById('studioBatchPauseBtn');
     const queueBtn = document.getElementById('studioQueueBtn');
-    if (sendBtn) sendBtn.onclick = () => batchSendStudioTasks(sendBtn);
-    if (pauseBtn) pauseBtn.onclick = () => batchPauseStudioTasks(pauseBtn);
+    if (pauseBtn) pauseBtn.onclick = () => toggleStudioRpaGlobalPause(pauseBtn);
     if (queueBtn) queueBtn.onclick = openStudioRpaQueue;
 }
 
-async function batchSendStudioTasks(btn) {
-    const tasks = studioAdminTasks.filter(task => ['free', 'program', 'retouch'].includes(task.mode) && task.status === 'pending' && !task.sentToRpa);
-    if (!tasks.length) {
-        alert('当前没有待发送任务');
-        return;
-    }
-    if (!confirm('确认立即发送全部 ' + tasks.length + ' 个待处理任务吗？')) return;
-
-    const originalText = btn.textContent;
-    btn.disabled = true;
-    let sent = 0;
-    let queued = 0;
-    const failed = [];
+async function syncStudioRpaGlobalPause() {
+    const button = document.getElementById('studioBatchPauseBtn');
+    if (!button) return;
     try {
-        for (let i = 0; i < tasks.length; i++) {
-            const task = tasks[i];
-            btn.textContent = '发送中 ' + (i + 1) + '/' + tasks.length;
-            const programWebhook = 'https://api-rpa.bazhuayu.com/api/v1/bots/webhooks/6a3a40ac622e84b667229fde/invoke';
-            const freeWebhook = 'https://api-rpa.bazhuayu.com/api/v1/bots/webhooks/6a31134a622e84b6672263ee/invoke';
-            const retouchWebhook = 'https://api-rpa.bazhuayu.com/api/v1/bots/webhooks/6a543c91645904b3178e096b/invoke';
-            try {
-                const res = await fetch('/api/studio-webhook', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ taskId: task.id, webhookUrl: task.mode === 'program' ? programWebhook : task.mode === 'retouch' ? retouchWebhook : freeWebhook })
-                });
-                const json = await res.json().catch(() => ({}));
-                if (res.ok && json.ok && json.queued) queued++;
-                else if (res.ok && json.ok) sent++;
-                else failed.push(task.id);
-            } catch {
-                failed.push(task.id);
-            }
-        }
-        alert('一键发送完成：已发送 ' + sent + ' 个，已排队 ' + queued + ' 个' + (failed.length ? '，失败 ' + failed.length + ' 个' : ''));
-        await loadStudioAdmin();
-    } finally {
-        btn.disabled = false;
-        btn.textContent = originalText;
+        const response = await fetch('/api/studio-rpa-queue?stateOnly=1', { cache: 'no-store' });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.ok) throw new Error(result.error || '读取挂起状态失败');
+        studioRpaGlobalPaused = result.globalPaused === true;
+        renderStudioRpaGlobalPauseButton(button);
+    } catch (error) {
+        button.title = error.message;
     }
+}
+
+function renderStudioRpaGlobalPauseButton(button) {
+    if (!button) return;
+    button.textContent = studioRpaGlobalPaused ? '恢复自动发送' : '一键挂起';
+    button.title = studioRpaGlobalPaused
+        ? '当前所有新任务和排队任务都不会发送，点击恢复后自动继续'
+        : '挂起后所有新任务和排队任务都不会发送，正在执行的任务不受影响';
+    button.style.color = studioRpaGlobalPaused ? '#047857' : '#b45309';
+    button.style.borderColor = studioRpaGlobalPaused ? '#10b981' : '#f59e0b';
+    button.style.background = studioRpaGlobalPaused ? '#ecfdf5' : '#fff';
+    document.querySelectorAll('[data-rpa-auto-label="1"]').forEach(label => {
+        label.textContent = studioRpaGlobalPaused ? '自动发送已挂起' : '2 分钟后自动发送，无需审批';
+        label.style.color = studioRpaGlobalPaused ? '#92400e' : '#047857';
+        label.style.background = studioRpaGlobalPaused ? '#fff7ed' : '#ecfdf5';
+        label.style.borderColor = studioRpaGlobalPaused ? '#fcd34d' : '#a7f3d0';
+    });
 }
 
 function scheduleStudioNotificationRefresh(tasks) {
@@ -3664,40 +3647,29 @@ function scheduleStudioNotificationRefresh(tasks) {
     }, delay);
 }
 
-async function batchPauseStudioTasks(btn) {
-    const tasks = studioAdminTasks.filter(task => studioApprovalModes.has(task.mode) && task.status === 'pending' && !task.sentToRpa && !task.pausedAuto);
-    if (!tasks.length) {
-        alert('当前没有可挂起的待发送任务');
-        return;
-    }
-    if (!confirm('确认挂起全部 ' + tasks.length + ' 个待发送任务吗？挂起后不会自动发送，但仍可手动发送。')) return;
-
+async function toggleStudioRpaGlobalPause(btn) {
+    const nextPaused = !studioRpaGlobalPaused;
+    if (nextPaused && !confirm('确认一键挂起自动发送吗？正在执行的任务会继续，其他任务会保留在队列中。')) return;
     const originalText = btn.textContent;
     btn.disabled = true;
-    let paused = 0;
-    const failed = [];
+    btn.textContent = nextPaused ? '正在挂起...' : '正在恢复...';
     try {
-        for (let i = 0; i < tasks.length; i++) {
-            const task = tasks[i];
-            btn.textContent = '挂起中 ' + (i + 1) + '/' + tasks.length;
-            try {
-                const res = await fetch('/api/studio-pause-auto', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ taskId: task.id, pausedAuto: true })
-                });
-                const json = await res.json().catch(() => ({}));
-                if (res.ok && json.ok) paused++;
-                else failed.push(task.id);
-            } catch {
-                failed.push(task.id);
-            }
-        }
-        alert('一键挂起完成：成功 ' + paused + ' 个' + (failed.length ? '，失败 ' + failed.length + ' 个' : ''));
-        await loadStudioAdmin();
+        const response = await fetch('/api/studio-rpa-queue', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: nextPaused ? 'global_pause' : 'global_resume' })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.ok) throw new Error(result.error || `操作失败 (${response.status})`);
+        studioRpaGlobalPaused = result.globalPaused === true;
+        renderStudioRpaGlobalPauseButton(btn);
+        if (studioRpaQueueModal) await loadStudioRpaQueue(studioRpaGlobalPaused ? '自动发送已挂起。' : '自动发送已恢复，队列正在继续。');
+    } catch (error) {
+        btn.textContent = originalText;
+        alert(error.message);
     } finally {
         btn.disabled = false;
-        btn.textContent = originalText;
+        renderStudioRpaGlobalPauseButton(btn);
     }
 }
 
@@ -3776,6 +3748,8 @@ function renderStudioRpaQueue(data, message = '') {
     const waiting = Array.isArray(data.waiting) ? data.waiting : [];
     const paused = mergeKnownPausedStudioTasks(data.paused || [], data.active, waiting);
     const active = data.active || null;
+    studioRpaGlobalPaused = data.globalPaused === true;
+    renderStudioRpaGlobalPauseButton(document.getElementById('studioBatchPauseBtn'));
     const activeHtml = active
         ? `<div class="studio-rpa-queue-current${active.possiblyStuck ? ' is-stuck' : ''}">
                 <div>
@@ -3788,6 +3762,7 @@ function renderStudioRpaQueue(data, message = '') {
             </div>`
         : '<div class="studio-rpa-queue-empty">RPA 当前空闲</div>';
     body.innerHTML = `
+        ${studioRpaGlobalPaused ? '<div class="studio-rpa-queue-message" style="margin-bottom:12px;background:#fff7ed;color:#92400e;border-color:#fcd34d">自动发送已全局挂起。正在执行的任务会继续，其他任务恢复后自动发送。</div>' : ''}
         <div class="studio-rpa-queue-summary">
             <span class="studio-rpa-queue-stat">执行中 <strong>${active ? 1 : 0}</strong></span>
             <span class="studio-rpa-queue-stat">等待 <strong>${waiting.length}</strong></span>
