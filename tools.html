@@ -57,22 +57,82 @@
         .tool-grid { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px; padding:16px 20px 20px; }
         .tool-card { display:grid; grid-template-columns:40px minmax(0, 1fr) auto; align-items:start; gap:11px; min-height:116px; padding:15px; border:1px solid #cbd5e1; border-radius:7px; background:#f8fafc; color:inherit; text-decoration:none; cursor:pointer; }
         .tool-card:hover, .tool-card.active { border-color:#0f766e; background:#f0fdfa; }
+        .tools-workspace.pdf-active .tool-grid { grid-template-columns:1fr; }
         .tool-card-icon { display:grid; place-items:center; width:40px; height:40px; border-radius:7px; background:#0f766e; color:#fff; }
         .tool-card-icon svg { width:21px; height:21px; }
         .tool-card h3 { margin:1px 0 5px; color:#111827; font-size:.88rem; }
         .tool-card p { color:#64748b; font-size:.72rem; line-height:1.55; }
         .tool-status { margin-top:2px; padding:3px 7px; border-radius:999px; background:#dcfce7; color:#047857; font-size:.64rem; font-weight:800; }
         .catalog-empty { margin:0 20px 20px; padding:16px; border-top:1px solid #eef2f7; color:#94a3b8; font-size:.76rem; }
+        .tool-panel[hidden] { display:none !important; }
+        .tools-workspace.pdf-active { grid-template-columns:minmax(560px, 760px) minmax(310px, 1fr); }
+        .pdf-upload-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+        .pdf-upload-box { position:relative; display:flex; align-items:center; gap:10px; min-width:0; min-height:82px; padding:13px; border:1px dashed #94a3b8; border-radius:7px; background:#f8fafc; cursor:pointer; }
+        .pdf-upload-box:hover { border-color:#0f766e; background:#f0fdfa; }
+        .pdf-upload-box.ready { border-style:solid; border-color:#10b981; background:#f0fdf4; }
+        .pdf-upload-box input { position:absolute; width:1px; height:1px; opacity:0; pointer-events:none; }
+        .pdf-upload-icon { flex:none; display:grid; place-items:center; width:34px; height:34px; border-radius:7px; background:#e2e8f0; color:#334155; }
+        .pdf-upload-icon svg { width:18px; height:18px; }
+        .pdf-upload-copy { min-width:0; }
+        .pdf-upload-copy strong { display:block; color:#1f2937; font-size:.78rem; }
+        .pdf-upload-copy span { display:block; margin-top:4px; overflow:hidden; color:#94a3b8; font-size:.68rem; text-overflow:ellipsis; white-space:nowrap; }
+        .pdf-editor { margin-top:14px; }
+        .pdf-editor[hidden], .pdf-empty-preview[hidden] { display:none !important; }
+        .pdf-toolbar { display:grid; grid-template-columns:auto minmax(0, 1fr) auto; align-items:center; gap:8px; margin-bottom:9px; }
+        .pdf-page-nav { display:flex; align-items:center; gap:6px; }
+        .pdf-icon-btn { display:grid; place-items:center; width:34px; height:34px; padding:0; border:1px solid #cbd5e1; border-radius:6px; background:#fff; color:#334155; cursor:pointer; }
+        .pdf-icon-btn:disabled { opacity:.4; cursor:not-allowed; }
+        .pdf-icon-btn svg { width:16px; height:16px; }
+        .pdf-page-label { color:#475569; font-size:.72rem; font-weight:800; white-space:nowrap; }
+        .pdf-page-target { display:flex; align-items:center; justify-content:center; gap:7px; min-width:0; color:#64748b; font-size:.7rem; }
+        .pdf-page-target select { width:74px; height:34px; border:1px solid #cbd5e1; border-radius:6px; background:#fff; color:#1f2937; }
+        .pdf-preview-shell { position:relative; display:grid; place-items:center; min-height:360px; max-height:68vh; overflow:auto; padding:18px; border:1px solid #dbe3ec; border-radius:7px; background:#e5e7eb; }
+        .pdf-stage { position:relative; flex:none; line-height:0; box-shadow:0 7px 20px rgba(15,23,42,.16); touch-action:none; }
+        #pdfPreviewCanvas { display:block; max-width:none; background:#fff; }
+        .pdf-image-overlay { position:absolute; min-width:28px; min-height:28px; border:1px solid #0f766e; cursor:move; touch-action:none; user-select:none; }
+        .pdf-image-overlay[hidden] { display:none; }
+        .pdf-image-overlay img { display:block; width:100%; height:100%; object-fit:fill; pointer-events:none; }
+        .pdf-resize-handle { position:absolute; right:-7px; bottom:-7px; width:14px; height:14px; border:2px solid #fff; border-radius:50%; background:#0f766e; cursor:nwse-resize; }
+        .pdf-empty-preview { display:grid; place-items:center; min-height:360px; padding:30px; color:#94a3b8; text-align:center; font-size:.76rem; line-height:1.7; }
+        .pdf-controls { display:grid; grid-template-columns:1fr 1fr; gap:10px 16px; margin-top:13px; }
+        .pdf-control { min-width:0; }
+        .pdf-control-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px; color:#475569; font-size:.7rem; font-weight:700; }
+        .pdf-control input[type="range"] { width:100%; accent-color:#0f766e; }
+        .pdf-control-actions { display:flex; align-items:end; justify-content:flex-end; gap:7px; }
+        .pdf-small-btn { min-height:35px; padding:0 10px; border:1px solid #cbd5e1; border-radius:6px; background:#fff; color:#475569; font-size:.72rem; font-weight:700; cursor:pointer; }
+        .pdf-small-btn:disabled { opacity:.45; cursor:not-allowed; }
+        .pdf-send-row { display:grid; grid-template-columns:minmax(0, 1fr) auto; gap:8px; margin-top:16px; }
+        .pdf-send-btn { display:flex; align-items:center; justify-content:center; gap:8px; min-height:44px; border:0; border-radius:7px; background:#111827; color:#fff; font-size:.84rem; font-weight:800; cursor:pointer; }
+        .pdf-send-btn:disabled { opacity:.55; cursor:not-allowed; }
+        .pdf-send-btn svg { width:17px; height:17px; }
+        .pdf-clear-btn { min-width:72px; border:1px solid #cbd5e1; border-radius:7px; background:#fff; color:#475569; font-size:.76rem; font-weight:700; cursor:pointer; }
+        .pdf-progress { margin-top:12px; padding:11px 12px; border-left:3px solid #0f766e; background:#f0fdfa; }
+        .pdf-progress[hidden] { display:none; }
+        .pdf-progress-head { display:flex; align-items:center; justify-content:space-between; gap:10px; color:#0f766e; font-size:.72rem; font-weight:800; }
+        .pdf-progress-track { height:5px; margin-top:8px; overflow:hidden; border-radius:999px; background:#ccfbf1; }
+        .pdf-progress-bar { width:0; height:100%; border-radius:inherit; background:#0f766e; transition:width .25s ease; }
+        .pdf-progress.error { border-color:#dc2626; background:#fef2f2; }
+        .pdf-progress.error .pdf-progress-head { color:#b91c1c; }
+        .pdf-progress.error .pdf-progress-bar { background:#dc2626; }
+        .pdf-progress.success { border-color:#16a34a; background:#f0fdf4; }
+        .pdf-progress.success .pdf-progress-head { color:#15803d; }
+        .pdf-progress.success .pdf-progress-bar { background:#16a34a; }
+        .pdf-card-icon { background:#334155; }
         @media (max-width:1050px) {
             .tools-workspace { grid-template-columns:minmax(300px, 360px) minmax(0, 1fr); }
+            .tools-workspace.pdf-active { grid-template-columns:minmax(480px, 620px) minmax(280px, 1fr); }
             .tool-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); }
         }
         @media (max-width:760px) {
             .tools-container { padding:20px 14px 32px; }
             .tools-header { align-items:flex-start; flex-direction:column; gap:8px; }
-            .tools-workspace { grid-template-columns:1fr; }
+            .tools-workspace, .tools-workspace.pdf-active { grid-template-columns:1fr; }
             .tool-operations, .tool-catalog { min-height:0; }
             .tool-grid { grid-template-columns:1fr; }
+            .pdf-upload-grid, .pdf-controls { grid-template-columns:1fr; }
+            .pdf-preview-shell { min-height:300px; max-height:62vh; padding:10px; }
+            .pdf-toolbar { grid-template-columns:1fr auto; }
+            .pdf-page-target { grid-column:1 / -1; grid-row:2; justify-content:flex-start; }
         }
     </style>
 </head>
@@ -95,11 +155,12 @@
     <div class="tools-container">
         <header class="tools-header">
             <div><h1>更多功能</h1><p>常用查询和日常处理工具</p></div>
-            <div class="tools-count">1 个工具可用</div>
+            <div class="tools-count">2 个工具可用</div>
         </header>
 
         <div class="tools-workspace">
-            <section class="tool-operations" aria-labelledby="patentPanelTitle">
+            <section class="tool-operations">
+                <div class="tool-panel" id="patentToolPanel">
                 <div class="tool-panel-title">
                     <div class="tool-panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/><path d="M8 11h6M11 8v6"/></svg></div>
                     <div><strong id="patentPanelTitle">查询美国专利</strong><span>US Patent Search</span></div>
@@ -158,14 +219,88 @@
                     <div class="recent-title"><span>最近查询</span><button type="button" id="clearPatentHistory">清除记录</button></div>
                     <div class="recent-list" id="patentRecentList"></div>
                 </div>
+                </div>
+
+                <div class="tool-panel" id="pdfToolPanel" hidden>
+                    <div class="tool-panel-title">
+                        <div class="tool-panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 15h8M8 11h3"/></svg></div>
+                        <div><strong>图片添加到 PDF 文件</strong><span>PDF Image Editor</span></div>
+                    </div>
+
+                    <div class="pdf-upload-grid">
+                        <label class="pdf-upload-box" id="pdfFileBox">
+                            <input id="pdfFileInput" type="file" accept="application/pdf,.pdf">
+                            <span class="pdf-upload-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 18v-6M9 15l3-3 3 3"/></svg></span>
+                            <span class="pdf-upload-copy"><strong>上传 PDF 文件</strong><span id="pdfFileName">支持 20MB 以内文件</span></span>
+                        </label>
+                        <label class="pdf-upload-box" id="pdfImageBox">
+                            <input id="pdfImageInput" type="file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp">
+                            <span class="pdf-upload-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg></span>
+                            <span class="pdf-upload-copy"><strong>上传要添加的图片</strong><span id="pdfImageName">PNG、JPG 或 WebP</span></span>
+                        </label>
+                    </div>
+
+                    <div class="pdf-editor" id="pdfEditor" hidden>
+                        <div class="pdf-toolbar">
+                            <div class="pdf-page-nav">
+                                <button class="pdf-icon-btn" id="pdfPrevPage" type="button" title="上一页" aria-label="上一页"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
+                                <span class="pdf-page-label" id="pdfPageLabel">第 1 / 1 页</span>
+                                <button class="pdf-icon-btn" id="pdfNextPage" type="button" title="下一页" aria-label="下一页"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
+                            </div>
+                            <label class="pdf-page-target" for="pdfTargetPage">图片添加到第 <select id="pdfTargetPage" aria-label="选择图片所在页"></select> 页</label>
+                            <span class="pdf-page-label" id="pdfZoomLabel">100%</span>
+                        </div>
+
+                        <div class="pdf-preview-shell" id="pdfPreviewShell">
+                            <div class="pdf-stage" id="pdfStage">
+                                <canvas id="pdfPreviewCanvas"></canvas>
+                                <div class="pdf-image-overlay" id="pdfImageOverlay" role="img" aria-label="已添加的图片，可拖动调整位置" tabindex="0" hidden>
+                                    <img id="pdfOverlayImage" alt="">
+                                    <span class="pdf-resize-handle" id="pdfResizeHandle" aria-hidden="true"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="pdf-controls">
+                            <label class="pdf-control">
+                                <span class="pdf-control-head"><span>图片大小</span><output id="pdfScaleOutput">25%</output></span>
+                                <input id="pdfScaleRange" type="range" min="5" max="100" value="25">
+                            </label>
+                            <label class="pdf-control">
+                                <span class="pdf-control-head"><span>图片透明度</span><output id="pdfOpacityOutput">100%</output></span>
+                                <input id="pdfOpacityRange" type="range" min="10" max="100" value="100">
+                            </label>
+                            <div class="pdf-control-actions">
+                                <button class="pdf-small-btn" type="button" id="pdfCenterImage">居中</button>
+                                <button class="pdf-small-btn" type="button" id="pdfRemoveImage">移除图片</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="pdf-empty-preview" id="pdfEmptyPreview">上传 PDF 文件后即可预览，再添加图片并调整位置和大小。</div>
+
+                    <div class="pdf-send-row">
+                        <button class="pdf-send-btn" type="button" id="pdfSendButton" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>发送到我的钉钉</button>
+                        <button class="pdf-clear-btn" type="button" id="pdfClearButton">清空</button>
+                    </div>
+                    <div class="pdf-progress" id="pdfProgress" hidden>
+                        <div class="pdf-progress-head"><span id="pdfProgressText">正在处理文件</span><span id="pdfProgressPercent">0%</span></div>
+                        <div class="pdf-progress-track"><div class="pdf-progress-bar" id="pdfProgressBar"></div></div>
+                    </div>
+                </div>
             </section>
 
             <section class="tool-catalog" aria-labelledby="toolCatalogTitle">
-                <div class="catalog-heading"><h2 id="toolCatalogTitle">查询工具</h2><span>点击工具后在左侧操作</span></div>
+                <div class="catalog-heading"><h2 id="toolCatalogTitle">实用工具</h2><span>点击工具后在左侧操作</span></div>
                 <div class="tool-grid">
                     <button class="tool-card active" type="button" id="patentToolCard">
                         <span class="tool-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/><path d="M8 8h6M8 11h4M8 14h5"/></svg></span>
                         <span><h3>查询美国专利</h3><p>按关键词、专利号、申请人、发明人或标题查找美国公开专利和专利申请。</p></span>
+                        <span class="tool-status">可用</span>
+                    </button>
+                    <button class="tool-card" type="button" id="pdfToolCard">
+                        <span class="tool-card-icon pdf-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 15h8M12 11v8M8 15l4-4 4 4"/></svg></span>
+                        <span><h3>图片添加到 PDF 文件</h3><p>上传 PDF 和图片，在预览中拖动并调整图片大小，完成后发送到你的钉钉。</p></span>
                         <span class="tool-status">可用</span>
                     </button>
                 </div>
@@ -289,11 +424,22 @@ document.getElementById('clearPatentHistory').addEventListener('click', () => {
     localStorage.removeItem(PATENT_HISTORY_KEY);
     renderPatentHistory();
 });
-document.getElementById('patentToolCard').addEventListener('click', () => {
+window.selectToolsPanel = function selectToolsPanel(panelName) {
+    const isPdf = panelName === 'pdf';
+    document.getElementById('patentToolPanel').hidden = isPdf;
+    document.getElementById('pdfToolPanel').hidden = !isPdf;
+    document.getElementById('patentToolCard').classList.toggle('active', !isPdf);
+    document.getElementById('pdfToolCard').classList.toggle('active', isPdf);
+    document.querySelector('.tools-workspace').classList.toggle('pdf-active', isPdf);
     document.querySelector('.tool-operations').scrollIntoView({ behavior:'smooth', block:'start' });
+};
+document.getElementById('patentToolCard').addEventListener('click', () => {
+    window.selectToolsPanel('patent');
     patentQuery.focus({ preventScroll:true });
 });
 renderPatentHistory();
 </script>
+<script src="/assets/vendor/pdf-lib.min.js"></script>
+<script type="module" src="/tools-pdf.js"></script>
 </body>
 </html>
