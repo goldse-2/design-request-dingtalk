@@ -1,9 +1,9 @@
 import * as pdfjsLib from '/assets/vendor/pdf.min.mjs';
-import { composePdfImage } from '/tools-pdf-compose.mjs';
+import { composePageImagesPdf, composePdfImage } from '/tools-pdf-compose.mjs';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = '/assets/vendor/pdf.worker.min.mjs';
 
-const MAX_PDF_BYTES = 20 * 1024 * 1024;
+const MAX_DOCUMENT_BYTES = 20 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const MAX_RESULT_BYTES = 20 * 1024 * 1024;
 
@@ -32,6 +32,9 @@ const elements = {
     scaleOutput: document.getElementById('pdfScaleOutput'),
     opacityRange: document.getElementById('pdfOpacityRange'),
     opacityOutput: document.getElementById('pdfOpacityOutput'),
+    blendToggle: document.getElementById('pdfBlendToggle'),
+    blendOutput: document.getElementById('pdfBlendOutput'),
+    exportFormats: [...document.querySelectorAll('input[name="pdfExportFormat"]')],
     centerImage: document.getElementById('pdfCenterImage'),
     removeImage: document.getElementById('pdfRemoveImage'),
     sendButton: document.getElementById('pdfSendButton'),
@@ -43,9 +46,12 @@ const elements = {
 };
 
 const state = {
-    pdfFile: null,
+    sourceFile: null,
     sourceBytes: null,
+    documentType: '',
     pdfDocument: null,
+    wordPages: [],
+    pageCount: 0,
     imageFile: null,
     imageUrl: '',
     pageNumber: 1,
@@ -55,21 +61,22 @@ const state = {
     renderScale: 1,
     renderTask: null,
     overlay: null,
+    blendMode: 'normal',
     sending: false
 };
 
 elements.card.addEventListener('click', () => {
     window.selectToolsPanel?.('pdf');
     requestAnimationFrame(() => {
-        if (state.pdfDocument) renderCurrentPage();
+        if (state.sourceFile) renderCurrentPage();
         else elements.fileInput.focus({ preventScroll: true });
     });
 });
 
-elements.fileInput.addEventListener('change', () => loadPdf(elements.fileInput.files?.[0]));
+elements.fileInput.addEventListener('change', () => loadDocument(elements.fileInput.files?.[0]));
 elements.imageInput.addEventListener('change', () => loadImage(elements.imageInput.files?.[0]));
-bindDropZone(elements.fileBox, file => loadPdf(file), file => file.type === 'application/pdf' || /\.pdf$/i.test(file.name));
-bindDropZone(elements.imageBox, file => loadImage(file), file => /^image\/(png|jpeg|webp)$/i.test(file.type));
+bindDropZone(elements.fileBox, loadDocument, file => /\.(pdf|docx?|DOCX?)$/i.test(file.name) || /pdf|wordprocessingml/i.test(file.type));
+bindDropZone(elements.imageBox, loadImage, file => /^image\/(png|jpeg|webp)$/i.test(file.type));
 
 elements.prevPage.addEventListener('click', () => changePage(state.pageNumber - 1));
 elements.nextPage.addEventListener('click', () => changePage(state.pageNumber + 1));
@@ -83,62 +90,127 @@ elements.opacityRange.addEventListener('input', () => {
     state.overlay.opacity = Number(elements.opacityRange.value) / 100;
     updateOverlayElement();
 });
+elements.blendToggle.addEventListener('change', () => {
+    state.blendMode = elements.blendToggle.checked ? 'multiply' : 'normal';
+    elements.blendOutput.textContent = elements.blendToggle.checked ? '正片叠底' : '无叠加';
+    updateOverlayElement();
+});
 elements.centerImage.addEventListener('click', centerOverlay);
 elements.removeImage.addEventListener('click', removeImage);
 elements.clearButton.addEventListener('click', () => resetPdfTool());
-elements.sendButton.addEventListener('click', sendPdfToDingTalk);
+elements.sendButton.addEventListener('click', sendFileToDingTalk);
 
 bindOverlayPointerEvents();
 window.addEventListener('resize', debounce(() => {
-    if (!state.pdfDocument || document.getElementById('pdfToolPanel').hidden) return;
+    if (!state.sourceFile || document.getElementById('pdfToolPanel').hidden) return;
     renderCurrentPage();
 }, 180));
 
-async function loadPdf(file) {
+async function loadDocument(file) {
     clearProgress();
     if (!file) return;
-    if (!(file.type === 'application/pdf' || /\.pdf$/i.test(file.name))) {
-        showProgress('请选择 PDF 文件', 100, 'error');
+    if (/\.doc$/i.test(file.name)) {
+        showProgress('暂不支持旧版 .doc，请在 Word 中另存为 .docx 后上传', 100, 'error');
         elements.fileInput.value = '';
         return;
     }
-    if (file.size > MAX_PDF_BYTES) {
-        showProgress('PDF 文件不能超过 20MB', 100, 'error');
+    const documentType = isPdfFile(file) ? 'pdf' : isDocxFile(file) ? 'docx' : '';
+    if (!documentType) {
+        showProgress('请选择 PDF 或 Word（.docx）文件', 100, 'error');
+        elements.fileInput.value = '';
+        return;
+    }
+    if (file.size > MAX_DOCUMENT_BYTES) {
+        showProgress('文件不能超过 20MB', 100, 'error');
         elements.fileInput.value = '';
         return;
     }
 
+    clearDocumentState();
     try {
-        showProgress('正在读取 PDF 文件', 18);
         const bytes = new Uint8Array(await file.arrayBuffer());
-        const documentTask = pdfjsLib.getDocument({ data: bytes.slice() });
-        const pdfDocument = await documentTask.promise;
-        if (!pdfDocument.numPages) throw new Error('PDF 文件没有可预览的页面');
+        showProgress(documentType === 'pdf' ? '正在读取 PDF 文件' : '正在读取 Word 文件', 12);
 
-        state.pdfFile = file;
+        if (documentType === 'pdf') {
+            const documentTask = pdfjsLib.getDocument({ data: bytes.slice() });
+            state.pdfDocument = await documentTask.promise;
+            state.pageCount = state.pdfDocument.numPages;
+        } else {
+            state.wordPages = await renderWordPages(bytes);
+            state.pageCount = state.wordPages.length;
+        }
+        if (!state.pageCount) throw new Error('文件没有可预览的页面');
+
+        state.sourceFile = file;
         state.sourceBytes = bytes;
-        state.pdfDocument = pdfDocument;
+        state.documentType = documentType;
         state.pageNumber = 1;
         state.targetPage = 1;
         elements.fileName.textContent = `${file.name} · ${formatBytes(file.size)}`;
         elements.fileBox.classList.add('ready');
-        populateTargetPages(pdfDocument.numPages);
+        populateTargetPages(state.pageCount);
         elements.empty.hidden = true;
         elements.editor.hidden = false;
         await renderCurrentPage();
         clearProgress();
         updateReadyState();
     } catch (error) {
-        state.pdfFile = null;
-        state.sourceBytes = null;
-        state.pdfDocument = null;
+        clearDocumentState();
         elements.fileInput.value = '';
-        elements.fileName.textContent = '支持 20MB 以内文件';
+        elements.fileName.textContent = '支持 PDF、Word（.docx）';
         elements.fileBox.classList.remove('ready');
         elements.editor.hidden = true;
         elements.empty.hidden = false;
-        showProgress(error.message || 'PDF 文件读取失败，请更换文件', 100, 'error');
+        showProgress(error.message || '文件读取失败，请更换文件', 100, 'error');
         updateReadyState();
+    }
+}
+
+async function renderWordPages(bytes) {
+    if (!window.docx?.renderAsync || !window.html2canvas) {
+        throw new Error('Word 处理组件加载失败，请刷新页面重试');
+    }
+    const host = document.createElement('div');
+    host.style.cssText = 'position:fixed;left:-100000px;top:0;width:max-content;z-index:-1;pointer-events:none;background:#fff;';
+    document.body.appendChild(host);
+    try {
+        await window.docx.renderAsync(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), host, host, {
+            inWrapper: true,
+            breakPages: true,
+            ignoreWidth: false,
+            ignoreHeight: false,
+            ignoreFonts: false,
+            useBase64URL: true,
+            renderHeaders: true,
+            renderFooters: true
+        });
+        await waitForImages(host);
+        if (document.fonts?.ready) await document.fonts.ready;
+        const pageElements = [...host.querySelectorAll('.docx-wrapper > section.docx')];
+        if (!pageElements.length) pageElements.push(...host.querySelectorAll('section.docx'));
+        if (!pageElements.length) throw new Error('Word 文件没有可预览的页面');
+
+        const pages = [];
+        for (let index = 0; index < pageElements.length; index++) {
+            showProgress(`正在生成 Word 预览（${index + 1}/${pageElements.length}）`, 18 + ((index + 1) / pageElements.length) * 62);
+            const pageElement = pageElements[index];
+            const bounds = pageElement.getBoundingClientRect();
+            const canvas = await window.html2canvas(pageElement, {
+                backgroundColor: '#ffffff',
+                scale: 1.5,
+                useCORS: true,
+                allowTaint: false,
+                logging: false
+            });
+            pages.push({
+                canvas,
+                width: Math.max(1, bounds.width),
+                height: Math.max(1, bounds.height)
+            });
+        }
+        return pages;
+    } finally {
+        host.remove();
     }
 }
 
@@ -179,29 +251,26 @@ async function loadImage(file) {
 }
 
 async function renderCurrentPage() {
-    if (!state.pdfDocument) return;
+    if (!state.sourceFile) return;
+    if (state.documentType === 'pdf') await renderPdfPreview();
+    else renderWordPreview();
+    updatePageControls();
+    updateOverlayElement();
+}
+
+async function renderPdfPreview() {
     if (state.renderTask) {
         state.renderTask.cancel();
         state.renderTask = null;
     }
-
     const page = await state.pdfDocument.getPage(state.pageNumber);
     const baseViewport = page.getViewport({ scale: 1 });
-    const availableWidth = Math.max(260, elements.shell.clientWidth - (window.innerWidth <= 760 ? 22 : 38));
+    const availableWidth = previewAvailableWidth();
     const scale = Math.min(1.45, availableWidth / baseViewport.width);
     const viewport = page.getViewport({ scale });
     const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
-    const context = elements.canvas.getContext('2d', { alpha: false });
-
-    state.renderWidth = viewport.width;
-    state.renderHeight = viewport.height;
+    const context = preparePreviewCanvas(viewport.width, viewport.height, pixelRatio);
     state.renderScale = scale;
-    elements.canvas.width = Math.ceil(viewport.width * pixelRatio);
-    elements.canvas.height = Math.ceil(viewport.height * pixelRatio);
-    elements.canvas.style.width = `${viewport.width}px`;
-    elements.canvas.style.height = `${viewport.height}px`;
-    elements.stage.style.width = `${viewport.width}px`;
-    elements.stage.style.height = `${viewport.height}px`;
 
     const renderTask = page.render({
         canvasContext: context,
@@ -209,14 +278,44 @@ async function renderCurrentPage() {
         transform: pixelRatio === 1 ? null : [pixelRatio, 0, 0, pixelRatio, 0, 0]
     });
     state.renderTask = renderTask;
-    try { await renderTask.promise; }
-    catch (error) {
+    try {
+        await renderTask.promise;
+    } catch (error) {
         if (error?.name !== 'RenderingCancelledException') throw error;
     } finally {
         if (state.renderTask === renderTask) state.renderTask = null;
     }
-    updatePageControls();
-    updateOverlayElement();
+}
+
+function renderWordPreview() {
+    const page = state.wordPages[state.pageNumber - 1];
+    if (!page) return;
+    const scale = Math.min(1.45, previewAvailableWidth() / page.width);
+    const width = page.width * scale;
+    const height = page.height * scale;
+    const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+    const context = preparePreviewCanvas(width, height, pixelRatio);
+    context.drawImage(page.canvas, 0, 0, elements.canvas.width, elements.canvas.height);
+    state.renderScale = scale;
+}
+
+function preparePreviewCanvas(width, height, pixelRatio) {
+    state.renderWidth = width;
+    state.renderHeight = height;
+    elements.canvas.width = Math.ceil(width * pixelRatio);
+    elements.canvas.height = Math.ceil(height * pixelRatio);
+    elements.canvas.style.width = `${width}px`;
+    elements.canvas.style.height = `${height}px`;
+    elements.stage.style.width = `${width}px`;
+    elements.stage.style.height = `${height}px`;
+    const context = elements.canvas.getContext('2d', { alpha: false });
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, elements.canvas.width, elements.canvas.height);
+    return context;
+}
+
+function previewAvailableWidth() {
+    return Math.max(260, elements.shell.clientWidth - (window.innerWidth <= 760 ? 22 : 38));
 }
 
 function populateTargetPages(count) {
@@ -230,13 +329,13 @@ function populateTargetPages(count) {
 }
 
 function changePage(nextPage) {
-    if (!state.pdfDocument) return;
-    state.pageNumber = Math.min(state.pdfDocument.numPages, Math.max(1, Number(nextPage) || 1));
+    if (!state.sourceFile) return;
+    state.pageNumber = Math.min(state.pageCount, Math.max(1, Number(nextPage) || 1));
     renderCurrentPage();
 }
 
 function updatePageControls() {
-    const count = state.pdfDocument?.numPages || 1;
+    const count = state.pageCount || 1;
     elements.pageLabel.textContent = `第 ${state.pageNumber} / ${count} 页`;
     elements.prevPage.disabled = state.pageNumber <= 1;
     elements.nextPage.disabled = state.pageNumber >= count;
@@ -297,6 +396,7 @@ function updateOverlayElement() {
     elements.overlay.hidden = !visible;
     elements.centerImage.disabled = !state.imageFile;
     elements.removeImage.disabled = !state.imageFile;
+    elements.overlayImage.style.mixBlendMode = state.blendMode;
     if (!visible) return;
 
     elements.overlay.style.left = `${overlay.x * state.renderWidth}px`;
@@ -363,8 +463,8 @@ function bindOverlayPointerEvents() {
     });
 }
 
-async function sendPdfToDingTalk() {
-    if (state.sending || !state.sourceBytes || !state.imageFile || !state.overlay) return;
+async function sendFileToDingTalk() {
+    if (state.sending || !state.sourceFile || !state.imageFile || !state.overlay) return;
     const user = readCurrentUser();
     if (!user?.unionId) {
         showProgress('请先在钉钉中登录网站', 100, 'error');
@@ -374,17 +474,17 @@ async function sendPdfToDingTalk() {
     state.sending = true;
     updateReadyState();
     try {
-        showProgress('正在生成 PDF 文件', 18);
-        const resultBytes = await createResultPdf();
-        showProgress('文件已生成，正在发送到钉钉', 68);
-        if (resultBytes.byteLength > MAX_RESULT_BYTES) {
-            throw new Error('处理后的 PDF 超过 20MB，请使用较小的 PDF 或图片');
+        const format = selectedExportFormat();
+        showProgress(`正在生成 ${format.toUpperCase()} 文件`, 18);
+        const output = await createOutputFile(format);
+        if (output.blob.size > MAX_RESULT_BYTES) {
+            throw new Error('处理后的文件超过 20MB，请使用较小的文件或图片');
         }
 
-        const fileName = resultFileName(state.pdfFile.name);
+        showProgress('文件已生成，正在发送到钉钉', 68);
         const formData = new FormData();
-        formData.append('file', new Blob([resultBytes], { type: 'application/pdf' }), fileName);
-        formData.append('fileName', fileName);
+        formData.append('file', output.blob, output.fileName);
+        formData.append('fileName', output.fileName);
         formData.append('unionId', user.unionId);
         const response = await fetch('/api/tools-send-pdf', { method: 'POST', body: formData });
         const result = await response.json().catch(() => ({}));
@@ -400,17 +500,99 @@ async function sendPdfToDingTalk() {
     }
 }
 
-async function createResultPdf() {
+async function createOutputFile(format) {
+    if (format === 'jpg') {
+        const canvas = await createTargetPageCanvas();
+        const blob = await canvasToBlob(canvas, 'image/jpeg', 0.96);
+        return { blob, fileName: resultFileName(state.sourceFile.name, 'jpg') };
+    }
+
+    let bytes;
+    if (state.documentType === 'pdf') {
+        if (!window.PDFLib?.PDFDocument) throw new Error('PDF 处理组件加载失败，请刷新页面重试');
+        const imageBytes = await normalizedImageBytes(state.imageFile);
+        bytes = await composePdfImage({
+            PDFDocument: window.PDFLib.PDFDocument,
+            BlendMode: window.PDFLib.BlendMode,
+            pdfBytes: state.sourceBytes,
+            imageBytes: imageBytes.bytes,
+            imageType: imageBytes.type,
+            targetPage: state.targetPage,
+            placement: state.overlay,
+            blendMode: state.blendMode
+        });
+    } else {
+        bytes = await createWordResultPdf();
+    }
+    return {
+        blob: new Blob([bytes], { type: 'application/pdf' }),
+        fileName: resultFileName(state.sourceFile.name, 'pdf')
+    };
+}
+
+async function createWordResultPdf() {
     if (!window.PDFLib?.PDFDocument) throw new Error('PDF 处理组件加载失败，请刷新页面重试');
-    const imageBytes = await normalizedImageBytes(state.imageFile);
-    return composePdfImage({
-        PDFDocument: window.PDFLib.PDFDocument,
-        pdfBytes: state.sourceBytes,
-        imageBytes: imageBytes.bytes,
-        imageType: imageBytes.type,
-        targetPage: state.targetPage,
-        placement: state.overlay
-    });
+    const targetCanvas = await createTargetPageCanvas();
+    const pages = [];
+    for (let index = 0; index < state.wordPages.length; index++) {
+        showProgress(`正在生成 PDF（${index + 1}/${state.wordPages.length}）`, 20 + ((index + 1) / state.wordPages.length) * 35);
+        const source = state.wordPages[index];
+        const canvas = index === state.targetPage - 1 ? targetCanvas : source.canvas;
+        const blob = await canvasToBlob(canvas, 'image/jpeg', 0.92);
+        pages.push({
+            bytes: new Uint8Array(await blob.arrayBuffer()),
+            type: 'image/jpeg',
+            width: source.width * 0.75,
+            height: source.height * 0.75
+        });
+    }
+    return composePageImagesPdf({ PDFDocument: window.PDFLib.PDFDocument, pages });
+}
+
+async function createTargetPageCanvas() {
+    let baseCanvas;
+    if (state.documentType === 'pdf') {
+        baseCanvas = await renderPdfPageCanvas(state.targetPage, 2);
+    } else {
+        baseCanvas = state.wordPages[state.targetPage - 1]?.canvas;
+    }
+    if (!baseCanvas) throw new Error('所选页面不存在');
+
+    const canvas = document.createElement('canvas');
+    canvas.width = baseCanvas.width;
+    canvas.height = baseCanvas.height;
+    const context = canvas.getContext('2d', { alpha: false });
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(baseCanvas, 0, 0, canvas.width, canvas.height);
+
+    const bitmap = await createImageBitmap(state.imageFile);
+    context.save();
+    context.globalAlpha = clamp(state.overlay.opacity, 0, 1);
+    context.globalCompositeOperation = state.blendMode === 'multiply' ? 'multiply' : 'source-over';
+    context.drawImage(
+        bitmap,
+        state.overlay.x * canvas.width,
+        state.overlay.y * canvas.height,
+        state.overlay.width * canvas.width,
+        state.overlay.height * canvas.height
+    );
+    context.restore();
+    bitmap.close();
+    return canvas;
+}
+
+async function renderPdfPageCanvas(pageNumber, scale) {
+    const page = await state.pdfDocument.getPage(pageNumber);
+    const viewport = page.getViewport({ scale });
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.ceil(viewport.width);
+    canvas.height = Math.ceil(viewport.height);
+    const context = canvas.getContext('2d', { alpha: false });
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    await page.render({ canvasContext: context, viewport }).promise;
+    return canvas;
 }
 
 async function normalizedImageBytes(file) {
@@ -425,31 +607,41 @@ async function normalizedImageBytes(file) {
     const context = canvas.getContext('2d');
     context.drawImage(bitmap, 0, 0);
     bitmap.close();
-    const blob = await new Promise((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(new Error('图片转换失败')), 'image/png'));
+    const blob = await canvasToBlob(canvas, 'image/png');
     return { bytes: new Uint8Array(await blob.arrayBuffer()), type: 'image/png' };
 }
 
-function resetPdfTool(options = {}) {
+function clearDocumentState() {
     if (state.renderTask) state.renderTask.cancel();
     state.pdfDocument?.destroy?.();
-    releaseImageUrl();
     Object.assign(state, {
-        pdfFile: null,
+        sourceFile: null,
         sourceBytes: null,
+        documentType: '',
         pdfDocument: null,
-        imageFile: null,
-        imageUrl: '',
+        wordPages: [],
+        pageCount: 0,
         pageNumber: 1,
         targetPage: 1,
         renderWidth: 0,
         renderHeight: 0,
         renderScale: 1,
-        renderTask: null,
-        overlay: null
+        renderTask: null
+    });
+}
+
+function resetPdfTool(options = {}) {
+    clearDocumentState();
+    releaseImageUrl();
+    Object.assign(state, {
+        imageFile: null,
+        imageUrl: '',
+        overlay: null,
+        blendMode: 'normal'
     });
     elements.fileInput.value = '';
     elements.imageInput.value = '';
-    elements.fileName.textContent = '支持 20MB 以内文件';
+    elements.fileName.textContent = '支持 PDF、Word（.docx）';
     elements.imageName.textContent = 'PNG、JPG 或 WebP';
     elements.fileBox.classList.remove('ready');
     elements.imageBox.classList.remove('ready');
@@ -457,11 +649,15 @@ function resetPdfTool(options = {}) {
     elements.empty.hidden = false;
     elements.overlay.hidden = true;
     elements.overlayImage.removeAttribute('src');
+    elements.overlayImage.style.mixBlendMode = 'normal';
     elements.targetPage.innerHTML = '';
     elements.scaleRange.value = '25';
     elements.opacityRange.value = '100';
     elements.scaleOutput.textContent = '25%';
     elements.opacityOutput.textContent = '100%';
+    elements.blendToggle.checked = false;
+    elements.blendOutput.textContent = '无叠加';
+    elements.exportFormats.forEach(input => { input.checked = input.value === 'pdf'; });
     const context = elements.canvas.getContext('2d');
     context.clearRect(0, 0, elements.canvas.width, elements.canvas.height);
     if (!options.keepProgress) clearProgress();
@@ -469,13 +665,19 @@ function resetPdfTool(options = {}) {
 }
 
 function updateReadyState() {
-    elements.sendButton.disabled = state.sending || !state.sourceBytes || !state.imageFile || !state.overlay;
+    elements.sendButton.disabled = state.sending || !state.sourceFile || !state.imageFile || !state.overlay;
     elements.clearButton.disabled = state.sending;
     elements.fileInput.disabled = state.sending;
     elements.imageInput.disabled = state.sending;
+    elements.blendToggle.disabled = state.sending;
+    elements.exportFormats.forEach(input => { input.disabled = state.sending; });
     elements.sendButton.innerHTML = state.sending
         ? '<span>正在发送...</span>'
-        : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>发送到我的钉钉';
+        : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>发送';
+}
+
+function selectedExportFormat() {
+    return elements.exportFormats.find(input => input.checked)?.value || 'pdf';
 }
 
 function showProgress(message, percent, type = '') {
@@ -524,6 +726,16 @@ function bindDropZone(element, onFile, accepts) {
     });
 }
 
+function waitForImages(container) {
+    const pending = [...container.querySelectorAll('img')]
+        .filter(image => !image.complete)
+        .map(image => new Promise(resolve => {
+            image.addEventListener('load', resolve, { once: true });
+            image.addEventListener('error', resolve, { once: true });
+        }));
+    return Promise.all(pending);
+}
+
 function readImageDimensions(url) {
     return new Promise((resolve, reject) => {
         const image = new Image();
@@ -533,14 +745,31 @@ function readImageDimensions(url) {
     });
 }
 
+function canvasToBlob(canvas, type, quality) {
+    return new Promise((resolve, reject) => {
+        canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('文件生成失败，请重试')), type, quality);
+    });
+}
+
 function releaseImageUrl() {
     if (state.imageUrl) URL.revokeObjectURL(state.imageUrl);
     state.imageUrl = '';
 }
 
-function resultFileName(originalName) {
-    const base = String(originalName || 'PDF文件').replace(/\.pdf$/i, '').replace(/[\\/:*?"<>|\r\n]+/g, '_').slice(0, 80) || 'PDF文件';
-    return `${base}-已添加图片.pdf`;
+function resultFileName(originalName, extension) {
+    const base = String(originalName || '处理后的文件')
+        .replace(/\.(pdf|docx?)$/i, '')
+        .replace(/[\\/:*?"<>|\r\n]+/g, '_')
+        .slice(0, 80) || '处理后的文件';
+    return `${base}-已添加图片.${extension}`;
+}
+
+function isPdfFile(file) {
+    return file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+}
+
+function isDocxFile(file) {
+    return /\.docx$/i.test(file.name) || /wordprocessingml/i.test(file.type);
 }
 
 function formatBytes(bytes) {

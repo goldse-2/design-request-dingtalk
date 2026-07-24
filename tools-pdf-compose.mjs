@@ -1,4 +1,4 @@
-export async function composePdfImage({ PDFDocument, pdfBytes, imageBytes, imageType, targetPage, placement }) {
+export async function composePdfImage({ PDFDocument, BlendMode, pdfBytes, imageBytes, imageType, targetPage, placement, blendMode = 'normal' }) {
     if (!PDFDocument || !pdfBytes || !imageBytes || !placement) {
         throw new Error('PDF 合成参数不完整');
     }
@@ -15,13 +15,32 @@ export async function composePdfImage({ PDFDocument, pdfBytes, imageBytes, image
     const xRatio = clamp(Number(placement.x) || 0, 0, 1 - widthRatio);
     const yRatio = clamp(Number(placement.y) || 0, 0, 1 - heightRatio);
 
-    page.drawImage(embeddedImage, {
+    const drawOptions = {
         x: xRatio * pageWidth,
         y: pageHeight - ((yRatio + heightRatio) * pageHeight),
         width: widthRatio * pageWidth,
         height: heightRatio * pageHeight,
         opacity: clampUnit(placement.opacity ?? 1)
-    });
+    };
+    if (blendMode === 'multiply') drawOptions.blendMode = BlendMode?.Multiply || 'Multiply';
+    page.drawImage(embeddedImage, drawOptions);
+    return document.save({ useObjectStreams: true });
+}
+
+export async function composePageImagesPdf({ PDFDocument, pages }) {
+    if (!PDFDocument || !Array.isArray(pages) || !pages.length) {
+        throw new Error('文档合成参数不完整');
+    }
+    const document = await PDFDocument.create();
+    for (const source of pages) {
+        const width = Math.max(1, Number(source.width) || 1);
+        const height = Math.max(1, Number(source.height) || 1);
+        const page = document.addPage([width, height]);
+        const image = source.type === 'image/png'
+            ? await document.embedPng(source.bytes)
+            : await document.embedJpg(source.bytes);
+        page.drawImage(image, { x: 0, y: 0, width, height });
+    }
     return document.save({ useObjectStreams: true });
 }
 
