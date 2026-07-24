@@ -1,6 +1,7 @@
 export const STUDIO_RPA_ACTIVE_KEY = 'studio:rpaActive:v1';
 export const STUDIO_RPA_QUEUE_KEY = 'studio:rpaQueue:v2';
 export const STUDIO_PROCESSING_QUEUE_KEY = 'studio:processingQueue:v2';
+const STUDIO_RPA_DISPATCH_LEASE_MS = 30 * 1000;
 
 export async function ensureStudioRpaSlot(env, processingQueueIds = null) {
     const kv = env?.SUBMISSIONS;
@@ -8,6 +9,9 @@ export async function ensureStudioRpaSlot(env, processingQueueIds = null) {
 
     const current = parseSlot(await kv.get(STUDIO_RPA_ACTIVE_KEY).catch(() => null));
     if (current?.taskId) {
+        if (dispatchLeaseActive(current)) {
+            return { busy: true, taskId: current.taskId, slot: current, recovered: false };
+        }
         const task = await readTask(kv, current.taskId);
         if (taskHoldsRpaSlot(task)) {
             return { busy: true, taskId: current.taskId, slot: current, recovered: false };
@@ -44,15 +48,25 @@ export async function acquireStudioRpaSlot(env, taskId, processingQueueIds = nul
     const current = await ensureStudioRpaSlot(env, processingQueueIds);
     if (current.busy) {
         return {
-            acquired: current.taskId === id,
+            acquired: false,
             alreadyOwned: current.taskId === id,
             busyTaskId: current.taskId
         };
     }
 
-    const slot = makeBusySlot(id, 'dispatch');
+    const claimToken = crypto.randomUUID();
+    const slot = makeBusySlot(id, 'dispatch', claimToken);
     await env.SUBMISSIONS.put(STUDIO_RPA_ACTIVE_KEY, JSON.stringify(slot));
-    return { acquired: true, alreadyOwned: false, busyTaskId: '', slot };
+    await new Promise(resolve => setTimeout(resolve, 100));
+    const confirmed = parseSlot(await env.SUBMISSIONS.get(STUDIO_RPA_ACTIVE_KEY).catch(() => null));
+    if (confirmed?.claimToken !== claimToken) {
+        return {
+            acquired: false,
+            alreadyOwned: confirmed?.taskId === id,
+            busyTaskId: confirmed?.taskId || ''
+        };
+    }
+    return { acquired: true, alreadyOwned: false, busyTaskId: '', slot: confirmed };
 }
 
 export async function releaseStudioRpaSlot(env, taskId) {
@@ -160,9 +174,23 @@ function emptyQueueInfo(mode) {
     return { aheadCount: 0, queuePosition: 1, waitMinutes: 0, ownMinutes, completionMinutes: ownMinutes };
 }
 
-function makeBusySlot(taskId, source) {
+function makeBusySlot(taskId, source, claimToken = '') {
     const now = new Date().toISOString();
-    return { state: 'busy', taskId, acquiredAt: now, updatedAt: now, source };
+    return {
+        state: 'busy',
+        taskId,
+        acquiredAt: now,
+        updatedAt: now,
+        source,
+        claimToken,
+        leaseUntil: source === 'dispatch' ? new Date(Date.now() + STUDIO_RPA_DISPATCH_LEASE_MS).toISOString() : ''
+    };
+}
+
+function dispatchLeaseActive(slot, now = Date.now()) {
+    if (slot?.source !== 'dispatch') return false;
+    const leaseUntil = Date.parse(slot.leaseUntil || '');
+    return Number.isFinite(leaseUntil) && leaseUntil > now;
 }
 
 async function writeIdleSlot(kv, releasedTaskId = '', reconcile = false) {
