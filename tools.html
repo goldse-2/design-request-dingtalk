@@ -509,7 +509,6 @@ window.selectToolsPanel = function selectToolsPanel(panelName) {
     document.getElementById('patentToolCard').classList.toggle('active', !isPdf);
     document.getElementById('pdfToolCard').classList.toggle('active', isPdf);
     document.querySelector('.tools-workspace').classList.toggle('pdf-active', isPdf);
-    document.querySelector('.tool-operations').scrollIntoView({ behavior:'smooth', block:'start' });
 };
 document.getElementById('patentToolCard').addEventListener('click', () => {
     window.selectToolsPanel('patent');
