@@ -175,6 +175,7 @@ function showAdmin() {
 
     loadSubmissions();
     loadToolImageRequests();
+    loadStampRequests();
     initLibrary();
     document.getElementById('examplesAdminSection').hidden = false;
     initStudioGuidesToggle();
@@ -4986,4 +4987,225 @@ async function markUrgent(id) {
 }
 
 document.addEventListener('DOMContentLoaded', initSortModal);
+
+async function loadStampRequests() {
+    const container = document.getElementById('stampRequestAdminContent');
+    if (!container) return;
+    container.innerHTML = '<section class="stamp-admin-panel"><div class="shoot-admin-empty">正在加载盖章申请...</div></section>';
+    try {
+        const response = await fetch('/api/admin-stamp-requests?limit=100', { cache: 'no-store' });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.ok) throw new Error(result.error || '加载失败（' + response.status + '）');
+        renderStampRequests(result.tasks || []);
+    } catch (error) {
+        container.innerHTML = '<section class="stamp-admin-panel"><div class="shoot-admin-empty" style="color:#b91c1c">盖章申请加载失败：' + adminProgressEscape(error.message) + '</div></section>';
+    }
+}
+
+function renderStampRequests(tasks) {
+    const container = document.getElementById('stampRequestAdminContent');
+    if (!container) return;
+    if (!tasks.length) {
+        container.innerHTML = '';
+        return;
+    }
+    const cards = tasks.map(task => {
+        const submitter = task.submitter || {};
+        const created = formatStampAdminDate(task.createdAt);
+        const matches = Array.isArray(task.matchedStamps) ? task.matchedStamps : [];
+        const status = stampRequestStatus(task);
+        const options = matches.map(stamp => '<option value="' + adminProgressEscape(stamp.key) + '"' + (stamp.key === task.approvedStampKey ? ' selected' : '') + '>' + adminProgressEscape(stamp.name || stamp.companyName || '公章') + '</option>').join('');
+        const actions = task.status === 'pending_approval' || task.status === 'send_failed'
+            ? '<select data-stamp-select aria-label="选择公章">' + options + '</select>' +
+              '<div class="shoot-admin-actions" style="margin-top:8px"><button type="button" class="stamp-admin-button stamp-admin-button--primary" data-stamp-approve>同意盖章</button><button type="button" class="stamp-admin-button stamp-admin-button--danger" data-stamp-reject>驳回</button></div>'
+            : '<span class="stamp-request-status ' + status.className + '">' + status.label + '</span>';
+        const approved = matches.find(stamp => stamp.key === task.approvedStampKey);
+        return '<article class="shoot-admin-card stamp-request-card" data-stamp-request-id="' + adminProgressEscape(task.id) + '">' +
+            '<div class="shoot-admin-person">' +
+                (submitter.avatar ? '<img class="shoot-admin-avatar" src="' + adminProgressEscape(submitter.avatar) + '" alt="">' : '<span class="shoot-admin-avatar"></span>') +
+                '<div style="min-width:0"><strong>' + adminProgressEscape(submitter.name || '钉钉用户') + '</strong><small>' + adminProgressEscape(created) + ' 提交</small></div>' +
+            '</div>' +
+            '<div class="shoot-admin-details"><div class="stamp-request-company">' + adminProgressEscape(task.companyName || '未填写公司名称') + '</div>' +
+                '<div class="stamp-request-match">自动匹配到 ' + matches.length + ' 个公章' + (task.inputUrl ? '<br><a class="tool-image-request-file" href="' + adminProgressEscape(task.inputUrl) + '" target="_blank" rel="noopener">查看原文件</a>' : '') + '</div>' +
+                (approved ? '<div class="stamp-request-preview"><img src="' + adminProgressEscape(approved.url) + '" alt=""><span class="stamp-request-match">已选择公章</span></div>' : '') +
+            '</div>' +
+            '<div class="stamp-admin-actions">' + actions +
+                '<div class="stamp-request-meta" style="margin-top:8px">' + stampRequestMeta(task) + '</div>' +
+                (task.lastError ? '<div class="stamp-request-error">' + adminProgressEscape(task.lastError) + '</div>' : '') +
+            '</div></article>';
+    }).join('');
+    container.innerHTML = '<section class="stamp-admin-panel"><div class="stamp-admin-panel-head"><div><div class="stamp-admin-panel-title">盖章申请审核</div><div class="stamp-admin-panel-copy">确认后等待约 5 分钟，系统自动盖章并发送到提交人的钉钉。</div></div><div class="stamp-admin-panel-count">' + tasks.length + ' 个待处理</div></div><div class="shoot-admin-list">' + cards + '</div></section>';
+
+    container.querySelectorAll('[data-stamp-approve]').forEach(button => {
+        button.addEventListener('click', () => {
+            const card = button.closest('[data-stamp-request-id]');
+            approveStampRequest(card?.dataset.stampRequestId, card?.querySelector('[data-stamp-select]')?.value, button);
+        });
+    });
+    container.querySelectorAll('[data-stamp-reject]').forEach(button => {
+        button.addEventListener('click', () => rejectStampRequest(button.closest('[data-stamp-request-id]')?.dataset.stampRequestId, button));
+    });
+}
+
+function stampRequestStatus(task) {
+    if (task.status === 'approved_waiting') return { label: '已同意，等待自动发送', className: 'is-approved' };
+    if (task.status === 'processing') return { label: '正在盖章', className: 'is-processing' };
+    if (task.status === 'send_failed') return { label: '发送失败，可重试', className: 'is-error' };
+    return { label: '待审核', className: '' };
+}
+
+function stampRequestMeta(task) {
+    if (task.status === 'approved_waiting') {
+        const remaining = Date.parse(task.autoSendAt || '') - Date.now();
+        return remaining > 0 ? '约 ' + Math.ceil(remaining / 60000) + ' 分钟后自动发送' : '已到发送时间，等待定时检查';
+    }
+    if (task.status === 'processing') return '正在生成盖章文件，请稍候';
+    if (task.status === 'send_failed') return '已失败 ' + Number(task.sendFailures || 0) + ' 次，任务保留';
+    return '请确认匹配到的公章后再同意';
+}
+
+function formatStampAdminDate(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+async function approveStampRequest(id, stampKey, button) {
+    if (!id || !stampKey || button?.disabled) return;
+    button.disabled = true;
+    try {
+        const response = await fetch('/api/admin-stamp-requests', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'approve', id, stampKey })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.ok) throw new Error(result.error || '审核失败（' + response.status + '）');
+        await loadStampRequests();
+    } catch (error) {
+        alert('同意盖章失败：' + error.message);
+        button.disabled = false;
+    }
+}
+
+async function rejectStampRequest(id, button) {
+    if (!id || button?.disabled) return;
+    const reason = prompt('请输入驳回原因（可选）', '') ?? '';
+    button.disabled = true;
+    try {
+        const response = await fetch('/api/admin-stamp-requests', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'reject', id, reason })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.ok) throw new Error(result.error || '驳回失败（' + response.status + '）');
+        await loadStampRequests();
+    } catch (error) {
+        alert('驳回盖章申请失败：' + error.message);
+        button.disabled = false;
+    }
+}
+
+async function loadStampLibraryAdmin() {
+    const section = document.getElementById('stampLibraryAdminSection');
+    const list = document.getElementById('stampLibraryAdminList');
+    const count = document.getElementById('stampLibraryAdminCount');
+    if (!section || !list) return;
+    section.hidden = false;
+    list.innerHTML = '<div class="stamp-admin-status">正在加载公章资料...</div>';
+    try {
+        const response = await fetch('/api/admin-stamp-library', { cache: 'no-store' });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.ok) throw new Error(result.error || '加载失败（' + response.status + '）');
+        renderStampLibrary(result.stamps || []);
+        if (count) count.textContent = (result.stamps || []).length + ' 个公章';
+    } catch (error) {
+        list.innerHTML = '<div class="stamp-admin-status" style="color:#b91c1c">公章资料加载失败：' + adminProgressEscape(error.message) + '</div>';
+    }
+}
+
+function renderStampLibrary(stamps) {
+    const list = document.getElementById('stampLibraryAdminList');
+    if (!list) return;
+    if (!stamps.length) {
+        list.innerHTML = '<div class="stamp-admin-status">暂无公章，请上传 PNG 或 JPG 文件。</div>';
+        return;
+    }
+    list.innerHTML = stamps.map(stamp => '<article class="stamp-admin-item" data-stamp-key="' + adminProgressEscape(stamp.key) + '">' +
+        '<img src="' + adminProgressEscape(stamp.url) + '?v=' + encodeURIComponent(stamp.version || stamp.size || '') + '" alt="' + adminProgressEscape(stamp.name) + '" loading="lazy">' +
+        '<div class="stamp-admin-item-body"><div class="stamp-admin-item-name" title="' + adminProgressEscape(stamp.name) + '">' + adminProgressEscape(stamp.name) + '</div><div class="stamp-admin-item-company" title="' + adminProgressEscape(stamp.companyName) + '">' + adminProgressEscape(stamp.companyName) + '</div><div class="stamp-admin-item-actions"><button type="button" class="stamp-admin-button stamp-admin-button--danger" data-stamp-delete>删除</button></div></div></article>').join('');
+    list.querySelectorAll('[data-stamp-delete]').forEach(button => {
+        button.addEventListener('click', async () => {
+            const card = button.closest('[data-stamp-key]');
+            const key = card?.dataset.stampKey;
+            if (!key || !confirm('确认删除这个公章吗？')) return;
+            button.disabled = true;
+            try {
+                const response = await fetch('/api/admin-stamp-library', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key })
+                });
+                const result = await response.json().catch(() => ({}));
+                if (!response.ok || !result.ok) throw new Error(result.error || '删除失败（' + response.status + '）');
+                await loadStampLibraryAdmin();
+            } catch (error) {
+                alert('删除公章失败：' + error.message);
+                button.disabled = false;
+            }
+        });
+    });
+}
+
+function readStampFileBase64(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || '').split(',')[1] || '');
+        reader.onerror = () => reject(new Error('读取文件失败：' + file.name));
+        reader.readAsDataURL(file);
+    });
+}
+
+async function uploadStampFiles() {
+    const input = document.getElementById('stampLibraryFileInput');
+    const button = document.getElementById('stampLibraryUploadBtn');
+    const status = document.getElementById('stampLibraryUploadStatus');
+    const files = Array.from(input?.files || []);
+    if (!files.length || !button || !status) return;
+    const validFiles = files.filter(file => /^image\/(png|jpeg)$/i.test(file.type) || /\.(png|jpe?g)$/i.test(file.name));
+    if (validFiles.length !== files.length) status.textContent = '仅支持 PNG 或 JPG 公章图片，已跳过其他格式。';
+    if (!validFiles.length) return;
+    if (validFiles.some(file => file.size > 8 * 1024 * 1024)) {
+        status.textContent = '单个公章文件不能超过 8MB。';
+        return;
+    }
+    button.disabled = true;
+    try {
+        let uploaded = 0;
+        for (const file of validFiles) {
+            status.textContent = '正在上传 ' + (uploaded + 1) + '/' + validFiles.length + '：' + file.name;
+            const base64 = await readStampFileBase64(file);
+            const response = await fetch('/api/admin-stamp-library', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ files: [{ name: file.name, base64, mimeType: file.type }] })
+            });
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok || !result.ok) throw new Error(result.error || '上传失败（' + response.status + '）');
+            uploaded += 1;
+        }
+        input.value = '';
+        status.textContent = '已上传 ' + uploaded + ' 个公章。';
+        await loadStampLibraryAdmin();
+    } catch (error) {
+        status.textContent = '上传失败：' + error.message;
+    } finally {
+        button.disabled = false;
+    }
+}
+
+window.loadStampLibraryAdmin = loadStampLibraryAdmin;
+document.getElementById('stampLibraryUploadBtn')?.addEventListener('click', uploadStampFiles);
 

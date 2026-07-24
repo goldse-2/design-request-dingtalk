@@ -9,6 +9,7 @@ import { acquireStudioRpaSlot, claimStudioRpaRetrySlot, ensureStudioRpaSlot, get
 import { advanceStudioPhotographyWorkflow, markStudioPhotographyRetouchTimedOut } from '../_shared/studio-photography-workflow.js';
 import { processDueEtaReminders, shouldRunEtaReminderCheck } from '../_shared/eta-reminders.js';
 import { createProgramRpaParams } from '../_shared/studio-no-product.js';
+import { processDueStampRequests } from '../_shared/stamp-workflow.js';
 
 const DIRECT_IMAGE_PROCESSING_LEASE_MS = 20 * 60 * 1000;
 
@@ -24,12 +25,21 @@ export async function onRequestGet(context) {
         const rpaOnly = url.searchParams.get('rpaOnly') === '1';
         const imageOnly = url.searchParams.get('imageOnly') === '1';
         let etaReminders = { checked: false, pending: 0, due: 0, notified: 0, errors: [] };
+        let stampRequests = { checked: 0, sent: 0, errors: [] };
         if (rpaOnly && shouldRunEtaReminderCheck(now)) {
             try {
                 etaReminders = await processDueEtaReminders(env, now);
             } catch (error) {
                 etaReminders.errors.push({ id: '', error: String(error?.message || error).slice(0, 200) });
                 console.error('ETA reminder check failed:', error.message);
+            }
+        }
+        if (rpaOnly) {
+            try {
+                stampRequests = await processDueStampRequests(env, request, now);
+            } catch (error) {
+                stampRequests.errors.push({ id: '', error: String(error?.message || error).slice(0, 200) });
+                console.error('Stamp request check failed:', error.message);
             }
         }
         const autoSendThreshold = 2 * 60 * 1000;
@@ -422,7 +432,8 @@ export async function onRequestGet(context) {
             processingQueueRemaining: imageOnly ? null : finalProcessingQueue.length,
             globalPaused: globalPause.paused,
             globalPauseUpdatedAt: globalPause.updatedAt,
-            etaReminders
+            etaReminders,
+            stampRequests
         });
     } catch (err) {
         return Response.json({ ok: false, error: err.message }, { status: 500 });

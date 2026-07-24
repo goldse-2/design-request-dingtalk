@@ -17,6 +17,8 @@ const elements = {
     fileName: document.getElementById('pdfFileName'),
     imageName: document.getElementById('pdfImageName'),
     uploadGrid: document.getElementById('pdfUploadGrid'),
+    stampOption: document.getElementById('pdfStampOption'),
+    stampCompany: document.getElementById('pdfStampCompany'),
     designerOption: document.getElementById('pdfDesignerOption'),
     designerRequest: document.getElementById('pdfDesignerRequest'),
     designerToggle: document.getElementById('pdfDesignerToggle'),
@@ -118,6 +120,7 @@ elements.sendButton.addEventListener('click', () => {
     else sendFileToDingTalk();
 });
 elements.designerNote.addEventListener('input', updateReadyState);
+elements.stampCompany.addEventListener('input', updateReadyState);
 elements.designerToggle.addEventListener('change', () => {
     state.designerMode = elements.designerToggle.checked;
     elements.designerToggleState.textContent = state.designerMode ? '已开启' : '已关闭';
@@ -509,6 +512,25 @@ async function sendFileToDingTalk() {
             throw new Error('处理后的文件超过 20MB，请使用较小的文件或图片');
         }
 
+        const companyName = !state.designerMode && !state.imageRequest
+            ? elements.stampCompany.value.trim()
+            : '';
+        if (companyName) {
+            showProgress('正在提交盖章申请', 68);
+            const stampFormData = new FormData();
+            stampFormData.append('file', output.blob, output.fileName);
+            stampFormData.append('fileName', output.fileName);
+            stampFormData.append('companyName', companyName);
+            stampFormData.append('unionId', user.unionId);
+            stampFormData.append('submitter', JSON.stringify(user));
+            const stampResponse = await fetch('/api/tools-stamp-request', { method: 'POST', body: stampFormData });
+            const stampResult = await stampResponse.json().catch(() => ({}));
+            if (!stampResponse.ok || !stampResult.ok) throw new Error(stampResult.error || `盖章申请提交失败（HTTP ${stampResponse.status}）`);
+            resetPdfTool({ keepProgress: true });
+            showProgress('盖章申请已提交，等待管理台确认；确认后约 5 分钟自动发送到钉钉', 100, 'success');
+            return;
+        }
+
         showProgress('文件已生成，正在发送到钉钉', 68);
         const formData = new FormData();
         formData.append('file', output.blob, output.fileName);
@@ -871,6 +893,7 @@ function resetPdfTool(options = {}) {
     clearImageRequestRef();
     elements.fileInput.value = '';
     elements.imageInput.value = '';
+    elements.stampCompany.value = '';
     elements.designerNote.value = '';
     elements.designerToggle.checked = false;
     elements.designerToggleState.textContent = '已关闭';
@@ -894,6 +917,7 @@ function resetPdfTool(options = {}) {
     elements.exportFormats.forEach(input => { input.checked = input.value === 'pdf'; });
     elements.designerWaiting.hidden = true;
     elements.uploadGrid.hidden = false;
+    elements.stampOption.hidden = false;
     elements.designerOption.hidden = false;
     elements.sendRow.hidden = false;
     const context = elements.canvas.getContext('2d');
@@ -906,6 +930,8 @@ function updateReadyState() {
     const waiting = Boolean(state.imageRequest && !state.imageFile);
     const busy = state.sending || state.requestingDesigner;
     const requestingImage = state.designerMode && !state.imageRequest;
+    const stampingAvailable = !state.designerMode && !state.imageRequest;
+    elements.stampOption.hidden = !stampingAvailable;
     elements.designerOption.hidden = Boolean(state.imageRequest);
     elements.designerRequest.hidden = !requestingImage;
     elements.sendButton.disabled = busy || !state.sourceFile || (requestingImage
@@ -920,7 +946,9 @@ function updateReadyState() {
     elements.exportFormats.forEach(input => { input.disabled = busy; });
     elements.sendButton.innerHTML = busy
         ? `<span>${state.requestingDesigner ? '正在提交...' : '正在发送...'}</span>`
-        : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>发送';
+        : (stampingAvailable && elements.stampCompany.value.trim()
+            ? '提交盖章申请'
+            : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>发送');
 }
 
 function selectedExportFormat() {

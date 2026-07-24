@@ -15,6 +15,10 @@ const ADMIN_PATHS = new Set([
     '/api/studio-complete',
     '/api/admin-optimize-prompt',
     '/api/admin-library-cutout',
+    '/api/admin-stamp-library',
+    '/api/admin-stamp-requests',
+    '/api/admin-stamp-file',
+    '/api/admin-stamp-input',
     '/api/admin-retouch-library-review',
     '/api/admin-tools-image-request',
     '/api/sheet-self-photo',
@@ -35,6 +39,7 @@ export async function onRequest(context) {
 
 function requiresAdmin(request, url) {
     if (ADMIN_PATHS.has(url.pathname)) return true;
+    if (url.pathname.startsWith('/api/admin-stamp-file/') || url.pathname.startsWith('/api/admin-stamp-input/')) return true;
     if (url.pathname === '/api/studio-examples') {
         return ['PATCH', 'DELETE'].includes(request.method) || url.searchParams.get('all') === '1';
     }
