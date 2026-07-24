@@ -2510,10 +2510,13 @@ function renderStudioTask(task) {
         if (task.sentToRpa && task.status !== 'done') {
             actions.append(rpaBtn);
         } else if (!task.sentToRpa && task.status === 'pending') {
-            const automaticLabel = document.createElement('span');
+            const automaticLabel = document.createElement('button');
+            automaticLabel.type = 'button';
             automaticLabel.dataset.rpaAutoLabel = '1';
-            automaticLabel.textContent = studioRpaGlobalPaused ? '自动发送已挂起' : '2 分钟后自动发送，无需审批';
-            automaticLabel.style.cssText = 'font-size:0.82rem;color:#047857;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:7px;padding:7px 12px;font-weight:600';
+            automaticLabel.textContent = studioRpaGlobalPaused ? '自动发送已挂起' : '2 分钟后自动发送，点击立即发送';
+            automaticLabel.title = studioRpaGlobalPaused ? '自动发送已挂起，请先恢复自动发送' : '点击后立即发送给 RPA；如有任务正在执行，则立即加入队列';
+            automaticLabel.style.cssText = 'font-size:0.82rem;color:#047857;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:7px;padding:7px 12px;font-weight:600;cursor:pointer';
+            automaticLabel.onclick = () => sendToRpa(task.id, automaticLabel, card, task);
             actions.append(automaticLabel);
         }
         actions.append(viewCodeBtn, uploadBtn);
@@ -3616,7 +3619,8 @@ function renderStudioRpaGlobalPauseButton(button) {
     button.style.borderColor = studioRpaGlobalPaused ? '#10b981' : '#f59e0b';
     button.style.background = studioRpaGlobalPaused ? '#ecfdf5' : '#fff';
     document.querySelectorAll('[data-rpa-auto-label="1"]').forEach(label => {
-        label.textContent = studioRpaGlobalPaused ? '自动发送已挂起' : '2 分钟后自动发送，无需审批';
+        label.textContent = studioRpaGlobalPaused ? '自动发送已挂起' : '2 分钟后自动发送，点击立即发送';
+        label.title = studioRpaGlobalPaused ? '自动发送已挂起，请先恢复自动发送' : '点击后立即发送给 RPA；如有任务正在执行，则立即加入队列';
         label.style.color = studioRpaGlobalPaused ? '#92400e' : '#047857';
         label.style.background = studioRpaGlobalPaused ? '#fff7ed' : '#ecfdf5';
         label.style.borderColor = studioRpaGlobalPaused ? '#fcd34d' : '#a7f3d0';
