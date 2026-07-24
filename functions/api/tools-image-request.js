@@ -17,7 +17,7 @@ export async function onRequestPost({ request, env }) {
     const note = cleanText(form.get('note'), 300);
     const unionId = cleanText(form.get('unionId'), 160);
     if (!ID_PATTERN.test(id) || !TOKEN_PATTERN.test(token)) return json({ ok: false, error: '任务标识无效，请刷新页面重试' }, 400);
-    if (!note) return json({ ok: false, error: '请填写需要添加的图片' }, 400);
+    if (!note) return json({ ok: false, error: '请填写需要什么文件' }, 400);
     if (!unionId) return json({ ok: false, error: '请先在钉钉中登录网站' }, 400);
     if (!file || typeof file.arrayBuffer !== 'function') return json({ ok: false, error: '请先上传 PDF 或 Word 文件' }, 400);
 

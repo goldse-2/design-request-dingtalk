@@ -17,9 +17,11 @@ const elements = {
     fileName: document.getElementById('pdfFileName'),
     imageName: document.getElementById('pdfImageName'),
     uploadGrid: document.getElementById('pdfUploadGrid'),
+    designerOption: document.getElementById('pdfDesignerOption'),
     designerRequest: document.getElementById('pdfDesignerRequest'),
+    designerToggle: document.getElementById('pdfDesignerToggle'),
+    designerToggleState: document.getElementById('pdfDesignerToggleState'),
     designerNote: document.getElementById('pdfDesignerNote'),
-    designerSubmit: document.getElementById('pdfDesignerSubmit'),
     designerWaiting: document.getElementById('pdfDesignerWaiting'),
     designerWaitingNote: document.getElementById('pdfDesignerWaitingNote'),
     designerRefresh: document.getElementById('pdfDesignerRefresh'),
@@ -74,6 +76,7 @@ const state = {
     blendMode: 'normal',
     sending: false,
     requestingDesigner: false,
+    designerMode: false,
     imageRequest: null
 };
 
@@ -110,9 +113,18 @@ elements.blendToggle.addEventListener('change', () => {
 elements.centerImage.addEventListener('click', centerOverlay);
 elements.removeImage.addEventListener('click', removeImage);
 elements.clearButton.addEventListener('click', clearPdfTool);
-elements.sendButton.addEventListener('click', sendFileToDingTalk);
+elements.sendButton.addEventListener('click', () => {
+    if (state.designerMode && !state.imageRequest) submitDesignerImageRequest();
+    else sendFileToDingTalk();
+});
 elements.designerNote.addEventListener('input', updateReadyState);
-elements.designerSubmit.addEventListener('click', submitDesignerImageRequest);
+elements.designerToggle.addEventListener('change', () => {
+    state.designerMode = elements.designerToggle.checked;
+    elements.designerToggleState.textContent = state.designerMode ? '已开启' : '已关闭';
+    elements.designerRequest.hidden = !state.designerMode;
+    clearProgress();
+    updateReadyState();
+});
 elements.designerRefresh.addEventListener('click', () => refreshDesignerImageRequest(true));
 elements.designerCancel.addEventListener('click', clearPdfTool);
 
@@ -527,7 +539,7 @@ async function submitDesignerImageRequest() {
         return;
     }
     if (!note) {
-        showProgress('请填写需要设计师添加的图片内容', 100, 'error');
+        showProgress('请填写需要什么文件', 100, 'error');
         elements.designerNote.focus({ preventScroll: true });
         return;
     }
@@ -658,6 +670,7 @@ function showDesignerWaiting(requestRef) {
 function setDesignerWaiting(waiting) {
     elements.designerWaiting.hidden = !waiting;
     elements.uploadGrid.hidden = waiting;
+    elements.designerOption.hidden = waiting || Boolean(state.imageRequest);
     elements.editor.hidden = waiting || !state.sourceFile;
     elements.empty.hidden = waiting || Boolean(state.sourceFile);
     elements.sendRow.hidden = waiting;
@@ -852,12 +865,16 @@ function resetPdfTool(options = {}) {
         overlay: null,
         blendMode: 'normal',
         requestingDesigner: false,
+        designerMode: false,
         imageRequest: null
     });
     clearImageRequestRef();
     elements.fileInput.value = '';
     elements.imageInput.value = '';
     elements.designerNote.value = '';
+    elements.designerToggle.checked = false;
+    elements.designerToggleState.textContent = '已关闭';
+    elements.designerRequest.hidden = true;
     elements.fileName.textContent = '支持 PDF、Word（.docx）';
     elements.imageName.textContent = 'PNG、JPG 或 WebP';
     elements.fileBox.classList.remove('ready');
@@ -877,6 +894,7 @@ function resetPdfTool(options = {}) {
     elements.exportFormats.forEach(input => { input.checked = input.value === 'pdf'; });
     elements.designerWaiting.hidden = true;
     elements.uploadGrid.hidden = false;
+    elements.designerOption.hidden = false;
     elements.sendRow.hidden = false;
     const context = elements.canvas.getContext('2d');
     context.clearRect(0, 0, elements.canvas.width, elements.canvas.height);
@@ -887,17 +905,21 @@ function resetPdfTool(options = {}) {
 function updateReadyState() {
     const waiting = Boolean(state.imageRequest && !state.imageFile);
     const busy = state.sending || state.requestingDesigner;
-    elements.designerRequest.hidden = Boolean(state.imageRequest);
-    elements.sendButton.disabled = busy || !state.sourceFile || !state.imageFile || !state.overlay;
+    const requestingImage = state.designerMode && !state.imageRequest;
+    elements.designerOption.hidden = Boolean(state.imageRequest);
+    elements.designerRequest.hidden = !requestingImage;
+    elements.sendButton.disabled = busy || !state.sourceFile || (requestingImage
+        ? !elements.designerNote.value.trim()
+        : !state.imageFile || !state.overlay);
     elements.clearButton.disabled = busy;
     elements.fileInput.disabled = busy || waiting;
     elements.imageInput.disabled = busy || waiting;
     elements.designerNote.disabled = busy || Boolean(state.imageRequest);
-    elements.designerSubmit.disabled = busy || Boolean(state.imageRequest) || !state.sourceFile || !elements.designerNote.value.trim();
+    elements.designerToggle.disabled = busy || waiting;
     elements.blendToggle.disabled = busy;
     elements.exportFormats.forEach(input => { input.disabled = busy; });
-    elements.sendButton.innerHTML = state.sending
-        ? '<span>正在发送...</span>'
+    elements.sendButton.innerHTML = busy
+        ? `<span>${state.requestingDesigner ? '正在提交...' : '正在发送...'}</span>`
         : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>发送';
 }
 
