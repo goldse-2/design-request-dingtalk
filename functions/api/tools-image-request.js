@@ -29,7 +29,17 @@ export async function onRequestPost({ request, env }) {
     if (existingRaw) {
         const existing = safeParse(existingRaw);
         if (existing?.kind === 'tool-image-request' && existing.requestToken === token && existing.submitter?.unionId === unionId) {
-            return json({ ok: true, id, token, status: existing.status });
+            const adminNotified = existing.adminDingtalkNotified
+                ? true
+                : await notifyAdminAndRecord(request, env, existing);
+            return json({
+                ok: true,
+                id,
+                token,
+                status: existing.status,
+                adminNotified,
+                warning: adminNotified ? '' : '任务已保存，但管理员钉钉提醒失败'
+            });
         }
         return json({ ok: false, error: '任务已存在，请刷新页面后重试' }, 409);
     }
@@ -67,7 +77,15 @@ export async function onRequestPost({ request, env }) {
             metadata: taskMetadata(task),
             expirationTtl: RETENTION_SECONDS
         });
-        return json({ ok: true, id, token, status: task.status });
+        const adminNotified = await notifyAdminAndRecord(request, env, task);
+        return json({
+            ok: true,
+            id,
+            token,
+            status: task.status,
+            adminNotified,
+            warning: adminNotified ? '' : '任务已保存，但管理员钉钉提醒失败'
+        });
     } catch (error) {
         console.error('tools image request create failed:', error?.message || error);
         await env.SUBMISSION_FILES.delete(documentKey).catch(() => {});
@@ -126,6 +144,67 @@ async function readAuthorizedTask(storage, id, token) {
     const raw = await storage.get(id).catch(() => null);
     const task = safeParse(raw);
     return task?.kind === 'tool-image-request' && task.requestToken === token ? task : null;
+}
+
+async function notifyAdminAndRecord(request, env, task) {
+    try {
+        await notifyAdmin(request, env, task);
+        task.adminDingtalkNotified = true;
+        task.adminDingtalkNotifiedAt = new Date().toISOString();
+        task.adminDingtalkNotificationError = '';
+    } catch (error) {
+        console.error('tools image request admin notification failed:', error?.message || error);
+        task.adminDingtalkNotified = false;
+        task.adminDingtalkNotificationError = cleanText(error?.message || error || '钉钉提醒失败', 300);
+    }
+
+    await env.SUBMISSIONS.put(task.id, JSON.stringify(task), {
+        metadata: taskMetadata(task),
+        expirationTtl: RETENTION_SECONDS
+    }).catch(error => console.error('tools image request notification state save failed:', error?.message || error));
+    return task.adminDingtalkNotified;
+}
+
+async function notifyAdmin(request, env, task) {
+    if (!env.DINGTALK_APPKEY || !env.DINGTALK_APPSECRET || !env.ADMIN_USER_ID) {
+        throw new Error('管理员钉钉提醒未配置');
+    }
+    const tokenResponse = await fetch('https://api.dingtalk.com/v1.0/oauth2/accessToken', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ appKey: env.DINGTALK_APPKEY, appSecret: env.DINGTALK_APPSECRET })
+    });
+    const tokenData = await tokenResponse.json().catch(() => ({}));
+    if (!tokenResponse.ok || !tokenData.accessToken) throw new Error('获取钉钉访问凭证失败');
+
+    const origin = new URL(request.url).origin;
+    const content = [
+        'PDF / Word 文件待添加图片',
+        '',
+        `提交人：${task.submitter?.name || '钉钉用户'}`,
+        `文档：${task.document?.name || 'PDF / Word 文件'}`,
+        `需要：${task.note || '-'}`,
+        `任务 ID：${task.id}`,
+        '',
+        `去管理台上传图片：${origin}/admin.html`
+    ].join('\n');
+    const response = await fetch('https://api.dingtalk.com/v1.0/robot/oToMessages/batchSend', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'x-acs-dingtalk-access-token': tokenData.accessToken
+        },
+        body: JSON.stringify({
+            robotCode: env.DINGTALK_APPKEY,
+            userIds: [env.ADMIN_USER_ID],
+            msgKey: 'sampleText',
+            msgParam: JSON.stringify({ content })
+        })
+    });
+    if (!response.ok) {
+        const detail = await response.text().catch(() => '');
+        throw new Error(`管理员钉钉提醒失败 (${response.status}) ${detail}`.trim());
+    }
 }
 
 function detectDocumentType(file) {
